@@ -1,0 +1,408 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Catálogo Maestro de Unidades</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --ink:#142433; --ink-soft:#48607A; --ink-faint:#7C93A6;
+    --bg:#EEF2F5; --surface:#FFFFFF; --surface-alt:#E4EAEF; --border:#D3DCE3;
+    --accent:#0E7C86; --accent-ink:#FFFFFF; --accent-soft:#DCEEF0;
+    --shadow: 0 1px 2px rgba(20,36,51,.06), 0 4px 14px rgba(20,36,51,.07);
+    --c1:#2a78d6; --c2:#eb6834; --c3:#1baf7a; --c4:#eda100; --c5:#e87ba4; --c6:#008300;
+    --good:#0ca30c; --warn:#c98500; --bad:#e34948;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --ink:#E7EDF2; --ink-soft:#9AB0C2; --ink-faint:#5F7A8F;
+      --bg:#0F1620; --surface:#182230; --surface-alt:#1F2C3C; --border:#2B3B4D;
+      --accent:#35B6C2; --accent-ink:#06232A; --accent-soft:#163238;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 14px rgba(0,0,0,.35);
+      --c1:#3987e5; --c2:#d95926; --c3:#199e70; --c4:#c98500; --c5:#d55181; --c6:#008300;
+      --good:#0ca30c; --warn:#c98500; --bad:#e66767;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ink:#E7EDF2; --ink-soft:#9AB0C2; --ink-faint:#5F7A8F;
+    --bg:#0F1620; --surface:#182230; --surface-alt:#1F2C3C; --border:#2B3B4D;
+    --accent:#35B6C2; --accent-ink:#06232A; --accent-soft:#163238;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 14px rgba(0,0,0,.35);
+    --c1:#3987e5; --c2:#d95926; --c3:#199e70; --c4:#c98500; --c5:#d55181; --c6:#008300;
+    --good:#0ca30c; --warn:#c98500; --bad:#e66767;
+  }
+  *{box-sizing:border-box;}
+  body{background:var(--bg); color:var(--ink); font-family:'Inter',system-ui,-apple-system,sans-serif; margin:0;}
+  .wrap{max-width:1080px; margin:0 auto; padding:20px 16px 48px; display:flex; flex-direction:column; gap:20px;}
+  h1,h2,h3{font-family:'Barlow Semi Condensed',system-ui,sans-serif; font-weight:700; margin:0; letter-spacing:.2px;}
+  p{margin:0;}
+  button{font-family:inherit; cursor:pointer;}
+  input,select{font-family:inherit;}
+  [hidden]{display:none !important;}
+
+  .hero{display:flex; flex-direction:column; gap:6px;}
+  .hero h1{font-size:26px;}
+  .hero p{font-size:14px; color:var(--ink-soft); line-height:1.5; max-width:70ch;}
+
+  .kpi-row{display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px;}
+  .kpi-tile{background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:14px 16px; display:flex; flex-direction:column; gap:4px;}
+  .kpi-label{font-size:11px; font-weight:600; color:var(--ink-faint); text-transform:uppercase; letter-spacing:.5px;}
+  .kpi-value{font-family:'Barlow Semi Condensed',sans-serif; font-size:26px; font-weight:700; line-height:1.1;}
+  .kpi-sub{font-size:12px; color:var(--ink-soft);}
+
+  .card{background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:18px; box-shadow:var(--shadow); display:flex; flex-direction:column; gap:14px;}
+  .card-head{display:flex; align-items:baseline; justify-content:space-between; gap:10px; flex-wrap:wrap;}
+  .card-head h2{font-size:18px;}
+  .card-head .card-sub{font-size:12px; color:var(--ink-faint);}
+
+  .filters{display:flex; gap:8px; flex-wrap:wrap; align-items:center;}
+  .filters input[type=text]{flex:1; min-width:180px; padding:9px 12px; border-radius:10px; border:1px solid var(--border); background:var(--bg); color:var(--ink); font-size:13px;}
+  .filters select{padding:9px 10px; border-radius:10px; border:1px solid var(--border); background:var(--bg); color:var(--ink); font-size:13px;}
+  .btn-primary{background:var(--accent); color:var(--accent-ink); border:none; border-radius:11px; padding:10px 16px; font-size:13.5px; font-weight:700;}
+  .btn-primary:disabled{opacity:.5; cursor:default;}
+  .btn-ghost{background:transparent; border:1px solid var(--border); color:var(--ink); border-radius:10px; padding:8px 13px; font-size:12.5px; font-weight:600;}
+
+  table{width:100%; border-collapse:collapse; font-size:12.5px;}
+  th{text-align:left; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; color:var(--ink-faint); padding:7px 8px; border-bottom:1px solid var(--border); position:sticky; top:0; background:var(--surface);}
+  td{padding:7px 8px; border-bottom:1px solid var(--border); color:var(--ink);}
+  td.num{text-align:right; font-variant-numeric:tabular-nums;}
+  tr:last-child td{border-bottom:none;}
+  .table-wrap{overflow:auto; max-height:520px; border:1px solid var(--border); border-radius:12px;}
+  .badge{display:inline-block; padding:2px 8px; border-radius:99px; font-size:10.5px; font-weight:700;}
+  .badge-baja{background:var(--surface-alt); color:var(--bad);}
+
+  .note{font-size:12px; color:var(--ink-faint); line-height:1.5;}
+  .status-box{font-size:12.5px; color:var(--ink-soft); line-height:1.6; background:var(--surface-alt); border-radius:10px; padding:10px 12px;}
+  .status-box.ok{color:var(--good);}
+  .status-box.err{color:var(--bad);}
+  .diff-row{display:flex; gap:18px; flex-wrap:wrap;}
+  .diff-tile{display:flex; flex-direction:column; gap:2px;}
+  .diff-tile .n{font-family:'Barlow Semi Condensed',sans-serif; font-size:22px; font-weight:700;}
+  .diff-tile .l{font-size:11px; color:var(--ink-faint); text-transform:uppercase; letter-spacing:.4px;}
+  .update-form{display:flex; flex-direction:column; gap:12px;}
+  .update-form input[type=password]{padding:9px 12px; border-radius:10px; border:1px solid var(--border); background:var(--bg); color:var(--ink); font-size:13px; max-width:220px;}
+  .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hero">
+    <h1>Catálogo Maestro de Unidades</h1>
+    <p>Ficha maestra por económico — marca, modelo, uso, CEDIS y más. Es la tabla central de cruce del ERP: el resto de los módulos (correctivo, preventivo, llantas, combustible, refacciones) se ligan aquí por económico. Los datos viven en Supabase, así que se ven igual sin importar desde dónde se consulten.</p>
+  </div>
+
+  <div class="kpi-row" id="kpiRow"></div>
+
+  <div class="card">
+    <div class="card-head">
+      <h2>Unidades</h2>
+      <span class="card-sub" id="tableSub"></span>
+    </div>
+    <div class="filters">
+      <input id="searchBox" type="text" placeholder="Buscar por económico, marca, serie o placas...">
+      <select id="bodegaFilter"><option value="">Todos los CEDIS</option></select>
+      <select id="activoFilter">
+        <option value="activo">Solo activas</option>
+        <option value="todas">Todas (incluye bajas)</option>
+      </select>
+      <button id="btnExport" class="btn-ghost">Exportar a Excel</button>
+    </div>
+    <div class="table-wrap">
+      <table id="unitsTable"></table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <h2>Actualizar catálogo</h2>
+      <span class="card-sub">Sube el Excel mensual (pestaña "Morelos") para reflejar altas, bajas y cambios en Supabase</span>
+    </div>
+    <div class="update-form">
+      <div class="row">
+        <input id="pwBox" type="password" placeholder="Contraseña">
+        <input id="fileInput" type="file" accept=".xlsx,.xls" hidden>
+        <button id="btnPick" class="btn-ghost">Elegir archivo</button>
+        <span class="note" id="fileMeta"></span>
+      </div>
+      <div id="diffPreview" hidden>
+        <div class="diff-row">
+          <div class="diff-tile"><span class="n" id="diffNuevas">0</span><span class="l">Altas</span></div>
+          <div class="diff-tile"><span class="n" id="diffCambios">0</span><span class="l">Con cambios</span></div>
+          <div class="diff-tile"><span class="n" id="diffBajas">0</span><span class="l">Bajas (ya no están en el archivo)</span></div>
+          <div class="diff-tile"><span class="n" id="diffSinCambio">0</span><span class="l">Sin cambios</span></div>
+        </div>
+        <p class="note">Las bajas no se borran de la base — quedan marcadas como inactivas para no romper otras tablas que ya las referencien por económico. Revisa los números y confirma.</p>
+        <button id="btnConfirm" class="btn-primary">Confirmar y actualizar Supabase</button>
+      </div>
+      <div id="statusBox" class="status-box" hidden></div>
+    </div>
+  </div>
+
+  <p class="note">Fuente: "Catálogo Unidades Morelos" (Excel mensual, pestaña Morelos). Se aplican automáticamente las correcciones ya conocidas de este archivo: MODELO/ÁREA invertidos en algunas filas, espacios extra en MARCA, y CEDIS explícito (nunca se deriva del prefijo del económico salvo que la columna BODEGA venga vacía).</p>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var SUPABASE_URL = "https://aoutudbxwawlnbwvypir.supabase.co";
+  var SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFvdXR1ZGJ4d2F3bG5id3Z5cGlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU4NzQzNTMsImV4cCI6MjEwMTQ1MDM1M30.cfdjH9rwQDYyxrrKZIAw7JpcQKYcFWtiEYXEDF8fa_E";
+  var TABLE = "catalogo_unidades";
+  var UPDATE_PASSWORD = "morelos2026";
+
+  var BODEGA_CANON = {
+    "CUERNAVACA":"Cuernavaca", "CUAUTLA":"Cuautla", "JOJUTLA":"Jojutla",
+    "PUENTE IXTLA":"Puente de Ixtla", "PUENTE DE IXTLA":"Puente de Ixtla",
+    "AXOCHIAPAN":"Axochiapan", "COCOYOC":"Cocoyoc"
+  };
+  var PREFIX_TO_BODEGA = {
+    "MCV":"Cuernavaca","MCU":"Cuautla","MJO":"Jojutla",
+    "MPU":"Puente de Ixtla","MAX":"Axochiapan","MCC":"Cocoyoc"
+  };
+  var CEDIS_ORDER = ["Cuernavaca","Cuautla","Jojutla","Puente de Ixtla","Axochiapan","Cocoyoc"];
+
+  function sbHeaders(extra){
+    var h = { "apikey": SUPABASE_KEY, "Authorization": "Bearer " + SUPABASE_KEY, "Content-Type": "application/json" };
+    if(extra) for(var k in extra) h[k] = extra[k];
+    return h;
+  }
+
+  var state = { rows: [], parsedNew: null };
+
+  // ---------------- Cargar catálogo actual ----------------
+  function loadCatalog(){
+    return fetch(SUPABASE_URL + "/rest/v1/" + TABLE + "?select=*&order=economico", { headers: sbHeaders() })
+      .then(function(r){ if(!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+      .then(function(rows){ state.rows = rows; renderAll(); });
+  }
+
+  function renderAll(){
+    renderKpis();
+    populateBodegaFilter();
+    renderTable();
+  }
+
+  function renderKpis(){
+    var wrap = document.getElementById("kpiRow");
+    var activas = state.rows.filter(function(r){ return r.activo; });
+    var porBodega = {};
+    activas.forEach(function(r){ porBodega[r.bodega] = (porBodega[r.bodega]||0) + 1; });
+    var tiles = [{label:"Unidades activas", value: activas.length, sub: state.rows.length - activas.length + " de baja"}];
+    CEDIS_ORDER.forEach(function(c){
+      if(porBodega[c]) tiles.push({label:c, value: porBodega[c], sub:"unidades"});
+    });
+    wrap.innerHTML = "";
+    tiles.forEach(function(t){
+      var el = document.createElement("div");
+      el.className = "kpi-tile";
+      el.innerHTML = "<span class=\"kpi-label\">"+t.label+"</span><span class=\"kpi-value\">"+t.value+"</span><span class=\"kpi-sub\">"+t.sub+"</span>";
+      wrap.appendChild(el);
+    });
+  }
+
+  function populateBodegaFilter(){
+    var sel = document.getElementById("bodegaFilter");
+    if(sel.options.length > 1) return;
+    CEDIS_ORDER.forEach(function(c){
+      var o = document.createElement("option"); o.value = c; o.textContent = c; sel.appendChild(o);
+    });
+  }
+
+  function renderTable(){
+    var q = document.getElementById("searchBox").value.trim().toUpperCase();
+    var bodega = document.getElementById("bodegaFilter").value;
+    var activoMode = document.getElementById("activoFilter").value;
+    var rows = state.rows.filter(function(r){
+      if(activoMode === "activo" && !r.activo) return false;
+      if(bodega && r.bodega !== bodega) return false;
+      if(q){
+        var hay = [r.economico, r.marca, r.serie, r.placas].some(function(v){ return v && String(v).toUpperCase().indexOf(q) >= 0; });
+        if(!hay) return false;
+      }
+      return true;
+    });
+    document.getElementById("tableSub").textContent = rows.length + " unidades" + (activoMode==="activo" ? " activas" : "");
+    var html = "<thead><tr><th>Económico</th><th>Marca</th><th>Modelo</th><th>Área</th><th>Combustible</th><th>Placas</th><th>CEDIS</th><th>Estatus</th></tr></thead><tbody>";
+    rows.forEach(function(r){
+      html += "<tr><td>"+esc(r.economico)+"</td><td>"+esc(r.marca)+"</td><td>"+esc(r.modelo)+"</td><td>"+esc(r.area)+"</td><td>"+esc(r.combustible)+"</td><td>"+esc(r.placas)+"</td><td>"+esc(r.bodega)+"</td><td>"+(r.activo?"":"<span class=\"badge badge-baja\">BAJA</span>")+"</td></tr>";
+    });
+    html += "</tbody>";
+    document.getElementById("unitsTable").innerHTML = html;
+  }
+  function esc(v){ return v===null||v===undefined ? "" : String(v).replace(/&/g,"&amp;").replace(/</g,"&lt;"); }
+
+  document.getElementById("searchBox").addEventListener("input", renderTable);
+  document.getElementById("bodegaFilter").addEventListener("change", renderTable);
+  document.getElementById("activoFilter").addEventListener("change", renderTable);
+
+  document.getElementById("btnExport").addEventListener("click", function(){
+    var activoMode = document.getElementById("activoFilter").value;
+    var rows = activoMode === "activo" ? state.rows.filter(function(r){ return r.activo; }) : state.rows;
+    var ws = XLSX.utils.json_to_sheet(rows.map(function(r){
+      return { ECONOMICO:r.economico, MARCA:r.marca, MODELO:r.modelo, AREA:r.area, SERIE:r.serie, COMBUSTIBLE:r.combustible, PLACAS:r.placas, RUTA:r.ruta, CENTRO_COSTE_MTTO:r.centro_coste_mtto, BODEGA:r.bodega, ACTIVO:r.activo };
+    }));
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Catalogo");
+    XLSX.writeFile(wb, "catalogo_unidades.xlsx");
+  });
+
+  // ---------------- Parseo + limpieza del Excel (misma lógica validada en Python) ----------------
+  function isYear(v){ return typeof v === "number" && v > 1990 && v < 2030; }
+  function cleanMarca(m){
+    if(m === null || m === undefined || m === "") return null;
+    var s = String(m).replace(/ /g," ");
+    s = s.replace(/\s+/g," ").trim();
+    s = s.replace(/\*+\s*$/,"").trim();
+    return s;
+  }
+  function parseWorkbook(wb){
+    var sheetName = wb.SheetNames.filter(function(n){ return n.trim().toLowerCase() === "morelos"; })[0];
+    if(!sheetName) throw new Error("No se encontró la pestaña 'Morelos' en el archivo.");
+    var arr = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { header:1, defval:null, raw:true });
+    var out = [];
+    for(var r = 1; r < arr.length; r++){
+      var row = arr[r];
+      if(!row) continue;
+      var eco = row[2]; // C
+      if(eco === null || eco === undefined) continue;
+      var marca = row[3], modelo = row[4], area = row[5], serie = row[6], comb = row[7], placas = row[8], ruta = row[9], centro = row[10], bodegaRaw = row[11];
+
+      if(!isYear(modelo) && isYear(area)){ var tmp = modelo; modelo = area; area = tmp; }
+      if(!isYear(modelo)) modelo = null;
+
+      var bodega;
+      if(bodegaRaw){
+        var key = String(bodegaRaw).trim().toUpperCase();
+        bodega = BODEGA_CANON[key] || String(bodegaRaw).trim();
+      } else {
+        var prefix = String(eco).trim().substring(0,3);
+        bodega = PREFIX_TO_BODEGA[prefix] || null;
+      }
+
+      out.push({
+        economico: String(eco).trim(),
+        marca: cleanMarca(marca),
+        modelo: modelo,
+        area: area ? String(area).trim() : null,
+        serie: serie ? String(serie).trim() : null,
+        combustible: comb ? String(comb).trim() : null,
+        placas: placas ? String(placas).trim() : null,
+        ruta: ruta ? String(ruta).trim() : null,
+        centro_coste_mtto: centro ? String(centro).trim() : null,
+        bodega: bodega
+      });
+    }
+    return out;
+  }
+
+  function fieldsEqual(a, b){
+    var keys = ["marca","modelo","area","serie","combustible","placas","ruta","centro_coste_mtto","bodega"];
+    return keys.every(function(k){ return (a[k] ?? null) === (b[k] ?? null); });
+  }
+
+  function computeDiff(newRows){
+    var currentByEco = {};
+    state.rows.forEach(function(r){ currentByEco[r.economico] = r; });
+    var newByEco = {};
+    newRows.forEach(function(r){ newByEco[r.economico] = r; });
+
+    var altas = [], cambios = [], sinCambio = [], bajas = [];
+    newRows.forEach(function(r){
+      var existing = currentByEco[r.economico];
+      if(!existing){ altas.push(r); }
+      else if(!existing.activo || !fieldsEqual(existing, r)){ cambios.push(r); }
+      else { sinCambio.push(r); }
+    });
+    state.rows.forEach(function(r){
+      if(r.activo && !newByEco[r.economico]) bajas.push(r);
+    });
+    return { altas:altas, cambios:cambios, sinCambio:sinCambio, bajas:bajas };
+  }
+
+  // ---------------- Flujo de actualización ----------------
+  document.getElementById("btnPick").addEventListener("click", function(){ document.getElementById("fileInput").click(); });
+  document.getElementById("fileInput").addEventListener("change", function(e){
+    var file = e.target.files[0];
+    if(!file) return;
+    var statusBox = document.getElementById("statusBox");
+    statusBox.hidden = true;
+    var reader = new FileReader();
+    reader.onload = function(ev){
+      try{
+        var wb = XLSX.read(ev.target.result, { type:"array" });
+        var rows = parseWorkbook(wb);
+        state.parsedNew = rows;
+        var diff = computeDiff(rows);
+        state.diff = diff;
+        document.getElementById("fileMeta").textContent = file.name + " — " + rows.length + " filas leídas";
+        document.getElementById("diffNuevas").textContent = diff.altas.length;
+        document.getElementById("diffCambios").textContent = diff.cambios.length;
+        document.getElementById("diffBajas").textContent = diff.bajas.length;
+        document.getElementById("diffSinCambio").textContent = diff.sinCambio.length;
+        document.getElementById("diffPreview").hidden = false;
+      }catch(err){
+        statusBox.hidden = false;
+        statusBox.className = "status-box err";
+        statusBox.textContent = "No se pudo leer el archivo: " + err.message;
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  });
+
+  document.getElementById("btnConfirm").addEventListener("click", function(){
+    var statusBox = document.getElementById("statusBox");
+    var pw = document.getElementById("pwBox").value;
+    if(pw !== UPDATE_PASSWORD){
+      statusBox.hidden = false; statusBox.className = "status-box err";
+      statusBox.textContent = "Contraseña incorrecta.";
+      return;
+    }
+    var btn = document.getElementById("btnConfirm");
+    btn.disabled = true;
+    statusBox.hidden = false; statusBox.className = "status-box";
+    statusBox.textContent = "Actualizando Supabase...";
+
+    var toUpsert = state.diff.altas.concat(state.diff.cambios).map(function(r){
+      var copy = {}; for(var k in r) copy[k] = r[k];
+      copy.activo = true;
+      return copy;
+    });
+    var bajaEcos = state.diff.bajas.map(function(r){ return r.economico; });
+
+    var p1 = toUpsert.length === 0 ? Promise.resolve() : fetch(SUPABASE_URL + "/rest/v1/" + TABLE + "?on_conflict=economico", {
+      method: "POST",
+      headers: sbHeaders({ "Prefer": "resolution=merge-duplicates,return=minimal" }),
+      body: JSON.stringify(toUpsert)
+    }).then(function(r){ if(!r.ok) return r.text().then(function(t){ throw new Error("upsert: HTTP "+r.status+" "+t); }); });
+
+    p1.then(function(){
+      if(bajaEcos.length === 0) return;
+      return fetch(SUPABASE_URL + "/rest/v1/" + TABLE + "?economico=in.(" + bajaEcos.map(function(e){ return "\""+e+"\""; }).join(",") + ")", {
+        method: "PATCH",
+        headers: sbHeaders({ "Prefer": "return=minimal" }),
+        body: JSON.stringify({ activo: false })
+      }).then(function(r){ if(!r.ok) return r.text().then(function(t){ throw new Error("baja: HTTP "+r.status+" "+t); }); });
+    }).then(function(){
+      statusBox.className = "status-box ok";
+      statusBox.textContent = "Listo — " + toUpsert.length + " unidades creadas/actualizadas, " + bajaEcos.length + " marcadas de baja.";
+      document.getElementById("diffPreview").hidden = true;
+      document.getElementById("pwBox").value = "";
+      document.getElementById("fileMeta").textContent = "";
+      return loadCatalog();
+    }).catch(function(err){
+      statusBox.className = "status-box err";
+      statusBox.textContent = "Error al actualizar: " + err.message;
+    }).finally(function(){
+      btn.disabled = false;
+    });
+  });
+
+  loadCatalog().catch(function(err){
+    document.getElementById("tableSub").textContent = "Error al cargar: " + err.message;
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,868 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hojalatería y Pintura</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --ink:#142433; --ink-soft:#48607A; --ink-faint:#7C93A6;
+    --bg:#EEF2F5; --surface:#FFFFFF; --surface-alt:#E4EAEF; --border:#D3DCE3;
+    --accent:#0E7C86; --accent-ink:#FFFFFF; --accent-soft:#DCEEF0;
+    --shadow: 0 1px 2px rgba(20,36,51,.06), 0 4px 14px rgba(20,36,51,.07);
+    --c1:#2a78d6; --c2:#eb6834; --c3:#1baf7a; --c4:#eda100; --c5:#e87ba4; --c6:#008300;
+    --good:#0ca30c; --warn:#c98500; --bad:#e34948;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --ink:#E7EDF2; --ink-soft:#9AB0C2; --ink-faint:#5F7A8F;
+      --bg:#0F1620; --surface:#182230; --surface-alt:#1F2C3C; --border:#2B3B4D;
+      --accent:#35B6C2; --accent-ink:#06232A; --accent-soft:#163238;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 14px rgba(0,0,0,.35);
+      --c1:#3987e5; --c2:#d95926; --c3:#199e70; --c4:#c98500; --c5:#d55181; --c6:#008300;
+      --good:#0ca30c; --warn:#c98500; --bad:#e66767;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ink:#E7EDF2; --ink-soft:#9AB0C2; --ink-faint:#5F7A8F;
+    --bg:#0F1620; --surface:#182230; --surface-alt:#1F2C3C; --border:#2B3B4D;
+    --accent:#35B6C2; --accent-ink:#06232A; --accent-soft:#163238;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 14px rgba(0,0,0,.35);
+    --c1:#3987e5; --c2:#d95926; --c3:#199e70; --c4:#c98500; --c5:#d55181; --c6:#008300;
+    --good:#0ca30c; --warn:#c98500; --bad:#e66767;
+  }
+  *{box-sizing:border-box;}
+  body{background:var(--bg); color:var(--ink); font-family:'Inter',system-ui,-apple-system,sans-serif; margin:0;}
+  .wrap{max-width:1180px; margin:0 auto; padding:20px 16px 48px; display:flex; flex-direction:column; gap:20px;}
+  h1,h2,h3{font-family:'Barlow Semi Condensed',system-ui,sans-serif; font-weight:700; margin:0; letter-spacing:.2px;}
+  p{margin:0;}
+  button{font-family:inherit; cursor:pointer;}
+  input,select{font-family:inherit;}
+  [hidden]{display:none !important;}
+
+  .hero{display:flex; flex-direction:column; gap:6px;}
+  .hero h1{font-size:26px;}
+  .hero p{font-size:14px; color:var(--ink-soft); line-height:1.5; max-width:76ch;}
+
+  .tabs{display:flex; gap:6px; flex-wrap:wrap; border-bottom:1px solid var(--border); padding-bottom:0;}
+  .tab-btn{background:transparent; border:none; border-bottom:2px solid transparent; color:var(--ink-soft); font-size:13.5px; font-weight:600; padding:9px 4px; margin-bottom:-1px;}
+  .tab-btn.active{color:var(--accent); border-bottom-color:var(--accent);}
+  .tab-panel{display:none; flex-direction:column; gap:20px;}
+  .tab-panel.active{display:flex;}
+
+  .kpi-row{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px;}
+  .kpi-tile{background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:14px 16px; display:flex; flex-direction:column; gap:4px;}
+  .kpi-tile.accent{background:var(--accent-soft); border-color:var(--accent);}
+  .kpi-label{font-size:11px; font-weight:600; color:var(--ink-faint); text-transform:uppercase; letter-spacing:.5px;}
+  .kpi-value{font-family:'Barlow Semi Condensed',sans-serif; font-size:24px; font-weight:700; line-height:1.1;}
+  .kpi-sub{font-size:12px; color:var(--ink-soft);}
+
+  .card{background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:18px; box-shadow:var(--shadow); display:flex; flex-direction:column; gap:14px;}
+  .card-head{display:flex; align-items:baseline; justify-content:space-between; gap:10px; flex-wrap:wrap;}
+  .card-head h2{font-size:18px;}
+  .card-head .card-sub{font-size:12px; color:var(--ink-faint);}
+
+  .filters{display:flex; gap:8px; flex-wrap:wrap; align-items:center;}
+  .filters input[type=text]{flex:1; min-width:180px; padding:9px 12px; border-radius:10px; border:1px solid var(--border); background:var(--bg); color:var(--ink); font-size:13px;}
+  .filters select{padding:9px 10px; border-radius:10px; border:1px solid var(--border); background:var(--bg); color:var(--ink); font-size:13px;}
+  .btn-primary{background:var(--accent); color:var(--accent-ink); border:none; border-radius:11px; padding:10px 16px; font-size:13.5px; font-weight:700;}
+  .btn-primary:disabled{opacity:.5; cursor:default;}
+  .btn-ghost{background:transparent; border:1px solid var(--border); color:var(--ink); border-radius:10px; padding:8px 13px; font-size:12.5px; font-weight:600;}
+  .btn-ghost.active{background:var(--accent-soft); border-color:var(--accent); color:var(--accent);}
+
+  table{width:100%; border-collapse:collapse; font-size:12.5px;}
+  th{text-align:left; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; color:var(--ink-faint); padding:7px 8px; border-bottom:1px solid var(--border); position:sticky; top:0; background:var(--surface);}
+  td{padding:7px 8px; border-bottom:1px solid var(--border); color:var(--ink);}
+  td.num{text-align:right; font-variant-numeric:tabular-nums;}
+  th.num{text-align:right;}
+  tr:last-child td{border-bottom:none;}
+  tr.clickable{cursor:pointer;}
+  tr.clickable:hover td{background:var(--surface-alt);}
+  tr.selected td{background:var(--accent-soft);}
+  tr.total-row td{font-weight:700; background:var(--surface-alt);}
+  .table-wrap{overflow:auto; max-height:460px; border:1px solid var(--border); border-radius:12px;}
+  .badge{display:inline-block; padding:2px 8px; border-radius:99px; font-size:10.5px; font-weight:700;}
+  .badge-realizado{background:var(--surface-alt); color:var(--good);}
+  .badge-programado{background:var(--surface-alt); color:var(--c1);}
+  .badge-taller{background:var(--surface-alt); color:var(--warn);}
+  .badge-sin{background:var(--surface-alt); color:var(--ink-faint);}
+  .badge-om01{background:var(--surface-alt); color:var(--c1);}
+  .badge-om12{background:var(--surface-alt); color:var(--c2);}
+
+  .note{font-size:12px; color:var(--ink-faint); line-height:1.5;}
+  .status-box{font-size:12.5px; color:var(--ink-soft); line-height:1.6; background:var(--surface-alt); border-radius:10px; padding:10px 12px;}
+  .status-box.ok{color:var(--good);}
+  .status-box.err{color:var(--bad);}
+  .diff-row{display:flex; gap:18px; flex-wrap:wrap;}
+  .diff-tile{display:flex; flex-direction:column; gap:2px;}
+  .diff-tile .n{font-family:'Barlow Semi Condensed',sans-serif; font-size:22px; font-weight:700;}
+  .diff-tile .l{font-size:11px; color:var(--ink-faint); text-transform:uppercase; letter-spacing:.4px;}
+  .update-form{display:flex; flex-direction:column; gap:12px;}
+  .update-form input[type=password]{padding:9px 12px; border-radius:10px; border:1px solid var(--border); background:var(--bg); color:var(--ink); font-size:13px; max-width:220px;}
+  .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap;}
+  .diff-block{display:flex; flex-direction:column; gap:8px; border-top:1px solid var(--border); padding-top:12px;}
+  .diff-block h3{font-size:14px;}
+  .empty-hint{font-size:13px; color:var(--ink-faint); padding:24px; text-align:center;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hero">
+    <h1>Hojalatería y Pintura</h1>
+    <p>Seguimiento del programa de hojalatería/pintura por unidad (Red Cola, Retoque, Jarritos) y comparativa de gasto en remosamientos (presupuesto asignado OM01 vs. proyectos especiales OM12). Los datos viven en Supabase y se actualizan mes a mes desde aquí.</p>
+  </div>
+
+  <div class="tabs" id="tabs">
+    <button class="tab-btn active" data-tab="resumen">Resumen</button>
+    <button class="tab-btn" data-tab="cronograma">Cronograma</button>
+    <button class="tab-btn" data-tab="remo">Remo</button>
+    <button class="tab-btn" data-tab="remomov">Materiales</button>
+    <button class="tab-btn" data-tab="actualizar">Actualizar</button>
+  </div>
+
+  <!-- ========== RESUMEN ========== -->
+  <div class="tab-panel active" id="panel-resumen">
+    <div class="kpi-row" id="kpiRowGlobal"></div>
+    <div class="card">
+      <div class="card-head">
+        <h2>Avance por CEDIS y operación</h2>
+        <span class="card-sub">Calculado en vivo desde Cronograma (reemplaza la captura manual de "Concentrado")</span>
+      </div>
+      <div class="table-wrap">
+        <table id="avanceTable"></table>
+      </div>
+      <p class="note">Programados = unidades con esa operación asignada en ese CEDIS, sin importar su estatus actual. Realizados = con estatus REALIZADO. Faltantes = Programados − Realizados.</p>
+    </div>
+  </div>
+
+  <!-- ========== CRONOGRAMA ========== -->
+  <div class="tab-panel" id="panel-cronograma">
+    <div class="card">
+      <div class="card-head">
+        <h2>Cronograma por unidad</h2>
+        <span class="card-sub" id="cronoSub"></span>
+      </div>
+      <div class="filters">
+        <input id="cronoSearch" type="text" placeholder="Buscar por económico u observación...">
+        <select id="cronoCedis"><option value="">Todos los CEDIS</option></select>
+        <select id="cronoOp"><option value="">Toda operación</option></select>
+        <select id="cronoEstatus"><option value="">Todo estatus</option></select>
+        <button id="cronoExport" class="btn-ghost">Exportar a Excel</button>
+      </div>
+      <div class="table-wrap">
+        <table id="cronoTable"></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== REMO ========== -->
+  <div class="tab-panel" id="panel-remo">
+    <div class="kpi-row" id="remoKpis"></div>
+    <div class="card">
+      <div class="card-head">
+        <h2>Órdenes de remosamiento</h2>
+        <span class="card-sub" id="remoSub">Haz clic en una orden para ver el detalle de materiales (pestaña Materiales)</span>
+      </div>
+      <div class="filters">
+        <input id="remoSearch" type="text" placeholder="Buscar por orden, económico o texto...">
+        <select id="remoCedis"><option value="">Todos los CEDIS</option></select>
+        <select id="remoClase">
+          <option value="">OM01 + OM12</option>
+          <option value="OM01">Solo OM01 (presupuesto asignado)</option>
+          <option value="OM12">Solo OM12 (proyectos especiales)</option>
+        </select>
+        <select id="remoSort">
+          <option value="costo_desc">Costo real: mayor a menor</option>
+          <option value="costo_asc">Costo real: menor a mayor</option>
+          <option value="fecha_desc">Fecha entrada: más reciente</option>
+          <option value="fecha_asc">Fecha entrada: más antigua</option>
+        </select>
+        <button id="remoExport" class="btn-ghost">Exportar a Excel</button>
+      </div>
+      <div class="table-wrap">
+        <table id="remoTable"></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== REMOMOV ========== -->
+  <div class="tab-panel" id="panel-remomov">
+    <div class="card">
+      <div class="card-head">
+        <h2>Detalle de materiales por orden</h2>
+        <span class="card-sub" id="remomovSub"></span>
+      </div>
+      <div id="remomovEmpty" class="empty-hint">Selecciona una orden desde la pestaña "Remo" para ver qué materiales se surtieron.</div>
+      <div id="remomovContent" hidden>
+        <div class="kpi-row" id="remomovKpis" style="margin-bottom:12px;"></div>
+        <div class="table-wrap">
+          <table id="remomovTable"></table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== ACTUALIZAR ========== -->
+  <div class="tab-panel" id="panel-actualizar">
+    <div class="card">
+      <div class="card-head">
+        <h2>Actualizar desde Excel</h2>
+        <span class="card-sub">Sube el archivo mensual completo (pestañas CRONOGRAMA, Remo y Remomov) para refrescar las tres tablas en Supabase</span>
+      </div>
+      <div class="update-form">
+        <div class="row">
+          <input id="pwBox" type="password" placeholder="Contraseña">
+          <input id="fileInput" type="file" accept=".xlsx,.xls" hidden>
+          <button id="btnPick" class="btn-ghost">Elegir archivo</button>
+          <span class="note" id="fileMeta"></span>
+        </div>
+        <div id="diffPreview" hidden>
+
+          <div class="diff-block">
+            <h3>Cronograma</h3>
+            <div class="diff-row">
+              <div class="diff-tile"><span class="n" id="dCronoAltas">0</span><span class="l">Altas</span></div>
+              <div class="diff-tile"><span class="n" id="dCronoCambios">0</span><span class="l">Con cambios</span></div>
+              <div class="diff-tile"><span class="n" id="dCronoBajas">0</span><span class="l">Ya no están en el archivo</span></div>
+              <div class="diff-tile"><span class="n" id="dCronoSin">0</span><span class="l">Sin cambios</span></div>
+            </div>
+            <p class="note">Las unidades que ya no aparecen en el archivo se eliminan del cronograma (es el programa vigente del periodo, no un histórico).</p>
+          </div>
+
+          <div class="diff-block">
+            <h3>Remo (órdenes de remosamiento)</h3>
+            <div class="diff-row">
+              <div class="diff-tile"><span class="n" id="dRemoTotal">0</span><span class="l">Filas leídas en Remo</span></div>
+              <div class="diff-tile"><span class="n" id="dRemoFiltradas">0</span><span class="l">Identificadas como remosamiento</span></div>
+              <div class="diff-tile"><span class="n" id="dRemoAltas">0</span><span class="l">Órdenes nuevas</span></div>
+              <div class="diff-tile"><span class="n" id="dRemoCambios">0</span><span class="l">Órdenes con cambios</span></div>
+              <div class="diff-tile"><span class="n" id="dRemoSin">0</span><span class="l">Sin cambios</span></div>
+            </div>
+            <p class="note">Se identifican con el mismo criterio ya acordado: texto breve que contenga REMOSAMIENTO/REMOZAMIENTO o variantes con error de tecleo. Las órdenes de remosamiento nunca se borran de Remo (es un histórico de gasto), solo se agregan o se actualizan si cambia su costo/estatus.</p>
+          </div>
+
+          <div class="diff-block">
+            <h3>Remomov (materiales)</h3>
+            <div class="diff-row">
+              <div class="diff-tile"><span class="n" id="dMovOrdenes">0</span><span class="l">Órdenes a refrescar</span></div>
+              <div class="diff-tile"><span class="n" id="dMovFilas">0</span><span class="l">Renglones de material</span></div>
+            </div>
+            <p class="note">Para cada orden de remosamiento del archivo se reemplaza por completo su detalle de materiales (se borra lo que había y se carga lo nuevo), para que siempre coincida con el archivo más reciente.</p>
+          </div>
+
+          <button id="btnConfirm" class="btn-primary">Confirmar y actualizar Supabase</button>
+        </div>
+        <div id="statusBox" class="status-box" hidden></div>
+      </div>
+      <p class="note">Fuente: "Cronograma de hojalatería y pintura 2026.xlsx". Se procesan las pestañas CRONOGRAMA, Remo y Remomov; Concentrado ya no se usa porque ahora se calcula en vivo (ver pestaña Resumen), y Hoja2 se ignora.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var SUPABASE_URL = "https://aoutudbxwawlnbwvypir.supabase.co";
+  var SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFvdXR1ZGJ4d2F3bG5id3Z5cGlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU4NzQzNTMsImV4cCI6MjEwMTQ1MDM1M30.cfdjH9rwQDYyxrrKZIAw7JpcQKYcFWtiEYXEDF8fa_E";
+  var UPDATE_PASSWORD = "morelos2026";
+
+  var T_CRONO = "hojalateria_cronograma";
+  var T_REMO = "hojalateria_remo";
+  var T_MOV = "hojalateria_remomov";
+
+  var BODEGA_CANON = {
+    "CUERNAVACA":"Cuernavaca", "CUAUTLA":"Cuautla", "JOJUTLA":"Jojutla",
+    "PUENTE IXTLA":"Puente de Ixtla", "PUENTE DE IXTLA":"Puente de Ixtla",
+    "AXOCHIAPAN":"Axochiapan", "COCOYOC":"Cocoyoc"
+  };
+  var PREFIX_TO_BODEGA = {
+    "MCV":"Cuernavaca","MCU":"Cuautla","MJO":"Jojutla",
+    "MPU":"Puente de Ixtla","MAX":"Axochiapan","MCC":"Cocoyoc"
+  };
+  var CEDIS_ORDER = ["Cuernavaca","Cuautla","Jojutla","Puente de Ixtla","Axochiapan","Cocoyoc"];
+  var OPERACION_ORDER = ["JARRITOS","RED COLA","RETOQUE"];
+  var TYPO_TERMS = ["REMOSAMIENTO","REMOZAMIENTO","REBOSAMIENTO","REMOSAMINTO","REMOZAMNIENTO","REMOSAMINETO"];
+
+  function sbHeaders(extra){
+    var h = { "apikey": SUPABASE_KEY, "Authorization": "Bearer " + SUPABASE_KEY, "Content-Type": "application/json" };
+    if(extra) for(var k in extra) h[k] = extra[k];
+    return h;
+  }
+  function esc(v){ return v===null||v===undefined ? "" : String(v).replace(/&/g,"&amp;").replace(/</g,"&lt;"); }
+  function money(v){
+    if(v===null||v===undefined) return "";
+    return "$" + Number(v).toLocaleString("es-MX",{minimumFractionDigits:2, maximumFractionDigits:2});
+  }
+  function pct(v){ return (Math.round(v*1000)/10) + "%"; }
+  function bodegaFromEconomico(eco){
+    var prefix = String(eco||"").trim().substring(0,3).toUpperCase();
+    return PREFIX_TO_BODEGA[prefix] || null;
+  }
+  function stripAccents(s){ return String(s).normalize("NFD").replace(/[̀-ͯ]/g,""); }
+  function isRemosamiento(texto){
+    if(!texto) return false;
+    var s = stripAccents(String(texto).toUpperCase());
+    return TYPO_TERMS.some(function(t){ return s.indexOf(t) >= 0; });
+  }
+  function excelDateToISO(v){
+    if(v===null||v===undefined||v==="") return null;
+    if(typeof v === "number"){
+      var epoch = Date.UTC(1899,11,30);
+      var d = new Date(epoch + Math.round(v)*86400000);
+      return d.toISOString().slice(0,10);
+    }
+    // ya viene como fecha/string
+    var d2 = new Date(v);
+    if(!isNaN(d2.getTime())) return d2.toISOString().slice(0,10);
+    return null;
+  }
+  function badgeEstatus(e){
+    if(e === "REALIZADO") return '<span class="badge badge-realizado">REALIZADO</span>';
+    if(e === "PROGRAMADO") return '<span class="badge badge-programado">PROGRAMADO</span>';
+    if(e === "EN TALLER") return '<span class="badge badge-taller">EN TALLER</span>';
+    return '<span class="badge badge-sin">SIN ESTATUS</span>';
+  }
+  function badgeClase(c){
+    if(c === "OM01") return '<span class="badge badge-om01">OM01</span>';
+    if(c === "OM12") return '<span class="badge badge-om12">OM12</span>';
+    return esc(c);
+  }
+
+  var state = { cronograma: [], remo: [], remomov: [], selectedOrden: null };
+
+  // ---------------- Tabs ----------------
+  document.getElementById("tabs").addEventListener("click", function(e){
+    var btn = e.target.closest(".tab-btn");
+    if(!btn) return;
+    document.querySelectorAll(".tab-btn").forEach(function(b){ b.classList.toggle("active", b===btn); });
+    var name = btn.getAttribute("data-tab");
+    document.querySelectorAll(".tab-panel").forEach(function(p){ p.classList.toggle("active", p.id === "panel-"+name); });
+  });
+
+  // ---------------- Carga inicial ----------------
+  function loadAll(){
+    return Promise.all([
+      fetch(SUPABASE_URL+"/rest/v1/"+T_CRONO+"?select=*&order=economico", {headers:sbHeaders()}).then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); }),
+      fetch(SUPABASE_URL+"/rest/v1/"+T_REMO+"?select=*&order=costo_real.desc", {headers:sbHeaders()}).then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); }),
+      fetch(SUPABASE_URL+"/rest/v1/"+T_MOV+"?select=*&order=orden", {headers:sbHeaders()}).then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); })
+    ]).then(function(res){
+      state.cronograma = res[0];
+      state.remo = res[1];
+      state.remomov = res[2];
+      renderAll();
+    });
+  }
+
+  function renderAll(){
+    renderGlobalKpis();
+    renderAvanceTable();
+    populateCronoFilters();
+    renderCronoTable();
+    renderRemoKpis();
+    populateRemoFilters();
+    renderRemoTable();
+    renderRemomov();
+  }
+
+  // ================= RESUMEN =================
+  function renderGlobalKpis(){
+    var total = state.cronograma.length;
+    var realizados = state.cronograma.filter(function(r){ return r.estatus === "REALIZADO"; }).length;
+    var avance = total ? realizados/total : 0;
+    var remoTotal = state.remo.reduce(function(s,r){ return s + Number(r.costo_real||0); }, 0);
+    var om01 = state.remo.filter(function(r){ return r.clase_orden === "OM01"; });
+    var om12 = state.remo.filter(function(r){ return r.clase_orden === "OM12"; });
+    var om01Total = om01.reduce(function(s,r){ return s+Number(r.costo_real||0); },0);
+    var om12Total = om12.reduce(function(s,r){ return s+Number(r.costo_real||0); },0);
+    var tiles = [
+      {label:"Unidades programadas", value: total, sub: realizados + " realizadas"},
+      {label:"Avance de zona", value: pct(avance), sub: (total-realizados)+" pendientes/en proceso"},
+      {label:"Órdenes de remosamiento", value: state.remo.length, sub: om01.length+" OM01 · "+om12.length+" OM12"},
+      {label:"Gasto total remosamiento", value: money(remoTotal), sub: "real ejercido"},
+      {label:"Gasto OM01 (presupuesto)", value: money(om01Total), sub: om01.length+" órdenes"},
+      {label:"Gasto OM12 (proyectos esp.)", value: money(om12Total), sub: om12.length+" órdenes"}
+    ];
+    var wrap = document.getElementById("kpiRowGlobal");
+    wrap.innerHTML = "";
+    tiles.forEach(function(t){
+      var el = document.createElement("div");
+      el.className = "kpi-tile";
+      el.innerHTML = "<span class=\"kpi-label\">"+t.label+"</span><span class=\"kpi-value\">"+t.value+"</span><span class=\"kpi-sub\">"+t.sub+"</span>";
+      wrap.appendChild(el);
+    });
+  }
+
+  function operacionesPresentes(){
+    var set = {};
+    state.cronograma.forEach(function(r){ if(r.operacion) set[r.operacion] = true; });
+    var extra = Object.keys(set).filter(function(o){ return OPERACION_ORDER.indexOf(o) < 0; }).sort();
+    return OPERACION_ORDER.filter(function(o){ return set[o]; }).concat(extra);
+  }
+
+  function renderAvanceTable(){
+    var ops = operacionesPresentes();
+    var byCedis = {};
+    CEDIS_ORDER.forEach(function(c){ byCedis[c] = {}; ops.forEach(function(o){ byCedis[c][o] = {prog:0, real:0}; }); });
+    var extraCedis = [];
+    state.cronograma.forEach(function(r){
+      var c = r.cedis || "Sin CEDIS";
+      if(!byCedis[c]){ byCedis[c] = {}; ops.forEach(function(o){ byCedis[c][o] = {prog:0, real:0}; }); extraCedis.push(c); }
+      var o = r.operacion || "Sin operación";
+      if(!byCedis[c][o]) byCedis[c][o] = {prog:0, real:0};
+      byCedis[c][o].prog++;
+      if(r.estatus === "REALIZADO") byCedis[c][o].real++;
+    });
+    var cedisList = CEDIS_ORDER.concat(extraCedis);
+
+    var html = "<thead><tr><th>CEDIS</th>";
+    ops.forEach(function(o){ html += "<th colspan=\"3\">"+esc(o)+"</th>"; });
+    html += "<th colspan=\"3\">Totales</th><th class=\"num\">% Avance</th></tr><tr><th></th>";
+    ops.forEach(function(){ html += "<th class=\"num\">Prog.</th><th class=\"num\">Real.</th><th class=\"num\">Falt.</th>"; });
+    html += "<th class=\"num\">Prog.</th><th class=\"num\">Real.</th><th class=\"num\">Falt.</th><th></th></tr></thead><tbody>";
+
+    var zoneProg = 0, zoneReal = 0;
+    var zoneByOp = {}; ops.forEach(function(o){ zoneByOp[o] = {prog:0, real:0}; });
+
+    cedisList.forEach(function(c){
+      if(!byCedis[c]) return;
+      var rowProg = 0, rowReal = 0;
+      html += "<tr><td>"+esc(c)+"</td>";
+      ops.forEach(function(o){
+        var cell = byCedis[c][o] || {prog:0,real:0};
+        rowProg += cell.prog; rowReal += cell.real;
+        zoneByOp[o].prog += cell.prog; zoneByOp[o].real += cell.real;
+        html += "<td class=\"num\">"+(cell.prog||"")+"</td><td class=\"num\">"+(cell.real||"")+"</td><td class=\"num\">"+((cell.prog-cell.real)||"")+"</td>";
+      });
+      zoneProg += rowProg; zoneReal += rowReal;
+      html += "<td class=\"num\">"+rowProg+"</td><td class=\"num\">"+rowReal+"</td><td class=\"num\">"+(rowProg-rowReal)+"</td><td class=\"num\">"+(rowProg?pct(rowReal/rowProg):"—")+"</td></tr>";
+    });
+
+    html += "<tr class=\"total-row\"><td>Total zona</td>";
+    ops.forEach(function(o){
+      html += "<td class=\"num\">"+zoneByOp[o].prog+"</td><td class=\"num\">"+zoneByOp[o].real+"</td><td class=\"num\">"+(zoneByOp[o].prog-zoneByOp[o].real)+"</td>";
+    });
+    html += "<td class=\"num\">"+zoneProg+"</td><td class=\"num\">"+zoneReal+"</td><td class=\"num\">"+(zoneProg-zoneReal)+"</td><td class=\"num\">"+(zoneProg?pct(zoneReal/zoneProg):"—")+"</td></tr>";
+    html += "</tbody>";
+    document.getElementById("avanceTable").innerHTML = html;
+  }
+
+  // ================= CRONOGRAMA =================
+  function populateCronoFilters(){
+    var cedisSel = document.getElementById("cronoCedis");
+    var opSel = document.getElementById("cronoOp");
+    var estSel = document.getElementById("cronoEstatus");
+    if(cedisSel.options.length === 1){
+      CEDIS_ORDER.forEach(function(c){ var o=document.createElement("option"); o.value=c; o.textContent=c; cedisSel.appendChild(o); });
+    }
+    if(opSel.options.length === 1){
+      operacionesPresentes().forEach(function(o){ var el=document.createElement("option"); el.value=o; el.textContent=o; opSel.appendChild(el); });
+    }
+    if(estSel.options.length === 1){
+      ["REALIZADO","PROGRAMADO","EN TALLER"].forEach(function(e){ var el=document.createElement("option"); el.value=e; el.textContent=e; estSel.appendChild(el); });
+    }
+  }
+
+  function renderCronoTable(){
+    var q = document.getElementById("cronoSearch").value.trim().toUpperCase();
+    var cedis = document.getElementById("cronoCedis").value;
+    var op = document.getElementById("cronoOp").value;
+    var est = document.getElementById("cronoEstatus").value;
+    var rows = state.cronograma.filter(function(r){
+      if(cedis && r.cedis !== cedis) return false;
+      if(op && r.operacion !== op) return false;
+      if(est && r.estatus !== est) return false;
+      if(q){
+        var hay = [r.economico, r.observacion].some(function(v){ return v && String(v).toUpperCase().indexOf(q) >= 0; });
+        if(!hay) return false;
+      }
+      return true;
+    });
+    document.getElementById("cronoSub").textContent = rows.length + " de " + state.cronograma.length + " unidades";
+    var html = "<thead><tr><th>CEDIS</th><th>Económico</th><th>Operación</th><th>Estatus</th><th>Observación</th></tr></thead><tbody>";
+    rows.forEach(function(r){
+      html += "<tr><td>"+esc(r.cedis)+"</td><td>"+esc(r.economico)+"</td><td>"+esc(r.operacion)+"</td><td>"+badgeEstatus(r.estatus)+"</td><td>"+esc(r.observacion)+"</td></tr>";
+    });
+    html += "</tbody>";
+    document.getElementById("cronoTable").innerHTML = html;
+  }
+
+  ["cronoSearch","cronoCedis","cronoOp","cronoEstatus"].forEach(function(id){
+    document.getElementById(id).addEventListener("input", renderCronoTable);
+    document.getElementById(id).addEventListener("change", renderCronoTable);
+  });
+
+  document.getElementById("cronoExport").addEventListener("click", function(){
+    var ws = XLSX.utils.json_to_sheet(state.cronograma.map(function(r){
+      return { CEDIS:r.cedis, ECONOMICO:r.economico, OPERACION:r.operacion, ESTATUS:r.estatus, OBSERVACION:r.observacion };
+    }));
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Cronograma");
+    XLSX.writeFile(wb, "cronograma_hojalateria.xlsx");
+  });
+
+  // ================= REMO =================
+  function renderRemoKpis(){
+    var om01 = state.remo.filter(function(r){ return r.clase_orden === "OM01"; });
+    var om12 = state.remo.filter(function(r){ return r.clase_orden === "OM12"; });
+    function sum(arr){ return arr.reduce(function(s,r){ return s+Number(r.costo_real||0); },0); }
+    var om01Total = sum(om01), om12Total = sum(om12);
+    var tiles = [
+      {label:"OM01 · presupuesto asignado", value: om01.length+" órdenes", sub: money(om01Total)+" total · "+money(om01.length?om01Total/om01.length:0)+" promedio", accent:false},
+      {label:"OM12 · proyectos especiales", value: om12.length+" órdenes", sub: money(om12Total)+" total · "+money(om12.length?om12Total/om12.length:0)+" promedio", accent:false},
+      {label:"Diferencia de promedio", value: money(Math.abs((om12.length?om12Total/om12.length:0)-(om01.length?om01Total/om01.length:0))), sub: (om12.length && om01.length && (om12Total/om12.length)>(om01Total/om01.length)) ? "OM12 cuesta más por orden en promedio" : "OM01 cuesta más por orden en promedio", accent:true}
+    ];
+    var wrap = document.getElementById("remoKpis");
+    wrap.innerHTML = "";
+    tiles.forEach(function(t){
+      var el = document.createElement("div");
+      el.className = "kpi-tile" + (t.accent ? " accent" : "");
+      el.innerHTML = "<span class=\"kpi-label\">"+t.label+"</span><span class=\"kpi-value\">"+t.value+"</span><span class=\"kpi-sub\">"+t.sub+"</span>";
+      wrap.appendChild(el);
+    });
+  }
+
+  function populateRemoFilters(){
+    var sel = document.getElementById("remoCedis");
+    if(sel.options.length === 1){
+      CEDIS_ORDER.forEach(function(c){ var o=document.createElement("option"); o.value=c; o.textContent=c; sel.appendChild(o); });
+    }
+  }
+
+  function renderRemoTable(){
+    var q = document.getElementById("remoSearch").value.trim().toUpperCase();
+    var cedis = document.getElementById("remoCedis").value;
+    var clase = document.getElementById("remoClase").value;
+    var sort = document.getElementById("remoSort").value;
+    var rows = state.remo.filter(function(r){
+      var cedisR = bodegaFromEconomico(r.economico);
+      if(cedis && cedisR !== cedis) return false;
+      if(clase && r.clase_orden !== clase) return false;
+      if(q){
+        var hay = [String(r.orden), r.economico, r.texto_breve].some(function(v){ return v && String(v).toUpperCase().indexOf(q) >= 0; });
+        if(!hay) return false;
+      }
+      return true;
+    });
+    rows = rows.slice().sort(function(a,b){
+      if(sort === "costo_desc") return Number(b.costo_real) - Number(a.costo_real);
+      if(sort === "costo_asc") return Number(a.costo_real) - Number(b.costo_real);
+      if(sort === "fecha_desc") return new Date(b.fecha_entrada) - new Date(a.fecha_entrada);
+      if(sort === "fecha_asc") return new Date(a.fecha_entrada) - new Date(b.fecha_entrada);
+      return 0;
+    });
+    document.getElementById("remoSub").textContent = rows.length + " de " + state.remo.length + " órdenes — haz clic en una para ver materiales";
+    var html = "<thead><tr><th>Orden</th><th>Clase</th><th>Económico</th><th>CEDIS</th><th>Texto breve</th><th>Fecha entrada</th><th class=\"num\">Costo real</th><th class=\"num\">Costo plan</th></tr></thead><tbody>";
+    rows.forEach(function(r){
+      var sel = state.selectedOrden === r.orden ? " selected" : "";
+      html += "<tr class=\"clickable"+sel+"\" data-orden=\""+r.orden+"\"><td>"+esc(r.orden)+"</td><td>"+badgeClase(r.clase_orden)+"</td><td>"+esc(r.economico)+"</td><td>"+esc(bodegaFromEconomico(r.economico))+"</td><td>"+esc(r.texto_breve)+"</td><td>"+esc(r.fecha_entrada)+"</td><td class=\"num\">"+money(r.costo_real)+"</td><td class=\"num\">"+money(r.costo_plan)+"</td></tr>";
+    });
+    html += "</tbody>";
+    document.getElementById("remoTable").innerHTML = html;
+  }
+
+  ["remoSearch","remoCedis","remoClase","remoSort"].forEach(function(id){
+    document.getElementById(id).addEventListener("input", renderRemoTable);
+    document.getElementById(id).addEventListener("change", renderRemoTable);
+  });
+
+  document.getElementById("remoTable").addEventListener("click", function(e){
+    var tr = e.target.closest("tr[data-orden]");
+    if(!tr) return;
+    state.selectedOrden = Number(tr.getAttribute("data-orden"));
+    renderRemoTable();
+    renderRemomov();
+    document.querySelector('.tab-btn[data-tab="remomov"]').click();
+  });
+
+  document.getElementById("remoExport").addEventListener("click", function(){
+    var ws = XLSX.utils.json_to_sheet(state.remo.map(function(r){
+      return { ORDEN:r.orden, CLASE:r.clase_orden, ECONOMICO:r.economico, CEDIS:bodegaFromEconomico(r.economico), TEXTO_BREVE:r.texto_breve, CENTRO_COSTE:r.centro_coste, FECHA_ENTRADA:r.fecha_entrada, FECHA_REFERENCIA:r.fecha_referencia, COSTO_REAL:r.costo_real, COSTO_PLAN:r.costo_plan, STATUS:r.status_sistema };
+    }));
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Remo");
+    XLSX.writeFile(wb, "remo_hojalateria.xlsx");
+  });
+
+  // ================= REMOMOV =================
+  function renderRemomov(){
+    var orden = state.selectedOrden;
+    var emptyEl = document.getElementById("remomovEmpty");
+    var contentEl = document.getElementById("remomovContent");
+    if(!orden){
+      emptyEl.hidden = false; contentEl.hidden = true;
+      document.getElementById("remomovSub").textContent = "";
+      return;
+    }
+    var remoRow = state.remo.filter(function(r){ return r.orden === orden; })[0];
+    var items = state.remomov.filter(function(r){ return r.orden === orden; });
+    emptyEl.hidden = true; contentEl.hidden = false;
+    document.getElementById("remomovSub").textContent = "Orden " + orden + (remoRow ? " — " + esc(remoRow.texto_breve) + " (" + esc(remoRow.economico) + ")" : "");
+
+    var sumImporte = items.reduce(function(s,r){ return s + Number(r.importe||0); }, 0);
+    var costoReal = remoRow ? Number(remoRow.costo_real||0) : null;
+    var kpis = [
+      {label:"Renglones de material", value: items.length, sub: "documentos de salida"},
+      {label:"Suma de materiales", value: money(sumImporte), sub: "importe ML"},
+      {label:"Costo real de la orden", value: costoReal!==null ? money(costoReal) : "—", sub: costoReal!==null ? (Math.abs(costoReal-sumImporte) < 1 ? "coincide con los materiales" : "diferencia: "+money(costoReal-sumImporte)) : ""}
+    ];
+    var kwrap = document.getElementById("remomovKpis");
+    kwrap.innerHTML = "";
+    kpis.forEach(function(t){
+      var el = document.createElement("div");
+      el.className = "kpi-tile";
+      el.innerHTML = "<span class=\"kpi-label\">"+t.label+"</span><span class=\"kpi-value\">"+t.value+"</span><span class=\"kpi-sub\">"+t.sub+"</span>";
+      kwrap.appendChild(el);
+    });
+
+    var html = "<thead><tr><th>Documento</th><th>Fecha</th><th>Material</th><th>Descripción</th><th class=\"num\">Cantidad</th><th>Unidad</th><th class=\"num\">Importe</th><th>Cuenta</th></tr></thead><tbody>";
+    items.slice().sort(function(a,b){ return String(a.fecha_documento).localeCompare(String(b.fecha_documento)); }).forEach(function(r){
+      html += "<tr><td>"+esc(r.documento_material)+"</td><td>"+esc(r.fecha_documento)+"</td><td>"+esc(r.material)+"</td><td>"+esc(r.texto_material)+"</td><td class=\"num\">"+esc(r.cantidad)+"</td><td>"+esc(r.unidad_medida)+"</td><td class=\"num\">"+money(r.importe)+"</td><td>"+esc(r.cuenta_mayor)+"</td></tr>";
+    });
+    html += "</tbody>";
+    document.getElementById("remomovTable").innerHTML = html;
+  }
+
+  // ================= ACTUALIZAR: parseo del Excel =================
+  function findSheet(wb, name){
+    var hit = wb.SheetNames.filter(function(n){ return n.trim().toLowerCase() === name.toLowerCase(); })[0];
+    return hit ? wb.Sheets[hit] : null;
+  }
+
+  function parseCronogramaSheet(wb){
+    var ws = findSheet(wb, "CRONOGRAMA");
+    if(!ws) throw new Error("No se encontró la pestaña CRONOGRAMA.");
+    var arr = XLSX.utils.sheet_to_json(ws, {header:1, defval:null, raw:true});
+    var out = [];
+    for(var r=1; r<arr.length; r++){
+      var row = arr[r];
+      if(!row || row[1]===null || row[1]===undefined || row[1]==="") continue;
+      var cedisRaw = row[0];
+      var cedis = cedisRaw ? (BODEGA_CANON[String(cedisRaw).trim().toUpperCase()] || String(cedisRaw).trim()) : bodegaFromEconomico(row[1]);
+      out.push({
+        economico: String(row[1]).trim(),
+        cedis: cedis,
+        operacion: row[2] ? String(row[2]).trim() : null,
+        estatus: row[row.length-2] ? String(row[row.length-2]).trim() : null,
+        observacion: row[row.length-1] ? String(row[row.length-1]).trim() : null
+      });
+    }
+    return out;
+  }
+
+  function parseRemoSheet(wb){
+    var ws = findSheet(wb, "Remo");
+    if(!ws) throw new Error("No se encontró la pestaña Remo.");
+    var arr = XLSX.utils.sheet_to_json(ws, {header:1, defval:null, raw:true});
+    var all = [];
+    for(var r=1; r<arr.length; r++){
+      var row = arr[r];
+      if(!row || row[1]===null || row[1]===undefined || row[1]==="") continue;
+      all.push({
+        orden: Number(row[1]),
+        clase_orden: row[2] ? String(row[2]).trim() : null,
+        texto_breve: row[3] ? String(row[3]).trim() : null,
+        economico: row[4] ? String(row[4]).trim() : null,
+        costo_real: row[5]===null||row[5]===undefined ? null : Number(row[5]),
+        centro: row[6] ? String(row[6]).trim() : null,
+        centro_coste: row[7] ? String(row[7]).trim() : null,
+        fecha_referencia: excelDateToISO(row[8]),
+        costo_plan: row[9]===null||row[9]===undefined ? null : Number(row[9]),
+        fecha_entrada: excelDateToISO(row[10]),
+        denominacion_objeto: row[11] ? String(row[11]).trim() : null,
+        status_sistema: row[12] ? String(row[12]).trim() : null
+      });
+    }
+    var filtradas = all.filter(function(r){ return isRemosamiento(r.texto_breve); });
+    return { all: all, filtradas: filtradas };
+  }
+
+  function parseRemomovSheet(wb, ordenSet){
+    var ws = findSheet(wb, "Remomov");
+    if(!ws) throw new Error("No se encontró la pestaña Remomov.");
+    var arr = XLSX.utils.sheet_to_json(ws, {header:1, defval:null, raw:true});
+    var out = [];
+    for(var r=1; r<arr.length; r++){
+      var row = arr[r];
+      if(!row || row[0]===null || row[0]===undefined || row[0]==="") continue;
+      var orden = Number(row[0]);
+      if(!ordenSet.has(orden)) continue;
+      out.push({
+        orden: orden,
+        documento_material: row[1]===null||row[1]===undefined ? null : Number(row[1]),
+        fecha_documento: excelDateToISO(row[2]),
+        material: row[3]===null||row[3]===undefined ? null : Number(row[3]),
+        texto_material: row[4] ? String(row[4]).trim() : null,
+        cantidad: row[5]===null||row[5]===undefined ? null : Number(row[5]),
+        unidad_medida: row[6] ? String(row[6]).trim() : null,
+        importe: row[7]===null||row[7]===undefined ? null : Number(row[7]),
+        fecha_contabilizacion: excelDateToISO(row[8]),
+        cuenta_mayor: row[9]===null||row[9]===undefined ? null : Number(row[9])
+      });
+    }
+    return out;
+  }
+
+  function cronoFieldsEqual(a,b){
+    var keys = ["cedis","operacion","estatus","observacion"];
+    return keys.every(function(k){ return (a[k] ?? null) === (b[k] ?? null); });
+  }
+  function remoFieldsEqual(a,b){
+    var keys = ["clase_orden","texto_breve","economico","costo_real","centro","centro_coste","fecha_referencia","costo_plan","fecha_entrada","denominacion_objeto","status_sistema"];
+    return keys.every(function(k){ return (a[k] ?? null) === (b[k] ?? null); });
+  }
+
+  function computeCronoDiff(newRows){
+    var currentByEco = {}; state.cronograma.forEach(function(r){ currentByEco[r.economico]=r; });
+    var newByEco = {}; newRows.forEach(function(r){ newByEco[r.economico]=r; });
+    var altas=[], cambios=[], sinCambio=[], bajas=[];
+    newRows.forEach(function(r){
+      var ex = currentByEco[r.economico];
+      if(!ex) altas.push(r);
+      else if(!cronoFieldsEqual(ex,r)) cambios.push(r);
+      else sinCambio.push(r);
+    });
+    state.cronograma.forEach(function(r){ if(!newByEco[r.economico]) bajas.push(r); });
+    return {altas:altas, cambios:cambios, sinCambio:sinCambio, bajas:bajas};
+  }
+
+  function computeRemoDiff(filtradas){
+    var currentByOrden = {}; state.remo.forEach(function(r){ currentByOrden[r.orden]=r; });
+    var altas=[], cambios=[], sinCambio=[];
+    filtradas.forEach(function(r){
+      var ex = currentByOrden[r.orden];
+      if(!ex) altas.push(r);
+      else if(!remoFieldsEqual(ex,r)) cambios.push(r);
+      else sinCambio.push(r);
+    });
+    return {altas:altas, cambios:cambios, sinCambio:sinCambio};
+  }
+
+  // ---------------- Flujo de actualización ----------------
+  document.getElementById("btnPick").addEventListener("click", function(){ document.getElementById("fileInput").click(); });
+  document.getElementById("fileInput").addEventListener("change", function(e){
+    var file = e.target.files[0];
+    if(!file) return;
+    var statusBox = document.getElementById("statusBox");
+    statusBox.hidden = true;
+    var reader = new FileReader();
+    reader.onload = function(ev){
+      try{
+        var wb = XLSX.read(ev.target.result, {type:"array"});
+        var cronoRows = parseCronogramaSheet(wb);
+        var remoParsed = parseRemoSheet(wb);
+        var ordenSet = new Set(remoParsed.filtradas.map(function(r){ return r.orden; }));
+        var movRows = parseRemomovSheet(wb, ordenSet);
+
+        var cronoDiff = computeCronoDiff(cronoRows);
+        var remoDiff = computeRemoDiff(remoParsed.filtradas);
+
+        state.pending = { cronoRows: cronoRows, remoFiltradas: remoParsed.filtradas, movRows: movRows, ordenSet: ordenSet, cronoDiff: cronoDiff, remoDiff: remoDiff };
+
+        document.getElementById("fileMeta").textContent = file.name;
+
+        document.getElementById("dCronoAltas").textContent = cronoDiff.altas.length;
+        document.getElementById("dCronoCambios").textContent = cronoDiff.cambios.length;
+        document.getElementById("dCronoBajas").textContent = cronoDiff.bajas.length;
+        document.getElementById("dCronoSin").textContent = cronoDiff.sinCambio.length;
+
+        document.getElementById("dRemoTotal").textContent = remoParsed.all.length;
+        document.getElementById("dRemoFiltradas").textContent = remoParsed.filtradas.length;
+        document.getElementById("dRemoAltas").textContent = remoDiff.altas.length;
+        document.getElementById("dRemoCambios").textContent = remoDiff.cambios.length;
+        document.getElementById("dRemoSin").textContent = remoDiff.sinCambio.length;
+
+        document.getElementById("dMovOrdenes").textContent = ordenSet.size;
+        document.getElementById("dMovFilas").textContent = movRows.length;
+
+        document.getElementById("diffPreview").hidden = false;
+      }catch(err){
+        statusBox.hidden = false; statusBox.className = "status-box err";
+        statusBox.textContent = "No se pudo leer el archivo: " + err.message;
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  });
+
+  document.getElementById("btnConfirm").addEventListener("click", function(){
+    var statusBox = document.getElementById("statusBox");
+    var pw = document.getElementById("pwBox").value;
+    if(pw !== UPDATE_PASSWORD){
+      statusBox.hidden=false; statusBox.className="status-box err"; statusBox.textContent="Contraseña incorrecta.";
+      return;
+    }
+    var p = state.pending;
+    if(!p){ return; }
+    var btn = document.getElementById("btnConfirm");
+    btn.disabled = true;
+    statusBox.hidden=false; statusBox.className="status-box"; statusBox.textContent="Actualizando Supabase...";
+
+    var cronoUpsert = p.cronoDiff.altas.concat(p.cronoDiff.cambios);
+    var cronoBajaEcos = p.cronoDiff.bajas.map(function(r){ return r.economico; });
+    var remoUpsert = p.remoDiff.altas.concat(p.remoDiff.cambios);
+    var ordenList = Array.from(p.ordenSet);
+
+    function step1_upsertCrono(){
+      if(cronoUpsert.length === 0) return Promise.resolve();
+      return fetch(SUPABASE_URL+"/rest/v1/"+T_CRONO+"?on_conflict=economico", {
+        method:"POST", headers: sbHeaders({"Prefer":"resolution=merge-duplicates,return=minimal"}),
+        body: JSON.stringify(cronoUpsert)
+      }).then(function(r){ if(!r.ok) return r.text().then(function(t){ throw new Error("crono upsert: "+t); }); });
+    }
+    function step2_deleteBajas(){
+      if(cronoBajaEcos.length === 0) return Promise.resolve();
+      return fetch(SUPABASE_URL+"/rest/v1/"+T_CRONO+"?economico=in.("+cronoBajaEcos.map(function(e){return '"'+e+'"';}).join(",")+")", {
+        method:"DELETE", headers: sbHeaders({"Prefer":"return=minimal"})
+      }).then(function(r){ if(!r.ok) return r.text().then(function(t){ throw new Error("crono bajas: "+t); }); });
+    }
+    function step3_upsertRemo(){
+      if(remoUpsert.length === 0) return Promise.resolve();
+      return fetch(SUPABASE_URL+"/rest/v1/"+T_REMO+"?on_conflict=orden", {
+        method:"POST", headers: sbHeaders({"Prefer":"resolution=merge-duplicates,return=minimal"}),
+        body: JSON.stringify(remoUpsert)
+      }).then(function(r){ if(!r.ok) return r.text().then(function(t){ throw new Error("remo upsert: "+t); }); });
+    }
+    function step4_deleteMov(){
+      if(ordenList.length === 0) return Promise.resolve();
+      return fetch(SUPABASE_URL+"/rest/v1/"+T_MOV+"?orden=in.("+ordenList.join(",")+")", {
+        method:"DELETE", headers: sbHeaders({"Prefer":"return=minimal"})
+      }).then(function(r){ if(!r.ok) return r.text().then(function(t){ throw new Error("mov delete: "+t); }); });
+    }
+    function step5_insertMov(){
+      if(p.movRows.length === 0) return Promise.resolve();
+      return fetch(SUPABASE_URL+"/rest/v1/"+T_MOV, {
+        method:"POST", headers: sbHeaders({"Prefer":"return=minimal"}),
+        body: JSON.stringify(p.movRows)
+      }).then(function(r){ if(!r.ok) return r.text().then(function(t){ throw new Error("mov insert: "+t); }); });
+    }
+
+    step1_upsertCrono()
+      .then(step2_deleteBajas)
+      .then(step3_upsertRemo)
+      .then(step4_deleteMov)
+      .then(step5_insertMov)
+      .then(function(){
+        statusBox.className="status-box ok";
+        statusBox.textContent = "Listo — Cronograma: "+cronoUpsert.length+" actualizadas/"+cronoBajaEcos.length+" eliminadas. Remo: "+remoUpsert.length+" actualizadas. Materiales: "+p.movRows.length+" renglones recargados para "+ordenList.length+" órdenes.";
+        document.getElementById("diffPreview").hidden = true;
+        document.getElementById("pwBox").value = "";
+        document.getElementById("fileMeta").textContent = "";
+        state.pending = null;
+        return loadAll();
+      })
+      .catch(function(err){
+        statusBox.className="status-box err";
+        statusBox.textContent = "Error al actualizar: " + err.message;
+      })
+      .finally(function(){ btn.disabled = false; });
+  });
+
+  loadAll().catch(function(err){
+    document.getElementById("cronoSub").textContent = "Error al cargar: " + err.message;
+  });
+})();
+</script>
+</body>
+</html>
