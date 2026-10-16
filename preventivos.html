@@ -242,6 +242,7 @@
 
   var cargas = [];
   var rows = [];
+  var personal = [];
   var $ = function(id){ return document.getElementById(id); };
 
   function sbHeaders(){ return { "apikey": SUPABASE_KEY, "Authorization": "Bearer " + SUPABASE_KEY }; }
@@ -256,6 +257,18 @@
   function cedisName(c){ return c === "Puente De Ixtla" ? "Puente de Ixtla" : c; }
   function periodoLabel(p){ var y = p.slice(0,4), m = parseInt(p.slice(5,7),10); return MESES[m-1] + " " + y; }
   function fechaCorta(s){ if(!s) return ""; var p = String(s).slice(0,10).split("-"); return p[2] + "/" + p[1] + "/" + p[0]; }
+  function norm(v){ return String(v||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").trim().toLowerCase(); }
+  function persona(cedis, alias){
+    var c = norm(cedis), a = norm(alias);
+    for(var i=0;i<personal.length;i++){ if(personal[i].alias_hoja && norm(personal[i].cedis) === c && norm(personal[i].alias_hoja) === a) return personal[i]; }
+    return null;
+  }
+  function nombreMec(r){ var p = persona(r.cedis, r.mecanico); return p ? p.nombre : (r.mecanico || "Sin asignar"); }
+  function jefeZona(z){
+    var pat = z === "Soler" ? "jefe de mantenimiento" : "supervisor de mecanicos";
+    for(var i=0;i<personal.length;i++){ if(norm(personal[i].puesto).indexOf(pat) === 0) return personal[i]; }
+    return null;
+  }
   function zonaDeCedis(c){ return ZONAS.Soler.cedis.indexOf(c) >= 0 ? "Soler" : "Muñiz"; }
 
   function agg(list){
@@ -333,8 +346,10 @@
         var ca = agg(zl.filter(function(r){ return r.cedis === c; }));
         return '<tr><td>' + esc(cedisName(c)) + '</td><td class="num">' + ca.real + ' / ' + ca.apl + '</td><td>' + meterCell(ca.pct) + '</td><td class="num">' + money(ca.costo) + '</td></tr>';
       }).join("");
+      var jf = jefeZona(z);
       return '<div class="zone-card ' + (f.zona === z ? "sel" : "") + '">' +
         '<div class="zone-head"><h3>' + esc(ZONAS[z].nombre) + '</h3><button class="btn-ghost" data-zona="' + esc(z) + '">' + (f.zona === z ? "Ver ambas zonas" : "Ver solo esta zona") + '</button></div>' +
+        (jf ? '<p class="note"><b>' + esc(jf.nombre) + '</b> · ' + esc(jf.puesto) + '</p>' : '') +
         '<div class="zone-kpis">' +
           '<div><span class="n">' + a.apl + '</span><span class="l">Aplicables</span></div>' +
           '<div><span class="n">' + a.real + '</span><span class="l">Realizados</span></div>' +
@@ -357,9 +372,9 @@
   function renderMecanicos(list){
     var map = {};
     list.forEach(function(r){
-      var name = (r.mecanico || "Sin asignar");
-      var k = r.cedis + "||" + name;
-      (map[k] = map[k] || {nombre:name, cedis:r.cedis, list:[]}).list.push(r);
+      var k = r.cedis + "||" + (r.mecanico || "");
+      if(!map[k]){ var p = persona(r.cedis, r.mecanico); map[k] = {nombre:nombreMec(r), puesto:p ? p.puesto : "", jefe:p ? (p.reporta_a || "") : "", cedis:r.cedis, list:[]}; }
+      map[k].list.push(r);
     });
     var arr = Object.keys(map).map(function(k){ var m = map[k]; m.a = agg(m.list); return m; }).filter(function(m){ return m.a.apl > 0; });
     var s = $("mecSort").value;
@@ -370,12 +385,12 @@
       return (y.a.real - x.a.real) || x.nombre.localeCompare(y.nombre, "es");
     });
     $("mecSub").textContent = scopeLabel() + " · " + arr.length + " mecánicos";
-    var html = '<thead><tr><th>Mecánico</th><th>CEDIS</th><th class="num">Asignados</th><th class="num">Realizados</th><th>Cumplimiento</th><th class="num">Con material</th><th class="num">Evidencia / material</th></tr></thead><tbody>';
+    var html = '<thead><tr><th>Mecánico</th><th>CEDIS</th><th>Supervisor</th><th class="num">Asignados</th><th class="num">Realizados</th><th>Cumplimiento</th><th class="num">Con material</th><th class="num">Evidencia / material</th></tr></thead><tbody>';
     arr.forEach(function(m){
       var evMat = m.a.conMat > 0 ? m.a.realMat / m.a.conMat : null;
-      html += '<tr><td>' + esc(m.nombre) + '</td><td>' + esc(cedisName(m.cedis)) + '</td><td class="num">' + m.a.apl + '</td><td class="num">' + m.a.real + '</td><td>' + meterCell(m.a.pct) + '</td><td class="num">' + m.a.conMat + '</td><td class="num">' + pctTxt(evMat) + '</td></tr>';
+      html += '<tr><td><b>' + esc(m.nombre) + '</b>' + (m.puesto ? '<br><span class="note">' + esc(m.puesto) + '</span>' : '') + '</td><td>' + esc(cedisName(m.cedis)) + '</td><td>' + esc(m.jefe) + '</td><td class="num">' + m.a.apl + '</td><td class="num">' + m.a.real + '</td><td>' + meterCell(m.a.pct) + '</td><td class="num">' + m.a.conMat + '</td><td class="num">' + pctTxt(evMat) + '</td></tr>';
     });
-    if(!arr.length) html += '<tr><td colspan="7" class="empty-hint">Sin datos con este filtro.</td></tr>';
+    if(!arr.length) html += '<tr><td colspan="8" class="empty-hint">Sin datos con este filtro.</td></tr>';
     $("mecTable").innerHTML = html + '</tbody>';
   }
 
@@ -427,7 +442,7 @@
       else if(est && r.estatus !== est) return false;
       if(srv && r.servicio !== srv) return false;
       if(q){
-        var hay = [r.economico, r.mecanico, r.orden, r.alerta, r.seguimiento, r.cedis].join(" ").toLowerCase();
+        var hay = [r.economico, r.mecanico, nombreMec(r), r.orden, r.alerta, r.seguimiento, r.cedis].join(" ").toLowerCase();
         if(hay.indexOf(q) < 0) return false;
       }
       return true;
@@ -441,7 +456,7 @@
       var servLbl = (SERVICIOS.filter(function(s){ return s[0] === r.servicio; })[0] || [0, r.servicio])[1];
       var obs = r.alerta || ((r.seguimiento && String(r.seguimiento).length > 10) ? r.seguimiento : "");
       if(r.alerta && r.seguimiento && String(r.seguimiento).length > 10 && r.estatus === "no_realizado") obs = r.seguimiento + " — " + r.alerta;
-      html += '<tr><td><b>' + esc(r.economico) + '</b></td><td>' + esc(cedisName(r.cedis)) + '</td><td>' + esc(servLbl) + '</td><td>' + esc(r.mecanico) + '</td><td>' + badge(r.estatus) + '</td><td>' + esc(r.orden) + '</td><td>' + esc(fechaCorta(r.fecha_orden)) + '</td><td class="num">' + (r.costo_real === null || r.costo_real === undefined ? "" : money(r.costo_real)) + '</td><td class="alert-txt">' + esc(obs) + '</td></tr>';
+      html += '<tr><td><b>' + esc(r.economico) + '</b></td><td>' + esc(cedisName(r.cedis)) + '</td><td>' + esc(servLbl) + '</td><td>' + esc(nombreMec(r)) + '</td><td>' + badge(r.estatus) + '</td><td>' + esc(r.orden) + '</td><td>' + esc(fechaCorta(r.fecha_orden)) + '</td><td class="num">' + (r.costo_real === null || r.costo_real === undefined ? "" : money(r.costo_real)) + '</td><td class="alert-txt">' + esc(obs) + '</td></tr>';
     });
     if(!out.length) html += '<tr><td colspan="9" class="empty-hint">Sin servicios con este filtro.</td></tr>';
     $("detTable").innerHTML = html + '</tbody>';
@@ -467,7 +482,7 @@
     var data = detCurrent.map(function(r){
       return {
         "Económico": r.economico, "CEDIS": cedisName(r.cedis), "Zona": ZONAS[zonaDeCedis(r.cedis)].nombre,
-        "Servicio": r.servicio, "Mecánico": r.mecanico, "Estatus": ESTATUS_LABEL[r.estatus] || r.estatus,
+        "Servicio": r.servicio, "Mecánico": nombreMec(r), "Supervisor": (persona(r.cedis, r.mecanico) || {}).reporta_a || "", "Estatus": ESTATUS_LABEL[r.estatus] || r.estatus,
         "Orden": r.orden, "Fecha orden": r.fecha_orden, "Costo real": r.costo_real,
         "Observación": r.alerta || r.seguimiento || ""
       };
@@ -496,7 +511,11 @@
   }
 
   function init(){
-    sbGet("preventivos_cargas?select=*&order=periodo.desc").then(function(data){
+    Promise.all([
+      sbGet("preventivos_cargas?select=*&order=periodo.desc"),
+      sbGet("personal?select=*").catch(function(){ return []; })
+    ]).then(function(res){
+      var data = res[0]; personal = res[1];
       cargas = data;
       if(!cargas.length){ showError("Todavía no hay meses cargados en Supabase."); $("metaCarga").textContent = ""; return; }
       $("fMes").innerHTML = cargas.map(function(c){ return '<option value="' + esc(c.periodo) + '">' + esc(periodoLabel(c.periodo)) + '</option>'; }).join("");
