@@ -1,0 +1,524 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Preventivos</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --ink:#142433; --ink-soft:#48607A; --ink-faint:#7C93A6;
+    --bg:#EEF2F5; --surface:#FFFFFF; --surface-alt:#E4EAEF; --border:#D3DCE3;
+    --accent:#0E7C86; --accent-ink:#FFFFFF; --accent-soft:#DCEEF0;
+    --shadow: 0 1px 2px rgba(20,36,51,.06), 0 4px 14px rgba(20,36,51,.07);
+    --c1:#2a78d6; --c2:#eb6834; --c3:#1baf7a; --c4:#eda100;
+    --good:#0b8a0b; --warn:#b07400; --bad:#d63a39;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --ink:#E7EDF2; --ink-soft:#9AB0C2; --ink-faint:#7C93A6;
+      --bg:#0F1620; --surface:#182230; --surface-alt:#1F2C3C; --border:#2B3B4D;
+      --accent:#35B6C2; --accent-ink:#06232A; --accent-soft:#163238;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 14px rgba(0,0,0,.35);
+      --c1:#3987e5; --c2:#d95926; --c3:#199e70; --c4:#c98500;
+      --good:#2fbf2f; --warn:#d99a1a; --bad:#e66767;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ink:#E7EDF2; --ink-soft:#9AB0C2; --ink-faint:#7C93A6;
+    --bg:#0F1620; --surface:#182230; --surface-alt:#1F2C3C; --border:#2B3B4D;
+    --accent:#35B6C2; --accent-ink:#06232A; --accent-soft:#163238;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 14px rgba(0,0,0,.35);
+    --c1:#3987e5; --c2:#d95926; --c3:#199e70; --c4:#c98500;
+    --good:#2fbf2f; --warn:#d99a1a; --bad:#e66767;
+  }
+  *{box-sizing:border-box;}
+  body{background:var(--bg); color:var(--ink); font-family:'Inter',system-ui,-apple-system,sans-serif; margin:0;}
+  .wrap{max-width:1180px; margin:0 auto; padding:20px 16px 48px; display:flex; flex-direction:column; gap:20px;}
+  h1,h2,h3{font-family:'Barlow Semi Condensed',system-ui,sans-serif; font-weight:700; margin:0; letter-spacing:.2px;}
+  p{margin:0;}
+  button{font-family:inherit; cursor:pointer;}
+  input,select{font-family:inherit;}
+  [hidden]{display:none !important;}
+
+  .hero{display:flex; flex-direction:column; gap:6px;}
+  .hero h1{font-size:26px;}
+  .hero p{font-size:14px; color:var(--ink-soft); line-height:1.5; max-width:78ch;}
+
+  .filterbar{display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:12px 14px; box-shadow:var(--shadow);}
+  @media (min-width:701px){ .filterbar{position:sticky; top:0; z-index:5;} }
+  .field{display:flex; flex-direction:column; gap:3px;}
+  .field label{font-size:10.5px; font-weight:700; color:var(--ink-faint); text-transform:uppercase; letter-spacing:.5px;}
+  .field select, .field input{padding:8px 10px; border-radius:10px; border:1px solid var(--border); background:var(--bg); color:var(--ink); font-size:13px; min-width:150px;}
+  .filterbar .meta{margin-left:auto; font-size:12px; color:var(--ink-faint); text-align:right; line-height:1.5;}
+
+  .kpi-row{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px;}
+  .kpi-tile{background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:14px 16px; display:flex; flex-direction:column; gap:4px;}
+  .kpi-tile.accent{background:var(--accent-soft); border-color:var(--accent);}
+  .kpi-label{font-size:11px; font-weight:600; color:var(--ink-faint); text-transform:uppercase; letter-spacing:.5px;}
+  .kpi-value{font-family:'Barlow Semi Condensed',sans-serif; font-size:26px; font-weight:700; line-height:1.1;}
+  .kpi-sub{font-size:12px; color:var(--ink-soft);}
+
+  .card{background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:18px; box-shadow:var(--shadow); display:flex; flex-direction:column; gap:14px;}
+  .card-head{display:flex; align-items:baseline; justify-content:space-between; gap:10px; flex-wrap:wrap;}
+  .card-head h2{font-size:18px;}
+  .card-head .card-sub{font-size:12px; color:var(--ink-faint);}
+  .grid2{display:grid; grid-template-columns:repeat(auto-fit,minmax(340px,1fr)); gap:16px;}
+  .zone-card{border:1px solid var(--border); border-radius:14px; padding:14px; display:flex; flex-direction:column; gap:12px; background:var(--bg);}
+  .zone-card.sel{border-color:var(--accent); background:var(--accent-soft);}
+  .zone-head{display:flex; justify-content:space-between; align-items:baseline; gap:8px; flex-wrap:wrap;}
+  .zone-head h3{font-size:16px;}
+  .zone-kpis{display:grid; grid-template-columns:repeat(4,1fr); gap:8px;}
+  .zone-kpis div{display:flex; flex-direction:column;}
+  .zone-kpis .n{font-family:'Barlow Semi Condensed',sans-serif; font-size:20px; font-weight:700;}
+  .zone-kpis .l{font-size:10.5px; color:var(--ink-faint); text-transform:uppercase; letter-spacing:.4px;}
+
+  .filters{display:flex; gap:8px; flex-wrap:wrap; align-items:center;}
+  .filters input[type=text]{flex:1; min-width:180px; padding:9px 12px; border-radius:10px; border:1px solid var(--border); background:var(--bg); color:var(--ink); font-size:13px;}
+  .filters select{padding:9px 10px; border-radius:10px; border:1px solid var(--border); background:var(--bg); color:var(--ink); font-size:13px;}
+  .btn-ghost{background:transparent; border:1px solid var(--border); color:var(--ink); border-radius:10px; padding:8px 13px; font-size:12.5px; font-weight:600;}
+  .btn-ghost:hover{background:var(--surface-alt);}
+
+  table{width:100%; border-collapse:collapse; font-size:12.5px;}
+  th{text-align:left; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; color:var(--ink-faint); padding:7px 8px; border-bottom:1px solid var(--border); position:sticky; top:0; background:var(--surface); white-space:nowrap;}
+  td{padding:7px 8px; border-bottom:1px solid var(--border); color:var(--ink); vertical-align:middle;}
+  td.num, th.num{text-align:right; font-variant-numeric:tabular-nums;}
+  tr:last-child td{border-bottom:none;}
+  tr.sel td{background:var(--accent-soft);}
+  tr.total-row td{font-weight:700; background:var(--surface-alt);}
+  .table-wrap{overflow:auto; max-height:460px; border:1px solid var(--border); border-radius:12px;}
+  .table-wrap.tall{max-height:560px;}
+
+  .cell-meter{display:flex; align-items:center; gap:8px; min-width:150px;}
+  .meter{flex:1; height:8px; background:var(--surface-alt); border-radius:99px; overflow:hidden; min-width:60px;}
+  .meter > span{display:block; height:100%; border-radius:99px; background:var(--accent);}
+  .meter.good > span{background:var(--good);}
+  .meter.warn > span{background:var(--warn);}
+  .meter.bad > span{background:var(--bad);}
+  .pct{font-variant-numeric:tabular-nums; font-weight:700; min-width:48px; text-align:right;}
+
+  .badge{display:inline-block; padding:2px 8px; border-radius:99px; font-size:10.5px; font-weight:700; white-space:nowrap; border:1px solid transparent;}
+  .badge-realizado{background:var(--surface-alt); color:var(--good);}
+  .badge-sin_evidencia{background:var(--surface-alt); color:var(--warn); border-color:var(--warn);}
+  .badge-no_realizado{background:var(--surface-alt); color:var(--bad); border-color:var(--bad);}
+  .badge-inhabilitado{background:var(--surface-alt); color:var(--ink-faint);}
+  .badge-pendiente{background:var(--surface-alt); color:var(--c1); border-color:var(--c1);}
+
+  .note{font-size:12px; color:var(--ink-faint); line-height:1.55;}
+  .status-box{font-size:12.5px; color:var(--ink-soft); line-height:1.6; background:var(--surface-alt); border-radius:10px; padding:10px 12px;}
+  .status-box.err{color:var(--bad);}
+  .empty-hint{font-size:13px; color:var(--ink-faint); padding:24px; text-align:center;}
+  .alert-txt{font-size:11.5px; color:var(--ink-soft); max-width:360px;}
+  details summary{cursor:pointer; font-size:13px; font-weight:600; color:var(--ink-soft);}
+  details ul{margin:8px 0 0; padding-left:18px; font-size:12.5px; color:var(--ink-soft); line-height:1.65;}
+  @media (max-width:600px){ .zone-kpis{grid-template-columns:repeat(2,1fr);} .filterbar .meta{margin-left:0; text-align:left;} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hero">
+    <h1>Preventivos</h1>
+    <p>Cumplimiento de los mantenimientos preventivos programados (Lubricación, Afinación y Frenos). Un servicio se da por realizado cuando cuenta con evidencia fotográfica; el costo y la fecha salen de la orden de SAP (OM02). Los datos viven en Supabase.</p>
+  </div>
+
+  <div class="filterbar">
+    <div class="field"><label for="fMes">Mes</label><select id="fMes"></select></div>
+    <div class="field"><label for="fZona">Zona</label>
+      <select id="fZona">
+        <option value="">Todas las zonas</option>
+        <option value="Soler">Zona Daniel Soler</option>
+        <option value="Muñiz">Zona José David Muñiz</option>
+      </select>
+    </div>
+    <div class="field"><label for="fCedis">CEDIS</label><select id="fCedis"></select></div>
+    <div class="meta" id="metaCarga">Cargando…</div>
+  </div>
+
+  <div id="statusBox" class="status-box" hidden></div>
+
+  <div id="content" hidden>
+    <div class="kpi-row" id="kpiRow"></div>
+
+    <div class="card" style="margin-top:20px;">
+      <div class="card-head">
+        <h2>Avance y cumplimiento por zona</h2>
+        <span class="card-sub">Siempre muestra las dos zonas del mes seleccionado</span>
+      </div>
+      <div class="grid2" id="zonaGrid"></div>
+    </div>
+
+    <div class="card" style="margin-top:20px;">
+      <div class="card-head">
+        <h2>Cumplimiento por mecánico</h2>
+        <span class="card-sub" id="mecSub"></span>
+      </div>
+      <div class="filters">
+        <select id="mecSort">
+          <option value="real_desc">Ordenar: más realizados</option>
+          <option value="pct_asc">Ordenar: menor cumplimiento</option>
+          <option value="pct_desc">Ordenar: mayor cumplimiento</option>
+          <option value="nombre">Ordenar: nombre</option>
+        </select>
+      </div>
+      <div class="table-wrap"><table id="mecTable"></table></div>
+      <p class="note">Asignados = servicios aplicables del mecánico (sin unidades inhabilitadas). Con material = servicios con orden y costo (se sacó material de almacén). Evidencia/material = de los servicios con material, cuántos tienen evidencia fotográfica; un número bajo significa material sacado sin servicio comprobado.</p>
+    </div>
+
+    <div class="card" style="margin-top:20px;">
+      <div class="card-head">
+        <h2>Comparación entre CEDIS</h2>
+        <span class="card-sub" id="cedisSub"></span>
+      </div>
+      <div class="table-wrap"><table id="cedisTable"></table></div>
+    </div>
+
+    <div class="card" style="margin-top:20px;">
+      <div class="card-head">
+        <h2>Cumplimiento por tipo de servicio</h2>
+        <span class="card-sub" id="servSub"></span>
+      </div>
+      <div class="table-wrap"><table id="servTable"></table></div>
+    </div>
+
+    <div class="card" style="margin-top:20px;">
+      <div class="card-head">
+        <h2>Detalle por unidad</h2>
+        <span class="card-sub" id="detSub"></span>
+      </div>
+      <div class="filters">
+        <input id="detSearch" type="text" placeholder="Buscar por económico, mecánico, orden o alerta...">
+        <select id="detEstatus">
+          <option value="">Todo estatus</option>
+          <option value="__sincumplir">Sin cumplir (pendientes de atender)</option>
+          <option value="realizado">Realizado</option>
+          <option value="sin_evidencia">Sin evidencia</option>
+          <option value="no_realizado">No realizado</option>
+          <option value="pendiente">Pendiente</option>
+          <option value="inhabilitado">Inhabilitado</option>
+        </select>
+        <select id="detServicio">
+          <option value="">Todo servicio</option>
+          <option value="LUBRICACION">Lubricación</option>
+          <option value="AFINACION">Afinación</option>
+          <option value="FRENOS">Frenos</option>
+        </select>
+        <button id="detExport" class="btn-ghost">Exportar a Excel</button>
+      </div>
+      <div class="table-wrap tall"><table id="detTable"></table></div>
+    </div>
+
+    <div class="card" style="margin-top:20px;">
+      <details>
+        <summary>Cómo se calcula (reglas de este módulo)</summary>
+        <ul>
+          <li><b>Realizado</b>: el servicio tiene evidencia fotográfica. Los mecánicos tienen 10 días naturales del mes siguiente para terminar el servicio, pero solo el mes del mantenimiento para sacar el material de almacén.</li>
+          <li><b>Sin evidencia</b>: hay orden con costo (se sacó material) pero no hay evidencia fotográfica. <b>No realizado</b>: se sacó material y el servicio no se hizo (según la observación). <b>Pendiente</b>: sin orden ni evidencia.</li>
+          <li><b>Inhabilitado</b>: unidad inhabilitada u orden sin movimiento (costo plan 0). SAP libera el número de orden al iniciar el mes; si no hubo movimiento, no cuenta. Estos servicios no entran al cumplimiento.</li>
+          <li><b>Cumplimiento</b> = realizados ÷ (programados − inhabilitados).</li>
+          <li><b>Costo</b>: costo real de la orden OM02 ligada al servicio; incluye servicios no realizados donde se sacó material. El económico válido es el de la pestaña Órdenes de SAP.</li>
+          <li>Unidades en piso que el cronograma programó y no se capturaron en la hoja del mes no se hacen ni se reprograman hasta que salgan de piso, por eso no aparecen aquí.</li>
+        </ul>
+      </details>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var SUPABASE_URL = "https://aoutudbxwawlnbwvypir.supabase.co";
+  var SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFvdXR1ZGJ4d2F3bG5id3Z5cGlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU4NzQzNTMsImV4cCI6MjEwMTQ1MDM1M30.cfdjH9rwQDYyxrrKZIAw7JpcQKYcFWtiEYXEDF8fa_E";
+
+  var ZONAS = {
+    "Soler": { nombre:"Zona Daniel Soler", cedis:["Cuernavaca","Jojutla","Puente De Ixtla"] },
+    "Muñiz": { nombre:"Zona José David Muñiz", cedis:["Cuautla","Axochiapan","Cocoyoc"] }
+  };
+  var CEDIS_ORDER = ["Cuernavaca","Jojutla","Puente De Ixtla","Cuautla","Axochiapan","Cocoyoc"];
+  var SERVICIOS = [["LUBRICACION","Lubricación"],["AFINACION","Afinación"],["FRENOS","Frenos"]];
+  var ESTATUS_LABEL = {realizado:"Realizado", sin_evidencia:"Sin evidencia", no_realizado:"No realizado", inhabilitado:"Inhabilitado", pendiente:"Pendiente"};
+  var MESES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+
+  var cargas = [];
+  var rows = [];
+  var $ = function(id){ return document.getElementById(id); };
+
+  function sbHeaders(){ return { "apikey": SUPABASE_KEY, "Authorization": "Bearer " + SUPABASE_KEY }; }
+  function sbGet(path){
+    return fetch(SUPABASE_URL + "/rest/v1/" + path, { headers: sbHeaders() }).then(function(r){
+      if(!r.ok) throw new Error("HTTP " + r.status);
+      return r.json();
+    });
+  }
+  function esc(v){ return v===null||v===undefined ? "" : String(v).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+  function money(v){ return "$" + Number(v||0).toLocaleString("es-MX",{minimumFractionDigits:2, maximumFractionDigits:2}); }
+  function cedisName(c){ return c === "Puente De Ixtla" ? "Puente de Ixtla" : c; }
+  function periodoLabel(p){ var y = p.slice(0,4), m = parseInt(p.slice(5,7),10); return MESES[m-1] + " " + y; }
+  function fechaCorta(s){ if(!s) return ""; var p = String(s).slice(0,10).split("-"); return p[2] + "/" + p[1] + "/" + p[0]; }
+  function zonaDeCedis(c){ return ZONAS.Soler.cedis.indexOf(c) >= 0 ? "Soler" : "Muñiz"; }
+
+  function agg(list){
+    var a = {prog:list.length, inh:0, real:0, sinEv:0, noReal:0, pend:0, costo:0, conMat:0, realMat:0};
+    list.forEach(function(r){
+      a.costo += Number(r.costo_real || 0);
+      if(r.estatus === "inhabilitado"){ a.inh++; return; }
+      if(r.estatus === "realizado") a.real++;
+      else if(r.estatus === "sin_evidencia") a.sinEv++;
+      else if(r.estatus === "no_realizado") a.noReal++;
+      else a.pend++;
+      if(Number(r.costo_real || 0) > 0){ a.conMat++; if(r.estatus === "realizado") a.realMat++; }
+    });
+    a.apl = a.prog - a.inh;
+    a.pct = a.apl > 0 ? a.real / a.apl : null;
+    a.sinCumplir = a.sinEv + a.noReal + a.pend;
+    return a;
+  }
+  function pctTxt(v){ return v === null ? "—" : (Math.round(v*1000)/10).toFixed(1) + "%"; }
+  function meterCls(v){ if(v === null) return ""; return v >= 0.95 ? "good" : (v >= 0.85 ? "warn" : "bad"); }
+  function meterCell(v){
+    var w = v === null ? 0 : Math.round(v*100);
+    return '<div class="cell-meter"><div class="meter ' + meterCls(v) + '"><span style="width:' + w + '%"></span></div><span class="pct">' + pctTxt(v) + '</span></div>';
+  }
+  function badge(e){ return '<span class="badge badge-' + esc(e) + '">' + esc(ESTATUS_LABEL[e] || e) + '</span>'; }
+
+  // ---------- filtros ----------
+  function currentFilters(){ return { mes:$("fMes").value, zona:$("fZona").value, cedis:$("fCedis").value }; }
+  function filteredRows(){
+    var f = currentFilters();
+    return rows.filter(function(r){
+      if(f.zona && zonaDeCedis(r.cedis) !== f.zona) return false;
+      if(f.cedis && r.cedis !== f.cedis) return false;
+      return true;
+    });
+  }
+  function refreshCedisOptions(){
+    var f = currentFilters();
+    var list = f.zona ? ZONAS[f.zona].cedis : CEDIS_ORDER;
+    var prev = $("fCedis").value;
+    var html = '<option value="">Todos los CEDIS</option>';
+    list.forEach(function(c){ html += '<option value="' + esc(c) + '">' + esc(cedisName(c)) + '</option>'; });
+    $("fCedis").innerHTML = html;
+    if(list.indexOf(prev) >= 0) $("fCedis").value = prev;
+  }
+  function scopeLabel(){
+    var f = currentFilters();
+    if(f.cedis) return cedisName(f.cedis);
+    if(f.zona) return ZONAS[f.zona].nombre;
+    return "Toda la zona Morelos";
+  }
+
+  // ---------- render ----------
+  function renderKpis(list){
+    var a = agg(list);
+    var tiles = [
+      {l:"Programados", v:a.prog, s:a.inh + " inhabilitados", cls:""},
+      {l:"Aplicables", v:a.apl, s:"programados − inhabilitados", cls:""},
+      {l:"Realizados", v:a.real, s:"con evidencia fotográfica", cls:""},
+      {l:"Cumplimiento", v:pctTxt(a.pct), s:a.real + " de " + a.apl, cls:"accent"},
+      {l:"Sin cumplir", v:a.sinCumplir, s:a.sinEv + " sin evidencia · " + a.noReal + " no realizados · " + a.pend + " pendientes", cls:""},
+      {l:"Costo total", v:money(a.costo), s:"órdenes OM02 ligadas", cls:""}
+    ];
+    $("kpiRow").innerHTML = tiles.map(function(t){
+      return '<div class="kpi-tile ' + t.cls + '"><span class="kpi-label">' + esc(t.l) + '</span><span class="kpi-value">' + esc(t.v) + '</span><span class="kpi-sub">' + esc(t.s) + '</span></div>';
+    }).join("");
+  }
+
+  function renderZonas(){
+    var f = currentFilters();
+    $("zonaGrid").innerHTML = ["Soler","Muñiz"].map(function(z){
+      var zl = rows.filter(function(r){ return zonaDeCedis(r.cedis) === z; });
+      var a = agg(zl);
+      var cedisRows = ZONAS[z].cedis.map(function(c){
+        var ca = agg(zl.filter(function(r){ return r.cedis === c; }));
+        return '<tr><td>' + esc(cedisName(c)) + '</td><td class="num">' + ca.real + ' / ' + ca.apl + '</td><td>' + meterCell(ca.pct) + '</td><td class="num">' + money(ca.costo) + '</td></tr>';
+      }).join("");
+      return '<div class="zone-card ' + (f.zona === z ? "sel" : "") + '">' +
+        '<div class="zone-head"><h3>' + esc(ZONAS[z].nombre) + '</h3><button class="btn-ghost" data-zona="' + esc(z) + '">' + (f.zona === z ? "Ver ambas zonas" : "Ver solo esta zona") + '</button></div>' +
+        '<div class="zone-kpis">' +
+          '<div><span class="n">' + a.apl + '</span><span class="l">Aplicables</span></div>' +
+          '<div><span class="n">' + a.real + '</span><span class="l">Realizados</span></div>' +
+          '<div><span class="n">' + pctTxt(a.pct) + '</span><span class="l">Cumplimiento</span></div>' +
+          '<div><span class="n">' + money(a.costo) + '</span><span class="l">Costo</span></div>' +
+        '</div>' +
+        '<div class="table-wrap" style="max-height:none;"><table><thead><tr><th>CEDIS</th><th class="num">Realizados</th><th>Cumplimiento</th><th class="num">Costo</th></tr></thead><tbody>' + cedisRows + '</tbody></table></div>' +
+      '</div>';
+    }).join("");
+    Array.prototype.forEach.call($("zonaGrid").querySelectorAll("button[data-zona]"), function(b){
+      b.addEventListener("click", function(){
+        var z = b.getAttribute("data-zona");
+        $("fZona").value = ($("fZona").value === z) ? "" : z;
+        $("fCedis").value = "";
+        onFilterChange(true);
+      });
+    });
+  }
+
+  function renderMecanicos(list){
+    var map = {};
+    list.forEach(function(r){
+      var name = (r.mecanico || "Sin asignar");
+      var k = r.cedis + "||" + name;
+      (map[k] = map[k] || {nombre:name, cedis:r.cedis, list:[]}).list.push(r);
+    });
+    var arr = Object.keys(map).map(function(k){ var m = map[k]; m.a = agg(m.list); return m; }).filter(function(m){ return m.a.apl > 0; });
+    var s = $("mecSort").value;
+    arr.sort(function(x,y){
+      if(s === "pct_asc") return (x.a.pct - y.a.pct) || (y.a.apl - x.a.apl);
+      if(s === "pct_desc") return (y.a.pct - x.a.pct) || (y.a.apl - x.a.apl);
+      if(s === "nombre") return x.nombre.localeCompare(y.nombre, "es");
+      return (y.a.real - x.a.real) || x.nombre.localeCompare(y.nombre, "es");
+    });
+    $("mecSub").textContent = scopeLabel() + " · " + arr.length + " mecánicos";
+    var html = '<thead><tr><th>Mecánico</th><th>CEDIS</th><th class="num">Asignados</th><th class="num">Realizados</th><th>Cumplimiento</th><th class="num">Con material</th><th class="num">Evidencia / material</th></tr></thead><tbody>';
+    arr.forEach(function(m){
+      var evMat = m.a.conMat > 0 ? m.a.realMat / m.a.conMat : null;
+      html += '<tr><td>' + esc(m.nombre) + '</td><td>' + esc(cedisName(m.cedis)) + '</td><td class="num">' + m.a.apl + '</td><td class="num">' + m.a.real + '</td><td>' + meterCell(m.a.pct) + '</td><td class="num">' + m.a.conMat + '</td><td class="num">' + pctTxt(evMat) + '</td></tr>';
+    });
+    if(!arr.length) html += '<tr><td colspan="7" class="empty-hint">Sin datos con este filtro.</td></tr>';
+    $("mecTable").innerHTML = html + '</tbody>';
+  }
+
+  function renderCedis(){
+    var f = currentFilters();
+    var list = f.zona ? ZONAS[f.zona].cedis : CEDIS_ORDER;
+    $("cedisSub").textContent = (f.zona ? ZONAS[f.zona].nombre : "Todos los CEDIS") + (f.cedis ? " · seleccionado: " + cedisName(f.cedis) : "");
+    var html = '<thead><tr><th>CEDIS</th><th class="num">Programados</th><th class="num">Inhab.</th><th class="num">Realizados</th><th>Cumplimiento</th><th class="num">Sin cumplir</th><th class="num">Costo</th><th class="num">Costo por servicio realizado</th></tr></thead><tbody>';
+    var all = [];
+    list.forEach(function(c){
+      var cl = rows.filter(function(r){ return r.cedis === c; });
+      all = all.concat(cl);
+      var a = agg(cl);
+      var realCost = cl.filter(function(r){ return r.estatus === "realizado"; }).reduce(function(s,r){ return s + Number(r.costo_real||0); }, 0);
+      html += '<tr class="' + (f.cedis === c ? "sel" : "") + '"><td>' + esc(cedisName(c)) + '</td><td class="num">' + a.prog + '</td><td class="num">' + a.inh + '</td><td class="num">' + a.real + '</td><td>' + meterCell(a.pct) + '</td><td class="num">' + a.sinCumplir + '</td><td class="num">' + money(a.costo) + '</td><td class="num">' + (a.real ? money(realCost / a.real) : "—") + '</td></tr>';
+    });
+    var t = agg(all);
+    var tReal = all.filter(function(r){ return r.estatus === "realizado"; }).reduce(function(s,r){ return s + Number(r.costo_real||0); }, 0);
+    html += '<tr class="total-row"><td>Total</td><td class="num">' + t.prog + '</td><td class="num">' + t.inh + '</td><td class="num">' + t.real + '</td><td>' + meterCell(t.pct) + '</td><td class="num">' + t.sinCumplir + '</td><td class="num">' + money(t.costo) + '</td><td class="num">' + (t.real ? money(tReal / t.real) : "—") + '</td></tr>';
+    $("cedisTable").innerHTML = html + '</tbody>';
+  }
+
+  function renderServicios(list){
+    var f = currentFilters();
+    var filtered = !!(f.zona || f.cedis);
+    $("servSub").textContent = scopeLabel() + (filtered ? " · comparado contra toda la zona Morelos" : "");
+    var head = '<thead><tr><th>Servicio</th><th class="num">Programados</th><th class="num">Inhab.</th><th class="num">Realizados</th><th>Cumplimiento</th><th class="num">Sin cumplir</th><th class="num">Costo</th><th class="num">Costo por servicio realizado</th>' + (filtered ? '<th>Total Morelos</th>' : '') + '</tr></thead><tbody>';
+    var html = head;
+    SERVICIOS.forEach(function(s){
+      var sl = list.filter(function(r){ return r.servicio === s[0]; });
+      var a = agg(sl);
+      var realCost = sl.filter(function(r){ return r.estatus === "realizado"; }).reduce(function(x,r){ return x + Number(r.costo_real||0); }, 0);
+      html += '<tr><td>' + esc(s[1]) + '</td><td class="num">' + a.prog + '</td><td class="num">' + a.inh + '</td><td class="num">' + a.real + '</td><td>' + meterCell(a.pct) + '</td><td class="num">' + a.sinCumplir + '</td><td class="num">' + money(a.costo) + '</td><td class="num">' + (a.real ? money(realCost / a.real) : "—") + '</td>';
+      if(filtered){
+        var g = agg(rows.filter(function(r){ return r.servicio === s[0]; }));
+        html += '<td>' + meterCell(g.pct) + '</td>';
+      }
+      html += '</tr>';
+    });
+    $("servTable").innerHTML = html + '</tbody>';
+  }
+
+  var detCurrent = [];
+  function renderDetalle(list){
+    var q = $("detSearch").value.trim().toLowerCase();
+    var est = $("detEstatus").value, srv = $("detServicio").value;
+    var out = list.filter(function(r){
+      if(est === "__sincumplir"){ if(["sin_evidencia","no_realizado","pendiente"].indexOf(r.estatus) < 0) return false; }
+      else if(est && r.estatus !== est) return false;
+      if(srv && r.servicio !== srv) return false;
+      if(q){
+        var hay = [r.economico, r.mecanico, r.orden, r.alerta, r.seguimiento, r.cedis].join(" ").toLowerCase();
+        if(hay.indexOf(q) < 0) return false;
+      }
+      return true;
+    });
+    var rank = {no_realizado:0, sin_evidencia:1, pendiente:2, realizado:3, inhabilitado:4};
+    out.sort(function(x,y){ return (rank[x.estatus]-rank[y.estatus]) || x.cedis.localeCompare(y.cedis) || x.economico.localeCompare(y.economico) || x.servicio.localeCompare(y.servicio); });
+    detCurrent = out;
+    $("detSub").textContent = out.length + " de " + list.length + " servicios";
+    var html = '<thead><tr><th>Económico</th><th>CEDIS</th><th>Servicio</th><th>Mecánico</th><th>Estatus</th><th>Orden</th><th>Fecha orden</th><th class="num">Costo</th><th>Observación</th></tr></thead><tbody>';
+    out.forEach(function(r){
+      var servLbl = (SERVICIOS.filter(function(s){ return s[0] === r.servicio; })[0] || [0, r.servicio])[1];
+      var obs = r.alerta || ((r.seguimiento && String(r.seguimiento).length > 10) ? r.seguimiento : "");
+      if(r.alerta && r.seguimiento && String(r.seguimiento).length > 10 && r.estatus === "no_realizado") obs = r.seguimiento + " — " + r.alerta;
+      html += '<tr><td><b>' + esc(r.economico) + '</b></td><td>' + esc(cedisName(r.cedis)) + '</td><td>' + esc(servLbl) + '</td><td>' + esc(r.mecanico) + '</td><td>' + badge(r.estatus) + '</td><td>' + esc(r.orden) + '</td><td>' + esc(fechaCorta(r.fecha_orden)) + '</td><td class="num">' + (r.costo_real === null || r.costo_real === undefined ? "" : money(r.costo_real)) + '</td><td class="alert-txt">' + esc(obs) + '</td></tr>';
+    });
+    if(!out.length) html += '<tr><td colspan="9" class="empty-hint">Sin servicios con este filtro.</td></tr>';
+    $("detTable").innerHTML = html + '</tbody>';
+  }
+
+  function renderAll(){
+    var list = filteredRows();
+    renderKpis(list);
+    renderZonas();
+    renderMecanicos(list);
+    renderCedis();
+    renderServicios(list);
+    renderDetalle(list);
+  }
+
+  function onFilterChange(zonaChanged){
+    if(zonaChanged) refreshCedisOptions();
+    renderAll();
+  }
+
+  function exportExcel(){
+    var f = currentFilters();
+    var data = detCurrent.map(function(r){
+      return {
+        "Económico": r.economico, "CEDIS": cedisName(r.cedis), "Zona": ZONAS[zonaDeCedis(r.cedis)].nombre,
+        "Servicio": r.servicio, "Mecánico": r.mecanico, "Estatus": ESTATUS_LABEL[r.estatus] || r.estatus,
+        "Orden": r.orden, "Fecha orden": r.fecha_orden, "Costo real": r.costo_real,
+        "Observación": r.alerta || r.seguimiento || ""
+      };
+    });
+    var ws = XLSX.utils.json_to_sheet(data);
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Preventivos");
+    XLSX.writeFile(wb, "Preventivos_" + f.mes.slice(0,7) + ".xlsx");
+  }
+
+  function showError(msg){
+    $("statusBox").hidden = false; $("statusBox").className = "status-box err"; $("statusBox").textContent = msg;
+  }
+
+  function loadMonth(periodo){
+    $("statusBox").hidden = false; $("statusBox").className = "status-box"; $("statusBox").textContent = "Cargando datos de " + periodoLabel(periodo) + "…";
+    return sbGet("v_preventivos?select=*&periodo=eq." + periodo + "&order=cedis,economico,servicio").then(function(data){
+      rows = data;
+      $("statusBox").hidden = true;
+      $("content").hidden = false;
+      var c = cargas.filter(function(x){ return x.periodo === periodo; })[0];
+      $("metaCarga").innerHTML = c ? ('Fuente: ' + esc(c.archivo) + '<br>Cargado el ' + esc(fechaCorta(c.cargado_at)) + ' · ' + rows.length + ' servicios') : (rows.length + ' servicios');
+      refreshCedisOptions();
+      renderAll();
+    });
+  }
+
+  function init(){
+    sbGet("preventivos_cargas?select=*&order=periodo.desc").then(function(data){
+      cargas = data;
+      if(!cargas.length){ showError("Todavía no hay meses cargados en Supabase."); $("metaCarga").textContent = ""; return; }
+      $("fMes").innerHTML = cargas.map(function(c){ return '<option value="' + esc(c.periodo) + '">' + esc(periodoLabel(c.periodo)) + '</option>'; }).join("");
+      return loadMonth(cargas[0].periodo);
+    }).catch(function(e){
+      showError("No se pudieron leer los datos de Supabase (" + e.message + "). Revisa la conexión e intenta de nuevo.");
+      $("metaCarga").textContent = "";
+    });
+  }
+
+  $("fMes").addEventListener("change", function(){ loadMonth($("fMes").value).catch(function(e){ showError("No se pudo cargar el mes (" + e.message + ")."); }); });
+  $("fZona").addEventListener("change", function(){ $("fCedis").value = ""; onFilterChange(true); });
+  $("fCedis").addEventListener("change", function(){ onFilterChange(false); });
+  $("mecSort").addEventListener("change", function(){ renderMecanicos(filteredRows()); });
+  $("detSearch").addEventListener("input", function(){ renderDetalle(filteredRows()); });
+  $("detEstatus").addEventListener("change", function(){ renderDetalle(filteredRows()); });
+  $("detServicio").addEventListener("change", function(){ renderDetalle(filteredRows()); });
+  $("detExport").addEventListener("click", exportExcel);
+
+  refreshCedisOptions();
+  init();
+})();
+</script>
+</body>
+</html>
