@@ -836,17 +836,48 @@
     if(e.dataTransfer.files && e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
   });
 
+  // ---------- Último archivo guardado en este equipo (para verlo sin internet) ----------
+  var DB_NAME = "erp-carga-mecanicos", STORE = "archivos";
+  function idbOpen(cb){
+    try{
+      var rq = indexedDB.open(DB_NAME, 1);
+      rq.onupgradeneeded = function(){ rq.result.createObjectStore(STORE); };
+      rq.onsuccess = function(){ cb(rq.result); };
+      rq.onerror = function(){ cb(null); };
+    }catch(e){ cb(null); }
+  }
+  function saveLast(name, buffer){
+    idbOpen(function(db){
+      if(!db) return;
+      try{ db.transaction(STORE, "readwrite").objectStore(STORE).put({ name:name, loadedAt:new Date().toISOString(), buffer:buffer }, "ultimo"); }catch(e){}
+    });
+  }
+  function loadLast(cb){
+    idbOpen(function(db){
+      if(!db) return cb(null);
+      try{
+        var rq = db.transaction(STORE).objectStore(STORE).get("ultimo");
+        rq.onsuccess = function(){ cb(rq.result || null); };
+        rq.onerror = function(){ cb(null); };
+      }catch(e){ cb(null); }
+    });
+  }
+
+  function processBuffer(buffer, name, loadedAt){
+    var wb = XLSX.read(new Uint8Array(buffer), { type:"array", cellDates:true });
+    var parsed = parseWorkbook(wb);
+    render(parsed);
+    var cuando = loadedAt ? new Date(loadedAt).toLocaleString("es-MX", { day:"2-digit", month:"short", hour:"2-digit", minute:"2-digit" }) : "";
+    $("fileMeta").textContent = (loadedAt ? "Último archivo guardado en este equipo: " : "Archivo cargado: ") + name + (cuando ? " (cargado el " + cuando + ")" : "") + " — " + fmtInt(parsed.meta.totalAvisos) + " avisos" + (loadedAt ? ". Sube otro para actualizar." : "");
+  }
+
   function handleFile(file){
     $("fileMeta").textContent = "Leyendo " + file.name + "…";
     var reader = new FileReader();
     reader.onload = function(e){
       try{
-        var data = new Uint8Array(e.target.result);
-        var wb = XLSX.read(data, { type:"array", cellDates:true });
-        var parsed = parseWorkbook(wb);
-        render(parsed);
-        $("fileMeta").textContent = "Archivo cargado: " + file.name + " — " + fmtInt(parsed.meta.totalAvisos) + " avisos";
-        lsSet("carga_trabajo_last_file", { name:file.name, loadedAt:new Date().toISOString() });
+        processBuffer(e.target.result, file.name, null);
+        saveLast(file.name, e.target.result);
       }catch(err){
         $("fileMeta").textContent = "No se pudo leer el archivo. Confirma que tiene las pestañas Operaciones, OM01OM02, OM01OM02MOV y Puestos De trabajo.";
       }
@@ -854,13 +885,15 @@
     reader.readAsArrayBuffer(file);
   }
 
-  var last = lsGet("carga_trabajo_last_file", null);
-  if(last){
-    $("fileMeta").textContent = "Último archivo cargado: " + last.name + ". Vuelve a cargarlo para actualizar los datos.";
-  }
+  loadLast(function(rec){
+    if(!rec || !rec.buffer) return;
+    try{ processBuffer(rec.buffer, rec.name, rec.loadedAt); }
+    catch(err){ $("fileMeta").textContent = "Hay un archivo guardado (" + rec.name + ") pero no se pudo abrir. Vuelve a cargarlo."; }
+  });
 
   if(typeof globalThis !== "undefined" && globalThis.__CM_TEST__){ globalThis.__CM_TEST__.parse = parseWorkbook; }
 })();
 </script>
 
+<script src="offline.js" defer></script>
 </body></html>
