@@ -1,0 +1,866 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif}img{max-width:100%}</style></head><body>
+<title>Carga de Mecánicos</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --ink:#142433; --ink-soft:#48607A; --ink-faint:#7C93A6;
+    --bg:#EEF2F5; --surface:#FFFFFF; --surface-alt:#E4EAEF; --border:#D3DCE3;
+    --accent:#0E7C86; --accent-ink:#FFFFFF; --accent-soft:#DCEEF0;
+    --shadow: 0 1px 2px rgba(20,36,51,.06), 0 4px 14px rgba(20,36,51,.07);
+    --c1:#2a78d6; --c2:#eb6834; --c3:#1baf7a; --c4:#eda100; --c5:#e87ba4; --c6:#008300;
+    --a4:#4a3aa7; --a5:#e34948; --prev:#1baf7a; --pend:#A9B7C2;
+    --good:#0ca30c; --warn:#B26A00; --warn-soft:#FBEBCF;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --ink:#E7EDF2; --ink-soft:#9AB0C2; --ink-faint:#5F7A8F;
+      --bg:#0F1620; --surface:#182230; --surface-alt:#1F2C3C; --border:#2B3B4D;
+      --accent:#35B6C2; --accent-ink:#06232A; --accent-soft:#163238;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 14px rgba(0,0,0,.35);
+      --c1:#3987e5; --c2:#d95926; --c3:#199e70; --c4:#c98500; --c5:#d55181; --c6:#008300;
+      --a4:#9085e9; --a5:#e66767; --prev:#199e70; --pend:#4A5C70;
+      --good:#0ca30c; --warn:#E5AE48; --warn-soft:#3A2D14;
+      color-scheme:dark;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ink:#E7EDF2; --ink-soft:#9AB0C2; --ink-faint:#5F7A8F;
+    --bg:#0F1620; --surface:#182230; --surface-alt:#1F2C3C; --border:#2B3B4D;
+    --accent:#35B6C2; --accent-ink:#06232A; --accent-soft:#163238;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 14px rgba(0,0,0,.35);
+    --c1:#3987e5; --c2:#d95926; --c3:#199e70; --c4:#c98500; --c5:#d55181; --c6:#008300;
+    --a4:#9085e9; --a5:#e66767; --prev:#199e70; --pend:#4A5C70;
+    --good:#0ca30c; --warn:#E5AE48; --warn-soft:#3A2D14;
+    color-scheme:dark;
+  }
+  *{box-sizing:border-box;}
+  body{background:var(--bg); color:var(--ink); font-family:'Inter',system-ui,-apple-system,sans-serif;}
+  .wrap{max-width:980px; margin:0 auto; padding:20px max(16px, env(safe-area-inset-right,0px)) 48px max(16px, env(safe-area-inset-left,0px)); display:flex; flex-direction:column; gap:20px;}
+  h1,h2,h3{font-family:'Barlow Semi Condensed',system-ui,sans-serif; font-weight:700; margin:0; letter-spacing:.2px;}
+  p{margin:0;}
+  button{font-family:inherit; cursor:pointer;}
+  [hidden]{display:none !important;}
+
+  .hero{display:flex; flex-direction:column; gap:6px;}
+  .hero h1{font-size:26px;}
+  .hero p{font-size:14px; color:var(--ink-soft); line-height:1.5; max-width:64ch;}
+
+  .uploader{border:1.5px dashed var(--border); border-radius:16px; background:var(--surface); padding:22px; display:flex; flex-direction:column; align-items:center; gap:10px; text-align:center;}
+  .uploader.drag{border-color:var(--accent); background:var(--accent-soft);}
+  .uploader p{font-size:13px; color:var(--ink-soft); max-width:46ch;}
+  .btn-primary{background:var(--accent); color:var(--accent-ink); border:none; border-radius:11px; padding:11px 18px; font-size:14px; font-weight:700;}
+  .btn-ghost{background:transparent; border:1px solid var(--border); color:var(--ink); border-radius:10px; padding:8px 13px; font-size:12.5px; font-weight:600;}
+  .btn-ghost:focus-visible,.btn-primary:focus-visible,summary:focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
+  .file-meta{font-size:12px; color:var(--ink-faint);}
+
+  .kpi-row{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px;}
+  .kpi-tile{background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:14px 16px; display:flex; flex-direction:column; gap:4px; min-width:0;}
+  .kpi-tile.warn{border-color:var(--warn);}
+  .kpi-label{font-size:11px; font-weight:600; color:var(--ink-faint); text-transform:uppercase; letter-spacing:.5px;}
+  .kpi-value{font-family:'Barlow Semi Condensed',sans-serif; font-size:28px; font-weight:700; line-height:1.1; overflow-wrap:anywhere;}
+  .kpi-sub{font-size:12px; color:var(--ink-soft);}
+
+  .card{background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:18px; box-shadow:var(--shadow); display:flex; flex-direction:column; gap:14px; min-width:0;}
+  .card-head{display:flex; align-items:baseline; justify-content:space-between; gap:10px; flex-wrap:wrap;}
+  .card-head h2{font-size:18px;}
+  .card-head .card-sub{font-size:12px; color:var(--ink-faint);}
+  .legend{display:flex; gap:14px; flex-wrap:wrap;}
+  .legend-item{display:flex; align-items:center; gap:6px; font-size:12px; color:var(--ink-soft); font-weight:500;}
+  .legend-swatch{width:10px; height:10px; border-radius:3px; flex:none;}
+
+  .rank-row{display:grid; grid-template-columns:minmax(120px,190px) 1fr 46px; align-items:center; gap:10px; padding:7px 0;}
+  .rank-name{display:flex; flex-direction:column; min-width:0;}
+  .rank-name .n{font-size:13px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .rank-name .p{font-size:11px; color:var(--ink-faint); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .rank-bar-track{position:relative; height:14px; background:var(--surface-alt); border-radius:99px; overflow:hidden; display:flex;}
+  .rank-bar-seg{height:100%;}
+  .rank-total{font-size:13px; font-weight:700; text-align:right; font-variant-numeric:tabular-nums;}
+  .unverified{color:var(--a5); font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; margin-left:4px;}
+  .tag-generic{color:var(--ink-faint); font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; margin-left:4px;}
+  .mm-badge{color:var(--warn); font-size:10px; font-weight:700; letter-spacing:.3px; margin-left:4px; white-space:nowrap;}
+
+  .bars-vert{display:flex; align-items:flex-end; gap:10px; height:160px; padding-top:8px;}
+  .bar-col{flex:1; display:flex; flex-direction:column; align-items:center; gap:6px; height:100%; justify-content:flex-end; min-width:0;}
+  .bar-stack{width:100%; max-width:38px; display:flex; flex-direction:column-reverse; border-radius:4px 4px 0 0; overflow:hidden;}
+  .bar-seg{width:100%;}
+  .bar-col-label{font-size:10.5px; color:var(--ink-faint); text-align:center; line-height:1.25; max-width:70px;}
+  .bar-col-value{font-size:11px; font-weight:700; color:var(--ink-soft); font-variant-numeric:tabular-nums;}
+
+  .day-chart{display:flex; align-items:flex-end; gap:2px; height:90px;}
+  .day-bar{flex:1; background:var(--accent); border-radius:2px 2px 0 0; min-width:3px;}
+
+  table{width:100%; border-collapse:collapse; font-size:12.5px;}
+  th{text-align:left; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; color:var(--ink-faint); padding:6px 8px; border-bottom:1px solid var(--border); white-space:nowrap;}
+  td{padding:7px 8px; border-bottom:1px solid var(--border); color:var(--ink); vertical-align:top;}
+  td.num,th.num{text-align:right; font-variant-numeric:tabular-nums;}
+  tr:last-child td{border-bottom:none;}
+  .table-wrap{overflow-x:auto;}
+  .scroll-y{max-height:420px; overflow:auto;}
+  code.cd{font-family:ui-monospace,Menlo,Consolas,monospace; font-size:11.5px; background:var(--surface-alt); padding:1px 5px; border-radius:4px;}
+
+  .chips{display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:10px;}
+  .chip{display:flex; align-items:center; gap:10px; background:var(--surface-alt); border-radius:12px; padding:10px 12px; min-width:0;}
+  .chip b{font-family:'Barlow Semi Condensed',sans-serif; font-size:24px; line-height:1; font-variant-numeric:tabular-nums;}
+  .chip span{font-size:12px; color:var(--ink-soft); line-height:1.35;}
+  .st{display:inline-block; font-size:10.5px; font-weight:700; padding:2px 7px; border-radius:99px; white-space:nowrap;}
+  .st-re{background:var(--accent-soft); color:var(--accent);}
+  .st-no{background:var(--warn-soft); color:var(--warn);}
+  .st-am{background:var(--surface-alt); color:var(--ink-soft);}
+  details{border-top:1px solid var(--border); padding-top:10px;}
+  summary{font-size:13px; font-weight:600; cursor:pointer; color:var(--ink);}
+  details[open] summary{margin-bottom:10px;}
+  .row-actions{display:flex; gap:10px; align-items:center; flex-wrap:wrap;}
+
+  .tooltip{position:fixed; pointer-events:none; background:var(--ink); color:var(--bg); font-size:12px; font-weight:500; padding:7px 10px; border-radius:8px; box-shadow:var(--shadow); opacity:0; transform:translate(-50%,-100%); transition:opacity .1s ease; z-index:80; white-space:nowrap;}
+  .tooltip.show{opacity:1;}
+
+  .empty-note{font-size:13px; color:var(--ink-faint); text-align:center; padding:20px 4px; line-height:1.5;}
+  .note{font-size:12px; color:var(--ink-faint); line-height:1.5;}
+  .warn-box{background:var(--surface-alt); border:1px solid var(--border); border-radius:12px; padding:12px 14px; font-size:12.5px; color:var(--ink-soft); line-height:1.5;}
+</style>
+
+<div class="wrap">
+  <div class="hero">
+    <h1>Carga de Mecánicos</h1>
+    <p>Avisos (correctivos A4 y auxilios viales A5) por mecánico. El nombre sale de la pestaña Puestos de trabajo, validando el autor del aviso contra el Pto.tbjo.responsable. Carga la exportación mensual de SAP para actualizar.</p>
+  </div>
+
+  <div id="uploader" class="uploader">
+    <p><strong>Arrastra aquí el archivo "Carga de trabajo" (.xlsx)</strong>, o selecciónalo. Debe tener las pestañas Operaciones, OM01OM02, OM01OM02MOV y Puestos De trabajo.</p>
+    <button id="btnPick" class="btn-primary">Elegir archivo</button>
+    <input id="fileInput" type="file" accept=".xlsx,.xls" hidden>
+    <span id="fileMeta" class="file-meta"></span>
+  </div>
+
+  <div id="content" hidden>
+
+    <div class="kpi-row" id="kpiRow"></div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Avisos por mecánico</h2>
+        <span class="card-sub" id="rankSub"></span>
+      </div>
+      <div class="legend">
+        <span class="legend-item"><span class="legend-swatch" style="background:var(--a4)"></span>A4 · Correctivo</span>
+        <span class="legend-item"><span class="legend-swatch" style="background:var(--prev)"></span>A4 · Preventivo</span>
+        <span class="legend-item"><span class="legend-swatch" style="background:var(--pend)"></span>A4 · Sin clasificar todavía</span>
+        <span class="legend-item"><span class="legend-swatch" style="background:var(--a5)"></span>A5 · Auxilio vial</span>
+      </div>
+      <div id="rankList"></div>
+      <div class="warn-box" id="unverifiedNote" hidden></div>
+    </div>
+
+    <div class="card" id="mmCard">
+      <div class="card-head">
+        <h2>Autor del aviso vs. responsable en SAP</h2>
+        <span class="card-sub" id="mmSub"></span>
+      </div>
+      <div id="mmBody"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Avisos por CEDIS</h2>
+        <span class="card-sub">Correctivo vs. preventivo (A4) vs. auxilio vial (A5)</span>
+      </div>
+      <div class="legend">
+        <span class="legend-item"><span class="legend-swatch" style="background:var(--a4)"></span>A4 · Correctivo</span>
+        <span class="legend-item"><span class="legend-swatch" style="background:var(--prev)"></span>A4 · Preventivo</span>
+        <span class="legend-item"><span class="legend-swatch" style="background:var(--pend)"></span>A4 · Sin clasificar todavía</span>
+        <span class="legend-item"><span class="legend-swatch" style="background:var(--a5)"></span>A5 · Auxilio vial</span>
+      </div>
+      <div class="bars-vert" id="cedisBars"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Ritmo del mes</h2>
+        <span class="card-sub" id="dayRangeLabel">Avisos por día</span>
+      </div>
+      <div class="day-chart" id="dayChart"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Resumen de órdenes (SAP)</h2>
+        <span class="card-sub">OM01 correctivo / OM02 preventivo · costo total por CEDIS y clase</span>
+      </div>
+      <div class="table-wrap">
+        <table id="ordersTable"></table>
+      </div>
+      <p class="note" id="ordersNote"></p>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Refacciones y servicios más utilizados</h2>
+        <span class="card-sub" id="partsSub">Ligado a las órdenes de los avisos capturados en Operaciones</span>
+      </div>
+      <div class="table-wrap">
+        <table id="partsTable"></table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Tabla completa por mecánico</h2>
+      </div>
+      <div class="table-wrap">
+        <table id="mechTable"></table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div id="tooltip" class="tooltip"></div>
+<script>
+(function(){
+  "use strict";
+
+  var CEDIS_ORDER = ["CUERNAVACA","CUAUTLA","JOJUTLA","PUENTE DE IXTLA","AXOCHIAPAN","COCOYOC"];
+  var CEDIS_FROM_FILE_CODE = { "MMCV":"CUERNAVACA", "MMCU":"CUAUTLA", "MMJO":"JOJUTLA", "MMPU":"PUENTE DE IXTLA", "MMAX":"AXOCHIAPAN", "MMCC":"COCOYOC" };
+
+  var $ = function(id){ return document.getElementById(id); };
+  function esc(s){ return String(s == null ? "" : s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+
+  function lsGet(key, fallback){ try{ var v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }catch(e){ return fallback; } }
+  function lsSet(key, val){ try{ localStorage.setItem(key, JSON.stringify(val)); }catch(e){} }
+
+  // ---------- Tooltip ----------
+  var tip = $("tooltip");
+  function showTip(el, text){
+    var r = el.getBoundingClientRect();
+    tip.textContent = text;
+    tip.style.left = (r.left + r.width/2) + "px";
+    tip.style.top = (r.top - 8) + "px";
+    tip.classList.add("show");
+  }
+  function hideTip(){ tip.classList.remove("show"); }
+
+  // ---------- Parsing helpers ----------
+  function sheetHeaderRows(ws){
+    return XLSX.utils.sheet_to_json(ws, { header:1, defval:null, blankrows:false });
+  }
+  function colMap(headerRow){
+    var m = {};
+    headerRow.forEach(function(h,i){ if(h!=null) m[String(h).trim()] = i; });
+    return m;
+  }
+  function findHeaderRowIndex(rows, mustContain){
+    for(var i=0;i<rows.length;i++){
+      if(rows[i].some(function(c){ return c && String(c).trim() === mustContain; })) return i;
+    }
+    return -1;
+  }
+  function excelDateToJS(v){
+    if(v instanceof Date) return v;
+    if(typeof v === "number"){ var d = XLSX.SSF.parse_date_code(v); if(d) return new Date(d.y, d.m-1, d.d); }
+    if(typeof v === "string"){ var parsed = new Date(v); if(!isNaN(parsed)) return parsed; }
+    return null;
+  }
+  // Búsqueda de hoja insensible a mayúsculas/minúsculas (SAP re-exporta con distinto capitalizado).
+  function findSheet(wb, name){
+    if(wb.Sheets[name]) return wb.Sheets[name];
+    var target = name.toLowerCase();
+    var found = wb.SheetNames.filter(function(n){ return n.toLowerCase() === target; })[0];
+    return found ? wb.Sheets[found] : null;
+  }
+  function normOrden(v){
+    if(v === null || v === undefined || v === "") return null;
+    return String(v).trim();
+  }
+
+  // ---------- Nombres: pestaña "Puestos De trabajo" ----------
+  function stripAcc(s){ return String(s).normalize("NFD").replace(/[̀-ͯ]/g,"").toUpperCase(); }
+  function toks(s){ return stripAcc(s).split(/[^A-Z0-9]+/).filter(Boolean); }
+
+  var ROLES = [
+    [/^MECANICO\s+MOTOS?\b/, "Mecánico de Motos"],
+    [/^MECANICO\s+GRAL\b/, "Mecánico General"],
+    [/^MECANICO\b/, "Mecánico General"],
+    [/^ELECTROMECANICO\b/, "Electromecánico"],
+    [/^HOJALATERO\b/, "Hojalatero"],
+    [/^SUPERV\w*\s+MECANICOS?\b/, "Supervisor de Mecánicos"],
+    [/^JEFE\s+(D\s+|DE\s+)?TALLER\s+AUTOMOTRIZ\b/, "Jefe de Taller Automotriz"],
+    [/^JEFE\s+MANTENIMIENTO\b/, "Jefe de Mantenimiento"]
+  ];
+
+  // "MECANICO GRAL. CUERN. J ANTONIO RANGEL V" -> { puesto:"Mecánico General", tokens:["J","ANTONIO","RANGEL","V"] }
+  function parseDesc(desc){
+    var up = String(desc == null ? "" : desc).toUpperCase().replace(/[.,()]/g," ").replace(/\s+/g," ").trim();
+    var puesto = null, rest = up;
+    for(var i=0;i<ROLES.length;i++){
+      var m = ROLES[i][0].exec(up);
+      if(m){ puesto = ROLES[i][1]; rest = up.slice(m[0].length); break; }
+    }
+    rest = rest.replace(/\b(P|PTE|PUENTE)\s+(DE\s+)?IXTLA\b/g," ")
+               .replace(/\b(CUERN\w*|CUAUTLA|JOJUTLA|COCOYOC|AXOCHIAPAN|IXTLA|CV|PIX)\b/g," ");
+    var tokens = rest.split(/\s+/).filter(Boolean);
+    return { puesto: puesto || "Sin clasificar", tokens: tokens };
+  }
+  function dispName(tokens){
+    return tokens.map(function(t){ return t.length === 1 ? t + "." : t.charAt(0) + t.slice(1).toLowerCase(); }).join(" ");
+  }
+
+  function tokOK(t, d){
+    if(t === d) return true;
+    if(t.length === 1) return d.indexOf(t) === 0;
+    if(d.length === 1) return t.indexOf(d) === 0;
+    return t.length >= 3 && d.length >= 3 && (d.indexOf(t) === 0 || t.indexOf(d) === 0);
+  }
+  // Todas las palabras del autor deben aparecer (o ser prefijo/inicial) en el nombre, y al menos una
+  // palabra completa (3+ letras) debe coincidir de verdad. weakOk permite que un autor de una sola
+  // inicial ("V") cuadre contra el responsable ya conocido, pero nunca en la búsqueda global.
+  function nameMatch(aT, dT, weakOk){
+    if(!aT.length) return false;
+    var strong = false;
+    for(var i=0;i<aT.length;i++){
+      var t = aT[i];
+      if(!dT.some(function(d){ return tokOK(t, d); })) return false;
+      if(t.length >= 3 && dT.some(function(d){ return d.length >= 3 && tokOK(t, d); })) strong = true;
+    }
+    return strong || !!weakOk;
+  }
+  function sharesStrong(aT, dT){
+    return aT.some(function(t){ return t.length >= 3 && dT.some(function(d){ return d.length >= 3 && tokOK(t, d); }); });
+  }
+  function core(nt){ return nt.filter(function(t){ return t.length > 1; }); }
+  function samePerson(a, b){
+    var A = core(a), B = core(b);
+    if(Math.min(A.length, B.length) < 2) return false;
+    var inB = function(t){ return B.indexOf(t) >= 0; }, inA = function(t){ return A.indexOf(t) >= 0; };
+    return A.every(inB) || B.every(inA);
+  }
+
+  function buildPuestos(wb){
+    var res = { found:false, byCode:{}, persons:[] };
+    var ws = findSheet(wb, "Puestos De trabajo");
+    if(!ws) return res;
+    var rows = sheetHeaderRows(ws);
+    var hi = findHeaderRowIndex(rows, "PtoTbjo");
+    if(hi < 0) return res;
+    res.found = true;
+    var cols = colMap(rows[hi]);
+    var cDesc = cols["Descripción"] != null ? cols["Descripción"] : cols["Descripcion"];
+    for(var i=hi+1;i<rows.length;i++){
+      var r = rows[i];
+      if(!r || r[cols["PtoTbjo"]] == null) continue;
+      var code = String(r[cols["PtoTbjo"]]).trim();
+      if(!code) continue;
+      var p = parseDesc(r[cDesc]);
+      var entry = { codigo:code, ctro:r[cols["Ctro"]] || null, desc:String(r[cDesc] || ""), puesto:p.puesto, tokens:p.tokens, person:null };
+      if(p.tokens.length){
+        var norm = p.tokens.map(stripAcc);
+        var person = null;
+        for(var k=0;k<res.persons.length;k++){ if(samePerson(res.persons[k].norm, norm)){ person = res.persons[k]; break; } }
+        if(!person){
+          person = { key:"P"+res.persons.length, nombre:dispName(p.tokens), puesto:p.puesto, codes:[], ctros:[], norm:[], tokens:p.tokens, generico:false, verificado:true };
+          res.persons.push(person);
+        } else if(core(p.tokens).length > core(person.tokens).length){
+          person.tokens = p.tokens; person.nombre = dispName(p.tokens);
+        }
+        person.codes.push(code);
+        if(entry.ctro && person.ctros.indexOf(entry.ctro) < 0) person.ctros.push(entry.ctro);
+        norm.forEach(function(t){ if(person.norm.indexOf(t) < 0) person.norm.push(t); });
+        entry.person = person;
+      }
+      res.byCode[code] = entry;
+    }
+    return res;
+  }
+
+  // ---------- Decide a quién se le asigna cada aviso ----------
+  // 1) Si el autor coincide con el nombre del Pto.tbjo.responsable en Puestos -> ese nombre.
+  // 2) Si no, se busca al autor en toda la pestaña Puestos y se usa esa persona.
+  // 3) Si no se encuentra (o hay varias), se queda el responsable y se marca para corregir.
+  function resolveAviso(P, pto, autor, centro){
+    var entry = P.byCode[pto] || null;
+    var ptoPerson = entry ? entry.person : null;
+    var aT = toks(autor || "");
+    var out = { person:ptoPerson, entry:entry, tipo:"ok", candidatos:[] };
+    if(!aT.length){ out.tipo = "sin_autor"; return out; }
+    if(ptoPerson && nameMatch(aT, ptoPerson.norm, true)) return out;
+    var searchable = aT.some(function(t){ return t.length >= 3; });
+    var cands = searchable ? P.persons.filter(function(p){ return nameMatch(aT, p.norm); }) : [];
+    if(cands.length > 1){
+      var local = cands.filter(function(p){ return p.ctros.indexOf(centro) >= 0; });
+      if(local.length === 1) cands = local;
+    }
+    // Si el autor comparte una palabra con el responsable registrado pero no cuadra completo
+    // (p. ej. "JESUS MARTIN" vs "Jesus Abarca"), no se reasigna sin confirmar.
+    var parcial = ptoPerson && cands.length && sharesStrong(aT, ptoPerson.norm);
+    if(parcial){ out.tipo = "ambiguo"; out.candidatos = [ptoPerson.nombre].concat(cands.map(function(p){ return p.nombre; })); }
+    else if(cands.length === 1){ out.person = cands[0]; out.tipo = "reasignado"; }
+    else if(cands.length > 1){ out.tipo = "ambiguo"; out.candidatos = cands.map(function(p){ return p.nombre; }); }
+    else { out.tipo = "no_localizado"; }
+    return out;
+  }
+
+  function parseWorkbook(wb){
+    var out = {
+      mechanics:{}, cedisTotals:{}, dayTotals:{}, orders:{}, parts:{}, mismatches:[],
+      meta:{ totalAvisos:0, minDate:null, maxDate:null, ordenesSinNumero:0, ordenesSinCierreSAP:0, ordenesConCosto:0, costoTotal:0, om02SinLiberar:0, puestosOk:false, sinAutor:0 }
+    };
+
+    CEDIS_ORDER.forEach(function(c){ out.cedisTotals[c] = { A4:0, A5:0, A4cor:0, A4prev:0, A4pend:0 }; });
+
+    var P = buildPuestos(wb);
+    out.meta.puestosOk = P.found;
+    var pseudo = {};
+    function pseudoPerson(code, entry){
+      if(!pseudo[code]){
+        pseudo[code] = entry
+          ? { key:"G"+code, nombre:entry.puesto + " (código " + code + ")", puesto:entry.puesto, codes:[code], ctros:[entry.ctro], generico:true, verificado:true }
+          : { key:"X"+code, nombre:"Código " + code + " (no está en Puestos de trabajo)", puesto:"Sin verificar", codes:[code], ctros:[], generico:false, verificado:false };
+      }
+      return pseudo[code];
+    }
+
+    // ---- OM01OM02: costo y clase por Orden ----
+    var ordenInfo = {};
+    var wsOrd = findSheet(wb, "OM01OM02");
+    if(wsOrd){
+      var ordRows = sheetHeaderRows(wsOrd);
+      var ordHeaderIdx = findHeaderRowIndex(ordRows, "Clase de orden");
+      var ordCols = colMap(ordRows[ordHeaderIdx] || []);
+      for(var j=ordHeaderIdx+1; j<ordRows.length; j++){
+        var orow = ordRows[j];
+        if(!orow) continue;
+        var oclase = orow[ordCols["Clase de orden"]];
+        var oOrden = normOrden(orow[ordCols["Orden"]]);
+        var ocentro = orow[ordCols["Centro"]];
+        var ocosto = orow[ordCols["Costes tot.reales"]];
+        var ocostoplan = orow[ordCols["Suma de costes plan"]];
+        if(!oclase || !oOrden) continue;
+        oclase = String(oclase).trim();
+        // OM02 liberadas automáticamente a inicio de mes con costo plan 0: todavía no son una orden real.
+        if(oclase === "OM02" && ocostoplan === 0){ out.meta.om02SinLiberar++; continue; }
+        var ocedis = CEDIS_FROM_FILE_CODE[ocentro] || (ocentro || "SIN CEDIS");
+        ordenInfo[oOrden] = { clase:oclase, cedis:ocedis, costo: (typeof ocosto === "number" ? ocosto : 0) };
+
+        var key = ocedis + "|" + oclase;
+        if(!out.orders[key]) out.orders[key] = { cedis:ocedis, clase:oclase, count:0, costo:0 };
+        out.orders[key].count++;
+        out.orders[key].costo += ordenInfo[oOrden].costo;
+      }
+    }
+
+    // ---- OM01OM02MOV: refacciones/servicios por Orden ----
+    var movByOrden = {};
+    var wsMov = findSheet(wb, "OM01OM02MOV");
+    if(wsMov){
+      var movRows = sheetHeaderRows(wsMov);
+      var movHeaderIdx = findHeaderRowIndex(movRows, "Material");
+      var movCols = colMap(movRows[movHeaderIdx] || []);
+      for(var k=movHeaderIdx+1; k<movRows.length; k++){
+        var mrow = movRows[k];
+        if(!mrow) continue;
+        var mOrden = normOrden(mrow[movCols["Orden"]]);
+        if(!mOrden) continue;
+        if(!movByOrden[mOrden]) movByOrden[mOrden] = [];
+        movByOrden[mOrden].push({
+          material: mrow[movCols["Material"]],
+          texto: mrow[movCols["Texto breve de material"]] || "(sin descripción)",
+          cantidad: (typeof mrow[movCols["Cantidad"]] === "number") ? mrow[movCols["Cantidad"]] : 0,
+          importe: (typeof mrow[movCols["Importe ML"]] === "number") ? mrow[movCols["Importe ML"]] : 0
+        });
+      }
+    }
+
+    // ---- Operaciones: avisos por mecánico ----
+    var wsOp = findSheet(wb, "Operaciones");
+    if(wsOp){
+      var opRows = sheetHeaderRows(wsOp);
+      var opHeaderIdx = findHeaderRowIndex(opRows, "Clase de aviso");
+      var opCols = colMap(opRows[opHeaderIdx] || []);
+      var cCentro = opCols["Centro emplazamiento"] != null ? opCols["Centro emplazamiento"] : opCols["Ce.p.pto.trabajo"];
+      for(var i=opHeaderIdx+1; i<opRows.length; i++){
+        var row = opRows[i];
+        if(!row) continue;
+        var clase = row[opCols["Clase de aviso"]];
+        var pto = row[opCols["Pto.tbjo.responsable"]];
+        var ctro = cCentro != null ? row[cCentro] : null;
+        var fecha = excelDateToJS(row[opCols["Fecha de aviso"]]);
+        var orden = normOrden(row[opCols["Orden"]]);
+        var autor = row[opCols["Autor del aviso"]];
+        if(!clase || !pto) continue;
+        clase = String(clase).trim();
+        pto = String(pto).trim();
+        if(clase !== "A4" && clase !== "A5") continue;
+
+        var res = resolveAviso(P, pto, autor, ctro);
+        var person = res.person || pseudoPerson(pto, res.entry);
+        var cedis = CEDIS_FROM_FILE_CODE[ctro] || CEDIS_FROM_FILE_CODE[(person.ctros || [])[0]] || "SIN CEDIS";
+
+        if(!out.mechanics[person.key]){
+          out.mechanics[person.key] = {
+            key: person.key, nombre: person.nombre, puesto: person.puesto,
+            codigos: {}, cedisCount: {}, cedis: cedis,
+            verificado: person.verificado !== false, generico: !!person.generico,
+            mismatches: 0, A4: 0, A5: 0, A4cor: 0, A4prev: 0, A4pend: 0, total: 0, costo: 0, ordenesConCosto: 0, ordenesPendientes: 0
+          };
+        }
+        var m = out.mechanics[person.key];
+        m.codigos[pto] = (m.codigos[pto] || 0) + 1;
+        m.cedisCount[cedis] = (m.cedisCount[cedis] || 0) + 1;
+        if(clase === "A4"){ m.A4++; } else { m.A5++; }
+        m.total++;
+        out.meta.totalAvisos++;
+
+        if(res.tipo === "sin_autor") out.meta.sinAutor++;
+        if(res.tipo === "reasignado" || res.tipo === "no_localizado" || res.tipo === "ambiguo"){
+          m.mismatches++;
+          var sugerido = null;
+          if(res.tipo === "reasignado"){
+            var pc = person.codes.filter(function(c){ return P.byCode[c] && P.byCode[c].ctro === ctro; });
+            sugerido = (pc.length ? pc : person.codes).join(" / ");
+          }
+          out.mismatches.push({
+            aviso: row[opCols["Aviso"]], fecha: fecha, desc: row[opCols["Descripción"]] || "",
+            autor: autor == null ? "" : String(autor).trim(), pto: pto,
+            ptoDesc: res.entry ? res.entry.desc : "(no está en Puestos de trabajo)",
+            ptoGenerico: !!(res.entry && !res.entry.person),
+            asignado: person.nombre, sugerido: sugerido, tipo: res.tipo,
+            candidatos: res.candidatos, equipo: row[opCols["Equipo"]] || ""
+          });
+        }
+
+        if(out.cedisTotals[cedis]){
+          if(clase === "A4") out.cedisTotals[cedis].A4++; else out.cedisTotals[cedis].A5++;
+        }
+
+        if(fecha){
+          var day = fecha.getDate();
+          out.dayTotals[day] = (out.dayTotals[day]||0) + 1;
+          if(!out.meta.minDate || fecha < out.meta.minDate) out.meta.minDate = fecha;
+          if(!out.meta.maxDate || fecha > out.meta.maxDate) out.meta.maxDate = fecha;
+        }
+
+        if(!orden){
+          out.meta.ordenesSinNumero++;
+          if(clase === "A4"){ m.A4pend++; if(out.cedisTotals[cedis]) out.cedisTotals[cedis].A4pend++; }
+        } else {
+          var info = ordenInfo[orden];
+          if(!info){
+            m.ordenesPendientes++;
+            out.meta.ordenesSinCierreSAP++;
+            if(clase === "A4"){ m.A4pend++; if(out.cedisTotals[cedis]) out.cedisTotals[cedis].A4pend++; }
+          } else {
+            m.costo += info.costo;
+            m.ordenesConCosto++;
+            out.meta.ordenesConCosto++;
+            out.meta.costoTotal += info.costo;
+            if(clase === "A4"){
+              if(info.clase === "OM01"){ m.A4cor++; if(out.cedisTotals[cedis]) out.cedisTotals[cedis].A4cor++; }
+              else if(info.clase === "OM02"){ m.A4prev++; if(out.cedisTotals[cedis]) out.cedisTotals[cedis].A4prev++; }
+              else { m.A4pend++; if(out.cedisTotals[cedis]) out.cedisTotals[cedis].A4pend++; }
+            }
+          }
+          var movs = movByOrden[orden];
+          if(movs){
+            movs.forEach(function(mv){
+              var pkey = String(mv.material);
+              if(!out.parts[pkey]) out.parts[pkey] = { material:mv.material, texto:mv.texto, cantidad:0, importe:0, ordenes:0 };
+              out.parts[pkey].cantidad += mv.cantidad;
+              out.parts[pkey].importe += mv.importe;
+              out.parts[pkey].ordenes++;
+            });
+          }
+        }
+      }
+    }
+
+    // CEDIS principal de cada mecánico = donde más avisos tiene
+    Object.keys(out.mechanics).forEach(function(k){
+      var mm = out.mechanics[k], best = null, bn = -1;
+      Object.keys(mm.cedisCount).forEach(function(c){ if(mm.cedisCount[c] > bn){ bn = mm.cedisCount[c]; best = c; } });
+      if(best) mm.cedis = best;
+    });
+    out.mismatches.sort(function(a,b){
+      return a.pto.localeCompare(b.pto) || a.autor.localeCompare(b.autor) || (a.fecha - b.fecha);
+    });
+
+    return out;
+  }
+
+  // ---------- Rendering ----------
+  function fmtInt(n){ return n.toLocaleString("es-MX"); }
+  function fmtMoney(n){ return "$" + n.toLocaleString("es-MX", { maximumFractionDigits:0 }); }
+  function fmtDateShort(d){ return d.toLocaleDateString("es-MX", { day:"2-digit", month:"short" }); }
+  function titleCase(s){
+    if(!s) return s;
+    return s.split(" ").map(function(w){ return w.length ? w.charAt(0)+w.slice(1).toLowerCase() : w; }).join(" ");
+  }
+  function kpiTile(label, value, sub, cls){
+    return '<div class="kpi-tile'+(cls?' '+cls:'')+'"><span class="kpi-label">'+label+'</span><span class="kpi-value">'+esc(value)+'</span><span class="kpi-sub">'+esc(sub||"")+'</span></div>';
+  }
+  function attachRowTooltips(selector){
+    document.querySelectorAll(selector).forEach(function(el){
+      var text = el.getAttribute("data-tip");
+      if(!text) return;
+      el.addEventListener("mouseenter", function(){ showTip(el, text); });
+      el.addEventListener("mouseleave", hideTip);
+    });
+  }
+
+  var STATUS = {
+    reasignado: ['st-re', 'Se muestra el nombre del autor'],
+    no_localizado: ['st-no', 'Autor no está en Puestos'],
+    ambiguo: ['st-am', 'Autor ambiguo']
+  };
+  function statusPill(mm){
+    var s = STATUS[mm.tipo];
+    var extra = (mm.tipo === "reasignado" && mm.ptoGenerico) ? " · código genérico" : "";
+    return '<span class="st '+s[0]+'">'+esc(s[1]+extra)+'</span>';
+  }
+
+  var lastPairs = [];
+  function renderMismatches(data){
+    var total = data.meta.totalAvisos, list = data.mismatches;
+    var re = list.filter(function(x){ return x.tipo === "reasignado"; }).length;
+    var no = list.filter(function(x){ return x.tipo === "no_localizado"; }).length;
+    var am = list.filter(function(x){ return x.tipo === "ambiguo"; }).length;
+    var pct = total ? (list.length/total*100) : 0;
+    $("mmSub").textContent = fmtInt(list.length) + " de " + fmtInt(total) + " avisos (" + pct.toFixed(1) + "%) no coinciden";
+
+    if(!data.meta.puestosOk){
+      $("mmBody").innerHTML = '<div class="warn-box">No se encontró la pestaña "Puestos De trabajo" (o su encabezado PtoTbjo). Sin ella no se puede validar el autor ni mostrar los nombres.</div>';
+      return;
+    }
+    if(!list.length){
+      $("mmBody").innerHTML = '<p class="empty-note">Todos los avisos tienen un autor que coincide con el responsable de Puestos de trabajo.</p>';
+      return;
+    }
+
+    var pairs = {};
+    list.forEach(function(x){
+      var k = x.pto + "|" + x.autor + "|" + x.tipo + "|" + x.asignado;
+      if(!pairs[k]) pairs[k] = { pto:x.pto, ptoDesc:x.ptoDesc, autor:x.autor, asignado:x.asignado, sugerido:x.sugerido, tipo:x.tipo, ptoGenerico:x.ptoGenerico, candidatos:x.candidatos, n:0 };
+      pairs[k].n++;
+    });
+    var pairList = Object.keys(pairs).map(function(k){ return pairs[k]; });
+    var order = { reasignado:0, ambiguo:1, no_localizado:2 };
+    pairList.sort(function(a,b){ return order[a.tipo]-order[b.tipo] || b.n-a.n; });
+    lastPairs = pairList;
+
+    var h = '';
+    h += '<div class="chips">' +
+      '<div class="chip"><b>'+re+'</b><span>Autor localizado en Puestos. Se muestra su nombre</span></div>' +
+      '<div class="chip"><b>'+no+'</b><span>Autor no está en Puestos. Se queda el responsable</span></div>' +
+      '<div class="chip"><b>'+am+'</b><span>Autor ambiguo (coincide con varias personas)</span></div>' +
+    '</div>';
+    h += '<p class="note">Cada aviso se compara contra el nombre del Pto.tbjo.responsable en Puestos de trabajo. Si el autor coincide se usa ese nombre. Si no coincide se busca al autor en toda la pestaña y se muestra esa persona. Cada renglón de abajo es una combinación a corregir en SAP.</p>';
+    h += '<div class="table-wrap scroll-y"><table><thead><tr><th>Pto.tbjo.responsable</th><th>Autor del aviso</th><th>Se muestra como</th><th class="num">Avisos</th><th>Estatus</th></tr></thead><tbody>';
+    pairList.forEach(function(p){
+      var sug = p.sugerido ? '<br><span class="note">Código sugerido: <code class="cd">'+esc(p.sugerido)+'</code></span>' : '';
+      var amb = (p.tipo === "ambiguo" && p.candidatos.length) ? '<br><span class="note">Podría ser: '+esc(p.candidatos.join(", "))+'</span>' : '';
+      h += '<tr><td><code class="cd">'+esc(p.pto)+'</code><br><span class="note">'+esc(p.ptoDesc)+'</span></td>' +
+        '<td>'+esc(p.autor)+'</td><td>'+esc(p.asignado)+sug+amb+'</td><td class="num">'+p.n+'</td><td>'+statusPill(p)+'</td></tr>';
+    });
+    h += '</tbody></table></div>';
+    h += '<div class="row-actions"><button type="button" class="btn-ghost" id="btnCopyPairs">Copiar tabla</button><span class="note" id="copyMsg"></span></div>';
+
+    h += '<details><summary>Ver los '+fmtInt(list.length)+' avisos</summary><div class="table-wrap scroll-y"><table><thead><tr><th>Aviso</th><th>Fecha</th><th>Descripción</th><th>Autor</th><th>Pto.tbjo</th><th>Se muestra como</th><th>Estatus</th></tr></thead><tbody>';
+    list.forEach(function(x){
+      h += '<tr><td>'+esc(x.aviso)+'</td><td>'+(x.fecha ? esc(fmtDateShort(x.fecha)) : '')+'</td><td>'+esc(x.desc)+'</td><td>'+esc(x.autor)+'</td><td><code class="cd">'+esc(x.pto)+'</code></td><td>'+esc(x.asignado)+'</td><td>'+statusPill(x)+'</td></tr>';
+    });
+    h += '</tbody></table></div></details>';
+    $("mmBody").innerHTML = h;
+
+    $("btnCopyPairs").addEventListener("click", function(){
+      var lines = ["Pto.tbjo.responsable\tNombre en Puestos\tAutor del aviso\tSe muestra como\tCódigo sugerido\tAvisos\tEstatus"];
+      lastPairs.forEach(function(p){
+        lines.push([p.pto, p.ptoDesc, p.autor, p.asignado, p.sugerido || "", p.n, STATUS[p.tipo][1]].join("\t"));
+      });
+      var msg = $("copyMsg");
+      try{
+        navigator.clipboard.writeText(lines.join("\n")).then(function(){ msg.textContent = "Copiado. Pégalo en Excel."; }, function(){ msg.textContent = "No se pudo copiar desde aquí."; });
+      }catch(e){ msg.textContent = "No se pudo copiar desde aquí."; }
+    });
+  }
+
+  function render(data){
+    $("content").hidden = false;
+
+    var mechs = Object.keys(data.mechanics).map(function(k){ return data.mechanics[k]; });
+    mechs.sort(function(a,b){ return b.total - a.total; });
+
+    var top = mechs[0];
+    var cedisRanked = CEDIS_ORDER.map(function(c){ return { cedis:c, total: data.cedisTotals[c].A4 + data.cedisTotals[c].A5 }; }).sort(function(a,b){ return b.total-a.total; });
+    var a4total = mechs.reduce(function(s,m){ return s+m.A4; },0);
+    var a5total = mechs.reduce(function(s,m){ return s+m.A5; },0);
+    var a4corTotal = mechs.reduce(function(s,m){ return s+m.A4cor; },0);
+    var a4prevTotal = mechs.reduce(function(s,m){ return s+m.A4prev; },0);
+    var a4pendTotal = mechs.reduce(function(s,m){ return s+m.A4pend; },0);
+    var mmTotal = data.mismatches.length;
+
+    var kpiHtml = "";
+    kpiHtml += kpiTile("Total de avisos", fmtInt(data.meta.totalAvisos), (data.meta.minDate&&data.meta.maxDate)? (fmtDateShort(data.meta.minDate)+" – "+fmtDateShort(data.meta.maxDate)) : "");
+    kpiHtml += kpiTile("Correctivo vs. auxilio", a4total+" / "+a5total, "A4 / A5");
+    kpiHtml += kpiTile("A4: correctivo vs. preventivo", a4corTotal+" / "+a4prevTotal, a4pendTotal ? (a4pendTotal+" sin clasificar todavía (orden sin cerrar en SAP)") : "según Clase de orden en OM01OM02");
+    kpiHtml += kpiTile("Autor ≠ responsable en SAP", fmtInt(mmTotal), data.meta.totalAvisos ? ((mmTotal/data.meta.totalAvisos*100).toFixed(1)+"% de los avisos, por corregir") : "", mmTotal ? "warn" : "");
+    kpiHtml += kpiTile("Mecánico con más carga", top ? top.nombre.split(" ").slice(0,2).join(" ") : "—", top ? (top.total+" avisos · "+titleCase(top.cedis)) : "");
+    kpiHtml += kpiTile("CEDIS con más avisos", cedisRanked[0] ? titleCase(cedisRanked[0].cedis) : "—", cedisRanked[0] ? (cedisRanked[0].total+" avisos") : "");
+    kpiHtml += kpiTile("Costo total (refacciones/servicios)", fmtMoney(data.meta.costoTotal), data.meta.ordenesConCosto+" órdenes con costo cerrado en SAP");
+    $("kpiRow").innerHTML = kpiHtml;
+
+    // Ranking por mecánico
+    var maxTotal = mechs.length ? mechs[0].total : 1;
+    $("rankSub").textContent = mechs.length + " mecánicos con avisos registrados";
+    var rankHtml = mechs.map(function(m){
+      var corw = (m.A4cor/maxTotal*100);
+      var prevw = (m.A4prev/maxTotal*100);
+      var pendw = (m.A4pend/maxTotal*100);
+      var a5w = (m.A5/maxTotal*100);
+      var flag = (!m.verificado) ? '<span class="unverified">sin verificar</span>' : (m.generico ? '<span class="tag-generic">genérico</span>' : '');
+      if(m.mismatches) flag += '<span class="mm-badge">'+m.mismatches+' autor ≠ responsable</span>';
+      var tipCosto = m.costo ? (' — ' + fmtMoney(m.costo) + ' en refacciones/servicios') : '';
+      var codes = Object.keys(m.codigos).join(", ");
+      return '<div class="rank-row" data-tip="'+esc(m.nombre)+' — '+m.A4cor+' correctivos, '+m.A4prev+' preventivos, '+m.A5+' auxilios'+esc(tipCosto)+'">' +
+        '<div class="rank-name"><span class="n">'+esc(m.nombre)+flag+'</span><span class="p">'+esc(m.puesto)+' · '+esc(titleCase(m.cedis))+' · '+esc(codes)+'</span></div>' +
+        '<div class="rank-bar-track"><span class="rank-bar-seg" style="width:'+corw+'%;background:var(--a4)"></span><span class="rank-bar-seg" style="width:'+prevw+'%;background:var(--prev)"></span><span class="rank-bar-seg" style="width:'+pendw+'%;background:var(--pend)"></span><span class="rank-bar-seg" style="width:'+a5w+'%;background:var(--a5)"></span></div>' +
+        '<div class="rank-total">'+m.total+'</div>' +
+      '</div>';
+    }).join("");
+    $("rankList").innerHTML = rankHtml;
+    attachRowTooltips("#rankList .rank-row");
+
+    var unv = mechs.filter(function(m){ return !m.verificado; });
+    var gen = mechs.filter(function(m){ return m.generico; });
+    var notes = [];
+    if(unv.length) notes.push("Hay códigos de Pto.tbjo.responsable que no existen en la pestaña Puestos de trabajo y sus avisos no se pudieron ligar a una persona.");
+    if(gen.length) notes.push("Los renglones \"genérico\" son avisos cuyo responsable es un código sin nombre (jefe de taller) y cuyo autor no se encontró en Puestos de trabajo.");
+    var unvEl = $("unverifiedNote");
+    unvEl.hidden = !notes.length;
+    unvEl.textContent = notes.join(" ");
+
+    renderMismatches(data);
+
+    // Avisos por CEDIS
+    var maxCedis = Math.max.apply(null, cedisRanked.map(function(c){ return c.total; }).concat([1]));
+    var cedisHtml = CEDIS_ORDER.map(function(c){
+      var t = data.cedisTotals[c];
+      var total = t.A4 + t.A5;
+      var h = total ? (total/maxCedis*130) : 2;
+      var a5h = total ? (t.A5/total*h) : 0;
+      var pendh = total ? (t.A4pend/total*h) : 0;
+      var prevh = total ? (t.A4prev/total*h) : 0;
+      var corh = total ? (t.A4cor/total*h) : 0;
+      return '<div class="bar-col" data-tip="'+titleCase(c)+' — '+t.A4cor+' correctivos, '+t.A4prev+' preventivos, '+t.A5+' auxilios">' +
+        '<span class="bar-col-value">'+total+'</span>' +
+        '<div class="bar-stack" style="height:'+h+'px"><span class="bar-seg" style="height:'+a5h+'px;background:var(--a5)"></span><span class="bar-seg" style="height:'+pendh+'px;background:var(--pend)"></span><span class="bar-seg" style="height:'+prevh+'px;background:var(--prev)"></span><span class="bar-seg" style="height:'+corh+'px;background:var(--a4)"></span></div>' +
+        '<span class="bar-col-label">'+titleCase(c)+'</span>' +
+      '</div>';
+    }).join("");
+    $("cedisBars").innerHTML = cedisHtml;
+    attachRowTooltips("#cedisBars .bar-col");
+
+    // Ritmo del mes
+    var days = Object.keys(data.dayTotals).map(Number).sort(function(a,b){return a-b;});
+    var maxDay = Math.max.apply(null, days.map(function(d){ return data.dayTotals[d]; }).concat([1]));
+    if(data.meta.minDate && data.meta.maxDate){
+      $("dayRangeLabel").textContent = "Avisos por día · " + fmtDateShort(data.meta.minDate) + " – " + fmtDateShort(data.meta.maxDate);
+    }
+    var dayHtml = days.map(function(d){
+      var v = data.dayTotals[d];
+      var h = (v/maxDay*84)+4;
+      return '<div class="day-bar" style="height:'+h+'px" data-tip="Día '+d+': '+v+' avisos"></div>';
+    }).join("");
+    $("dayChart").innerHTML = dayHtml;
+    attachRowTooltips("#dayChart .day-bar");
+
+    // Resumen de órdenes
+    var orderRows = Object.keys(data.orders).map(function(k){ return data.orders[k]; });
+    orderRows.sort(function(a,b){ return CEDIS_ORDER.indexOf(a.cedis)-CEDIS_ORDER.indexOf(b.cedis) || a.clase.localeCompare(b.clase); });
+    var ordTable = '<thead><tr><th>CEDIS</th><th>Clase</th><th class="num">Órdenes</th><th class="num">Costo total</th></tr></thead><tbody>';
+    orderRows.forEach(function(o){
+      ordTable += '<tr><td>'+esc(titleCase(o.cedis))+'</td><td>'+(o.clase==="OM01"?"OM01 · Correctivo":o.clase==="OM02"?"OM02 · Preventivo":esc(o.clase))+'</td><td class="num">'+fmtInt(o.count)+'</td><td class="num">'+fmtMoney(o.costo)+'</td></tr>';
+    });
+    ordTable += '</tbody>';
+    $("ordersTable").innerHTML = ordTable;
+
+    var noteParts = ["Esta tabla cuenta todas las órdenes de OM01OM02 por CEDIS y clase (incluye preventivos programados sin aviso); el desglose Correctivo/Preventivo de arriba es solo de los avisos capturados en Operaciones."];
+    if(data.meta.om02SinLiberar){
+      noteParts.push(data.meta.om02SinLiberar + " órdenes OM02 con \"Suma de costes plan\" en 0 no se cuentan aquí (SAP las libera automático a inicio de mes, pero aún no tienen material/aviso cargado).");
+    }
+    if(data.meta.ordenesSinCierreSAP){
+      noteParts.push(data.meta.ordenesSinCierreSAP + " avisos referencian una Orden que aún no aparece en OM01OM02 (pendiente de cierre en SAP, no es un error).");
+    }
+    if(data.meta.ordenesSinNumero){
+      noteParts.push(data.meta.ordenesSinNumero + " avisos todavía no tienen número de Orden capturado.");
+    }
+    $("ordersNote").textContent = noteParts.join(" ");
+
+    // Refacciones más utilizadas
+    var partRows = Object.keys(data.parts).map(function(k){ return data.parts[k]; });
+    partRows.sort(function(a,b){ return b.importe - a.importe; });
+    $("partsSub").textContent = partRows.length ? (partRows.length + " refacciones/servicios distintos ligados a órdenes con avisos") : "Sin datos ligados todavía";
+    if(partRows.length){
+      var pTable = '<thead><tr><th>Material</th><th>Descripción</th><th class="num">Cantidad</th><th class="num">Órdenes</th><th class="num">Importe</th></tr></thead><tbody>';
+      partRows.slice(0, 25).forEach(function(p){
+        pTable += '<tr><td>'+esc(p.material)+'</td><td>'+esc(p.texto)+'</td><td class="num">'+fmtInt(p.cantidad)+'</td><td class="num">'+fmtInt(p.ordenes)+'</td><td class="num">'+fmtMoney(p.importe)+'</td></tr>';
+      });
+      pTable += '</tbody>';
+      $("partsTable").innerHTML = pTable;
+    } else {
+      $("partsTable").innerHTML = '<tbody><tr><td class="empty-note">Sin refacciones ligadas. Revisa que el archivo incluya la pestaña OM01OM02MOV.</td></tr></tbody>';
+    }
+
+    // Tabla completa
+    var mtable = '<thead><tr><th>Mecánico</th><th>Puesto</th><th>CEDIS</th><th>Códigos</th><th class="num">Correctivo (A4)</th><th class="num">Preventivo (A4)</th><th class="num">A4 sin clasificar</th><th class="num">Auxilio (A5)</th><th class="num">Total</th><th class="num">Autor ≠ resp.</th><th class="num">Costo</th><th class="num">Órdenes pend. cierre</th></tr></thead><tbody>';
+    mechs.forEach(function(m){
+      mtable += '<tr><td>'+esc(m.nombre)+'</td><td>'+esc(m.puesto)+'</td><td>'+esc(titleCase(m.cedis))+'</td><td>'+esc(Object.keys(m.codigos).join(", "))+'</td><td class="num">'+m.A4cor+'</td><td class="num">'+m.A4prev+'</td><td class="num">'+m.A4pend+'</td><td class="num">'+m.A5+'</td><td class="num">'+m.total+'</td><td class="num">'+m.mismatches+'</td><td class="num">'+fmtMoney(m.costo)+'</td><td class="num">'+m.ordenesPendientes+'</td></tr>';
+    });
+    mtable += '</tbody>';
+    $("mechTable").innerHTML = mtable;
+  }
+
+  // ---------- File handling ----------
+  var uploaderEl = $("uploader");
+  var fileInput = $("fileInput");
+
+  $("btnPick").addEventListener("click", function(){ fileInput.click(); });
+  fileInput.addEventListener("change", function(e){
+    if(e.target.files && e.target.files[0]) handleFile(e.target.files[0]);
+  });
+  ["dragenter","dragover"].forEach(function(evt){
+    uploaderEl.addEventListener(evt, function(e){ e.preventDefault(); uploaderEl.classList.add("drag"); });
+  });
+  ["dragleave","drop"].forEach(function(evt){
+    uploaderEl.addEventListener(evt, function(e){ e.preventDefault(); uploaderEl.classList.remove("drag"); });
+  });
+  uploaderEl.addEventListener("drop", function(e){
+    if(e.dataTransfer.files && e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+  });
+
+  function handleFile(file){
+    $("fileMeta").textContent = "Leyendo " + file.name + "…";
+    var reader = new FileReader();
+    reader.onload = function(e){
+      try{
+        var data = new Uint8Array(e.target.result);
+        var wb = XLSX.read(data, { type:"array", cellDates:true });
+        var parsed = parseWorkbook(wb);
+        render(parsed);
+        $("fileMeta").textContent = "Archivo cargado: " + file.name + " — " + fmtInt(parsed.meta.totalAvisos) + " avisos";
+        lsSet("carga_trabajo_last_file", { name:file.name, loadedAt:new Date().toISOString() });
+      }catch(err){
+        $("fileMeta").textContent = "No se pudo leer el archivo. Confirma que tiene las pestañas Operaciones, OM01OM02, OM01OM02MOV y Puestos De trabajo.";
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  var last = lsGet("carga_trabajo_last_file", null);
+  if(last){
+    $("fileMeta").textContent = "Último archivo cargado: " + last.name + ". Vuelve a cargarlo para actualizar los datos.";
+  }
+
+  if(typeof globalThis !== "undefined" && globalThis.__CM_TEST__){ globalThis.__CM_TEST__.parse = parseWorkbook; }
+})();
+</script>
+
+</body></html>
