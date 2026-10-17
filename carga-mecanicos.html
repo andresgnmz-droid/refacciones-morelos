@@ -117,6 +117,19 @@
 
   .empty-note{font-size:13px; color:var(--ink-faint); text-align:center; padding:20px 4px; line-height:1.5;}
   .note{font-size:12px; color:var(--ink-faint); line-height:1.5;}
+  #content,#viewMain{display:flex; flex-direction:column; gap:20px;}
+  .link{background:none; border:0; padding:0; font:inherit; font-weight:600; color:var(--accent); cursor:pointer; text-align:left; text-decoration:underline; text-underline-offset:2px;}
+  .link:hover{text-decoration-thickness:2px;}
+  .link:focus-visible{outline:2px solid var(--accent); outline-offset:2px; border-radius:3px;}
+  .catpill{display:inline-flex; align-items:center; gap:6px; white-space:nowrap; font-size:12px;}
+  .fbar{display:flex; gap:8px; flex-wrap:wrap;}
+  .chipbtn{font:inherit; font-size:12.5px; font-weight:600; background:var(--surface); color:var(--ink); border:1px solid var(--border); border-radius:99px; padding:6px 12px;}
+  .chipbtn b{font-variant-numeric:tabular-nums; margin-left:4px;}
+  .chipbtn[aria-pressed="true"]{background:var(--accent); color:var(--accent-ink); border-color:var(--accent);}
+  .chipbtn:focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
+  .crumbs{display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:12.5px; color:var(--ink-faint);}
+  .kv{display:grid; grid-template-columns:auto 1fr; gap:6px 14px; font-size:13px;}
+  .kv dt{color:var(--ink-faint); font-weight:600;} .kv dd{margin:0; overflow-wrap:anywhere;}
   .warn-box{background:var(--surface-alt); border:1px solid var(--border); border-radius:12px; padding:12px 14px; font-size:12.5px; color:var(--ink-soft); line-height:1.5;}
 </style>
 
@@ -134,6 +147,9 @@
   </div>
 
   <div id="content" hidden>
+    <div id="viewMech" hidden></div>
+    <div id="viewOrder" hidden></div>
+    <div id="viewMain">
 
     <div class="kpi-row" id="kpiRow"></div>
 
@@ -212,6 +228,7 @@
       </div>
     </div>
 
+    </div>
   </div>
 </div>
 
@@ -439,7 +456,7 @@
         // OM02 liberadas automáticamente a inicio de mes con costo plan 0: todavía no son una orden real.
         if(oclase === "OM02" && ocostoplan === 0){ out.meta.om02SinLiberar++; continue; }
         var ocedis = CEDIS_FROM_FILE_CODE[ocentro] || (ocentro || "SIN CEDIS");
-        ordenInfo[oOrden] = { clase:oclase, cedis:ocedis, costo: (typeof ocosto === "number" ? ocosto : 0) };
+        ordenInfo[oOrden] = { clase:oclase, cedis:ocedis, costo: (typeof ocosto === "number" ? ocosto : 0), texto: orow[ordCols["Texto breve"]] || "", equipo: orow[ordCols["Equipo"]] || "", fecha: excelDateToJS(orow[ordCols["Fecha de referencia"]]) };
 
         var key = ocedis + "|" + oclase;
         if(!out.orders[key]) out.orders[key] = { cedis:ocedis, clase:oclase, count:0, costo:0 };
@@ -465,7 +482,9 @@
           material: mrow[movCols["Material"]],
           texto: mrow[movCols["Texto breve de material"]] || "(sin descripción)",
           cantidad: (typeof mrow[movCols["Cantidad"]] === "number") ? mrow[movCols["Cantidad"]] : 0,
-          importe: (typeof mrow[movCols["Importe ML"]] === "number") ? mrow[movCols["Importe ML"]] : 0
+          importe: (typeof mrow[movCols["Importe ML"]] === "number") ? mrow[movCols["Importe ML"]] : 0,
+          um: mrow[movCols["Un.medida de entrada"]] || "",
+          fecha: excelDateToJS(mrow[movCols["Fecha de documento"]])
         });
       }
     }
@@ -500,7 +519,7 @@
             key: person.key, nombre: person.nombre, puesto: person.puesto,
             codigos: {}, cedisCount: {}, cedis: cedis,
             verificado: person.verificado !== false, generico: !!person.generico,
-            mismatches: 0, A4: 0, A5: 0, A4cor: 0, A4prev: 0, A4pend: 0, total: 0, costo: 0, ordenesConCosto: 0, ordenesPendientes: 0
+            avisos: [], mismatches: 0, A4: 0, A5: 0, A4cor: 0, A4prev: 0, A4pend: 0, total: 0, costo: 0, ordenesConCosto: 0, ordenesPendientes: 0
           };
         }
         var m = out.mechanics[person.key];
@@ -539,6 +558,9 @@
           if(!out.meta.maxDate || fecha > out.meta.maxDate) out.meta.maxDate = fecha;
         }
 
+        var rec = { aviso:row[opCols["Aviso"]], fecha:fecha, clase:clase, cat:(clase === "A5" ? "aux" : "pend"), orden:orden, desc:row[opCols["Descripción"]] || "", equipo:row[opCols["Equipo"]] || "", autor:autor == null ? "" : String(autor).trim(), pto:pto, match:res.tipo };
+        m.avisos.push(rec);
+
         if(!orden){
           out.meta.ordenesSinNumero++;
           if(clase === "A4"){ m.A4pend++; if(out.cedisTotals[cedis]) out.cedisTotals[cedis].A4pend++; }
@@ -554,8 +576,8 @@
             out.meta.ordenesConCosto++;
             out.meta.costoTotal += info.costo;
             if(clase === "A4"){
-              if(info.clase === "OM01"){ m.A4cor++; if(out.cedisTotals[cedis]) out.cedisTotals[cedis].A4cor++; }
-              else if(info.clase === "OM02"){ m.A4prev++; if(out.cedisTotals[cedis]) out.cedisTotals[cedis].A4prev++; }
+              if(info.clase === "OM01"){ rec.cat = "cor"; m.A4cor++; if(out.cedisTotals[cedis]) out.cedisTotals[cedis].A4cor++; }
+              else if(info.clase === "OM02"){ rec.cat = "prev"; m.A4prev++; if(out.cedisTotals[cedis]) out.cedisTotals[cedis].A4prev++; }
               else { m.A4pend++; if(out.cedisTotals[cedis]) out.cedisTotals[cedis].A4pend++; }
             }
           }
@@ -583,6 +605,8 @@
       return a.pto.localeCompare(b.pto) || a.autor.localeCompare(b.autor) || (a.fecha - b.fecha);
     });
 
+    out.movs = movByOrden;
+    out.ordenInfo = ordenInfo;
     return out;
   }
 
@@ -683,6 +707,7 @@
   }
 
   function render(data){
+    DATA = data; NAV = { m:null, o:null }; mechFilter = "all";
     $("content").hidden = false;
 
     var mechs = Object.keys(data.mechanics).map(function(k){ return data.mechanics[k]; });
@@ -720,7 +745,7 @@
       var tipCosto = m.costo ? (' — ' + fmtMoney(m.costo) + ' en refacciones/servicios') : '';
       var codes = Object.keys(m.codigos).join(", ");
       return '<div class="rank-row" data-tip="'+esc(m.nombre)+' — '+m.A4cor+' correctivos, '+m.A4prev+' preventivos, '+m.A5+' auxilios'+esc(tipCosto)+'">' +
-        '<div class="rank-name"><span class="n">'+esc(m.nombre)+flag+'</span><span class="p">'+esc(m.puesto)+' · '+esc(titleCase(m.cedis))+' · '+esc(codes)+'</span></div>' +
+        '<div class="rank-name"><span class="n"><button type="button" class="link" data-m="'+esc(m.key)+'">'+esc(m.nombre)+'</button>'+flag+'</span><span class="p">'+esc(m.puesto)+' · '+esc(titleCase(m.cedis))+' · '+esc(codes)+'</span></div>' +
         '<div class="rank-bar-track"><span class="rank-bar-seg" style="width:'+corw+'%;background:var(--a4)"></span><span class="rank-bar-seg" style="width:'+prevw+'%;background:var(--prev)"></span><span class="rank-bar-seg" style="width:'+pendw+'%;background:var(--pend)"></span><span class="rank-bar-seg" style="width:'+a5w+'%;background:var(--a5)"></span></div>' +
         '<div class="rank-total">'+m.total+'</div>' +
       '</div>';
@@ -812,11 +837,163 @@
     // Tabla completa
     var mtable = '<thead><tr><th>Mecánico</th><th>Puesto</th><th>CEDIS</th><th>Códigos</th><th class="num">Correctivo (A4)</th><th class="num">Preventivo (A4)</th><th class="num">A4 sin clasificar</th><th class="num">Auxilio (A5)</th><th class="num">Total</th><th class="num">Autor ≠ resp.</th><th class="num">Costo</th><th class="num">Órdenes pend. cierre</th></tr></thead><tbody>';
     mechs.forEach(function(m){
-      mtable += '<tr><td>'+esc(m.nombre)+'</td><td>'+esc(m.puesto)+'</td><td>'+esc(titleCase(m.cedis))+'</td><td>'+esc(Object.keys(m.codigos).join(", "))+'</td><td class="num">'+m.A4cor+'</td><td class="num">'+m.A4prev+'</td><td class="num">'+m.A4pend+'</td><td class="num">'+m.A5+'</td><td class="num">'+m.total+'</td><td class="num">'+m.mismatches+'</td><td class="num">'+fmtMoney(m.costo)+'</td><td class="num">'+m.ordenesPendientes+'</td></tr>';
+      mtable += '<tr><td><button type="button" class="link" data-m="'+esc(m.key)+'">'+esc(m.nombre)+'</button></td><td>'+esc(m.puesto)+'</td><td>'+esc(titleCase(m.cedis))+'</td><td>'+esc(Object.keys(m.codigos).join(", "))+'</td><td class="num">'+m.A4cor+'</td><td class="num">'+m.A4prev+'</td><td class="num">'+m.A4pend+'</td><td class="num">'+m.A5+'</td><td class="num">'+m.total+'</td><td class="num">'+m.mismatches+'</td><td class="num">'+fmtMoney(m.costo)+'</td><td class="num">'+m.ordenesPendientes+'</td></tr>';
     });
     mtable += '</tbody>';
     $("mechTable").innerHTML = mtable;
+    showViews();
   }
+
+  // ---------- Detalle por mecánico y por orden ----------
+  var DATA = null, NAV = { m:null, o:null }, mechFilter = "all";
+  var CAT = {
+    cor:  { label:"A4 · Correctivo", color:"var(--a4)" },
+    prev: { label:"A4 · Preventivo", color:"var(--prev)" },
+    aux:  { label:"A5 · Auxilio vial", color:"var(--a5)" },
+    pend: { label:"A4 · Sin clasificar", color:"var(--pend)" }
+  };
+  function catPill(c){
+    var k = CAT[c] || CAT.pend;
+    return '<span class="catpill"><span class="legend-swatch" style="background:'+k.color+'"></span>'+esc(k.label)+'</span>';
+  }
+  function fmtQty(n){ return n.toLocaleString("es-MX", { maximumFractionDigits:3 }); }
+  function fmtMoney2(n){ return "$" + n.toLocaleString("es-MX", { minimumFractionDigits:2, maximumFractionDigits:2 }); }
+  function fmtDay(d){ return d ? d.toLocaleDateString("es-MX", { day:"2-digit", month:"short", year:"numeric" }) : "—"; }
+
+  function go(m, o){
+    NAV = { m:m, o:o };
+    if(!m) mechFilter = "all";
+    showViews();
+    try{ window.scrollTo(0, 0); }catch(e){}
+    try{ history.pushState({ m:m, o:o }, ""); }catch(e){}
+  }
+  window.addEventListener("popstate", function(e){
+    var st = e.state;
+    NAV = (st && typeof st === "object") ? { m:st.m || null, o:st.o || null } : { m:null, o:null };
+    showViews();
+  });
+
+  function showViews(){
+    if(!DATA) return;
+    if(NAV.m && !DATA.mechanics[NAV.m]) NAV = { m:null, o:null };
+    var inMech = !!NAV.m, inOrd = inMech && !!NAV.o;
+    $("viewMain").hidden = inMech;
+    $("viewMech").hidden = !inMech || inOrd;
+    $("viewOrder").hidden = !inOrd;
+    if(inOrd) renderOrder(); else if(inMech) renderMech();
+  }
+
+  function renderMech(){
+    var m = DATA.mechanics[NAV.m];
+    var counts = { cor:0, prev:0, aux:0, pend:0 };
+    m.avisos.forEach(function(a){ counts[a.cat]++; });
+    var list = m.avisos.filter(function(a){ return mechFilter === "all" || a.cat === mechFilter; }).slice();
+    list.sort(function(a,b){
+      var fa = a.fecha ? a.fecha.getTime() : Infinity, fb = b.fecha ? b.fecha.getTime() : Infinity;
+      return fa - fb || String(a.aviso).localeCompare(String(b.aviso));
+    });
+
+    var h = '';
+    h += '<div class="crumbs"><button type="button" class="link" data-back="main">Carga de Mecánicos</button><span>›</span><span>'+esc(m.nombre)+'</span></div>';
+    h += '<div class="hero"><h1>'+esc(m.nombre)+'</h1><p>'+esc(m.puesto)+' · '+esc(titleCase(m.cedis))+' · Códigos en SAP: '+esc(Object.keys(m.codigos).join(", "))+'</p></div>';
+    h += '<div class="kpi-row">' +
+      kpiTile("Total de avisos", fmtInt(m.total), "") +
+      kpiTile("Correctivo (A4)", fmtInt(counts.cor), "") +
+      kpiTile("Preventivo (A4)", fmtInt(counts.prev), "") +
+      kpiTile("Auxilio vial (A5)", fmtInt(counts.aux), "") +
+      (counts.pend ? kpiTile("A4 sin clasificar", fmtInt(counts.pend), "orden sin cerrar en SAP") : "") +
+      kpiTile("Costo", fmtMoney(m.costo), m.ordenesConCosto + " órdenes con costo cerrado") +
+    '</div>';
+
+    var filtros = [["all","Todos",m.avisos.length],["cor","Correctivo",counts.cor],["prev","Preventivo",counts.prev],["aux","Auxilio vial",counts.aux]];
+    if(counts.pend) filtros.push(["pend","Sin clasificar",counts.pend]);
+    h += '<div class="card"><div class="card-head"><h2>Avisos y órdenes</h2><span class="card-sub">Toca un número de orden para ver el material que se sacó</span></div>';
+    h += '<div class="fbar">' + filtros.map(function(f){
+      return '<button type="button" class="chipbtn" data-f="'+f[0]+'" aria-pressed="'+(mechFilter === f[0])+'">'+f[1]+'<b>'+f[2]+'</b></button>';
+    }).join("") + '</div>';
+    h += '<div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Aviso</th><th>Clase de aviso</th><th>Orden</th><th>Equipo</th><th>Descripción</th><th class="num">Costo</th><th>Autor del aviso</th></tr></thead><tbody>';
+    if(!list.length) h += '<tr><td colspan="8" class="empty-note">No hay avisos en este filtro.</td></tr>';
+    list.forEach(function(a){
+      var info = a.orden ? DATA.ordenInfo[a.orden] : null;
+      var ordCell = a.orden
+        ? '<button type="button" class="link" data-o="'+esc(a.orden)+'">'+esc(a.orden)+'</button>' + (info ? '' : '<br><span class="note">sin cerrar en SAP</span>')
+        : '<span class="note">sin orden</span>';
+      var desajuste = (a.match === "reasignado" || a.match === "no_localizado" || a.match === "ambiguo");
+      var autorCell = esc(a.autor) + (desajuste ? '<br><span class="mm-badge" style="margin-left:0">Pto.tbjo: '+esc(a.pto)+'</span>' : '');
+      h += '<tr><td>'+esc(fmtDay(a.fecha))+'</td><td>'+esc(a.aviso)+'</td><td>'+catPill(a.cat)+'</td><td>'+ordCell+'</td><td>'+esc(a.equipo)+'</td><td>'+esc(a.desc)+'</td><td class="num">'+(info ? fmtMoney(info.costo) : '—')+'</td><td>'+autorCell+'</td></tr>';
+    });
+    h += '</tbody></table></div></div>';
+    $("viewMech").innerHTML = h;
+  }
+
+  function renderOrder(){
+    var m = DATA.mechanics[NAV.m], ord = NAV.o;
+    var info = DATA.ordenInfo[ord] || null;
+    var movs = DATA.movs[ord] || [];
+    var avisos = m.avisos.filter(function(a){ return a.orden === ord; });
+
+    // Se suman los movimientos por material: una salida y su devolución se cancelan.
+    var groups = {}, keys = [];
+    movs.forEach(function(x){
+      var k = String(x.material);
+      if(!groups[k]){ groups[k] = { material:x.material, texto:x.texto, um:x.um, cant:0, imp:0, fmin:null, fmax:null }; keys.push(k); }
+      var g = groups[k];
+      g.cant += x.cantidad; g.imp += x.importe;
+      if(x.fecha){ if(!g.fmin || x.fecha < g.fmin) g.fmin = x.fecha; if(!g.fmax || x.fecha > g.fmax) g.fmax = x.fecha; }
+    });
+    var rows = [], cancelados = 0, total = 0;
+    keys.forEach(function(k){
+      var g = groups[k];
+      g.cant = Math.round(g.cant*1000)/1000; g.imp = Math.round(g.imp*100)/100;
+      if(g.cant === 0 && g.imp === 0){ cancelados++; return; }
+      total += g.imp; rows.push(g);
+    });
+    rows.sort(function(a,b){ return b.imp - a.imp; });
+
+    var claseTxt = info ? (info.clase === "OM01" ? "OM01 · Correctivo" : info.clase === "OM02" ? "OM02 · Preventivo" : info.clase) : "Sin cerrar en SAP";
+    var equipo = (info && info.equipo) || (avisos[0] && avisos[0].equipo) || "—";
+
+    var h = '';
+    h += '<div class="crumbs"><button type="button" class="link" data-back="main">Carga de Mecánicos</button><span>›</span><button type="button" class="link" data-back="mech">'+esc(m.nombre)+'</button><span>›</span><span>Orden '+esc(ord)+'</span></div>';
+    h += '<div class="hero"><h1>Orden '+esc(ord)+'</h1><p>'+esc(info && info.texto ? info.texto : (avisos[0] ? avisos[0].desc : ""))+'</p></div>';
+    h += '<div class="kpi-row">' +
+      kpiTile("Clase de orden", claseTxt, "") +
+      kpiTile("Equipo", String(equipo), info && info.fecha ? "Fecha de referencia " + fmtDay(info.fecha) : "") +
+      kpiTile("Costo en SAP", info ? fmtMoney2(info.costo) : "—", info ? "Costes totales reales" : "La orden aún no aparece en OM01OM02") +
+      kpiTile("Suma de materiales", fmtMoney2(total), rows.length + " materiales o servicios") +
+    '</div>';
+
+    h += '<div class="card"><div class="card-head"><h2>Material utilizado</h2><span class="card-sub">Mecánico: '+esc(m.nombre)+'</span></div>';
+    if(rows.length){
+      h += '<div class="table-wrap"><table><thead><tr><th>Material</th><th>Descripción</th><th class="num">Cantidad</th><th>Unidad</th><th class="num">Importe</th><th>Fecha</th></tr></thead><tbody>';
+      rows.forEach(function(g){
+        var fecha = g.fmin ? (g.fmax && g.fmax.getTime() !== g.fmin.getTime() ? fmtDay(g.fmin) + " – " + fmtDay(g.fmax) : fmtDay(g.fmin)) : "—";
+        h += '<tr><td>'+esc(g.material)+'</td><td>'+esc(g.texto)+'</td><td class="num">'+fmtQty(g.cant)+'</td><td>'+esc(g.um)+'</td><td class="num">'+fmtMoney2(g.imp)+'</td><td>'+esc(fecha)+'</td></tr>';
+      });
+      h += '<tr><td></td><td><b>Total</b></td><td></td><td></td><td class="num"><b>'+fmtMoney2(total)+'</b></td><td></td></tr>';
+      h += '</tbody></table></div>';
+    } else {
+      h += '<p class="empty-note">No hay movimientos de material para esta orden en el archivo (pestaña OM01OM02mov).</p>';
+    }
+    if(cancelados) h += '<p class="note">'+cancelados+' material'+(cancelados === 1 ? '' : 'es')+' con salida y devolución se cancelan entre sí y no se muestran.</p>';
+    h += '</div>';
+
+    h += '<div class="card"><div class="card-head"><h2>Avisos de esta orden</h2></div><div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Aviso</th><th>Clase de aviso</th><th>Descripción</th></tr></thead><tbody>';
+    avisos.forEach(function(a){
+      h += '<tr><td>'+esc(fmtDay(a.fecha))+'</td><td>'+esc(a.aviso)+'</td><td>'+catPill(a.cat)+'</td><td>'+esc(a.desc)+'</td></tr>';
+    });
+    h += '</tbody></table></div></div>';
+    $("viewOrder").innerHTML = h;
+  }
+
+  $("content").addEventListener("click", function(e){
+    var t = e.target.closest ? e.target.closest("[data-m],[data-o],[data-back],[data-f]") : null;
+    if(!t) return;
+    if(t.hasAttribute("data-m")) go(t.getAttribute("data-m"), null);
+    else if(t.hasAttribute("data-o")) go(NAV.m, t.getAttribute("data-o"));
+    else if(t.hasAttribute("data-f")){ mechFilter = t.getAttribute("data-f"); renderMech(); }
+    else if(t.hasAttribute("data-back")) go(t.getAttribute("data-back") === "main" ? null : NAV.m, null);
+  });
 
   // ---------- File handling ----------
   var uploaderEl = $("uploader");
