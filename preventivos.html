@@ -105,6 +105,15 @@
   .badge-inhabilitado{background:var(--surface-alt); color:var(--ink-faint);}
   .badge-pendiente{background:var(--surface-alt); color:var(--c1); border-color:var(--c1);}
 
+  .ord-link{background:none; border:none; padding:0; color:var(--accent); font:inherit; font-weight:700; text-decoration:underline; text-underline-offset:2px; cursor:pointer;}
+  .ord-link:hover{color:var(--ink);}
+  .modal-bg{position:fixed; inset:0; background:rgba(10,18,28,.55); display:flex; align-items:flex-start; justify-content:center; padding:4vh 12px; overflow:auto; z-index:50;}
+  .modal-bg[hidden]{display:none;}
+  .modal{background:var(--surface); border:1px solid var(--border); border-radius:16px; box-shadow:var(--shadow); width:min(860px,100%); padding:18px; display:flex; flex-direction:column; gap:14px;}
+  .modal-head{display:flex; justify-content:space-between; align-items:flex-start; gap:10px;}
+  .modal-head h2{font-size:18px; margin:0;}
+  .modal-head .note{margin:4px 0 0;}
+  .modal .table-wrap{max-height:50vh;}
   .note{font-size:12px; color:var(--ink-faint); line-height:1.55;}
   .status-box{font-size:12.5px; color:var(--ink-soft); line-height:1.6; background:var(--surface-alt); border-radius:10px; padding:10px 12px;}
   .status-box.err{color:var(--bad);}
@@ -224,6 +233,17 @@
   </div>
 </div>
 
+<div class="modal-bg" id="ordModal" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ordTitle">
+    <div class="modal-head">
+      <div><h2 id="ordTitle">Materiales de la orden</h2><p class="note" id="ordSub"></p></div>
+      <button class="btn-ghost" id="ordClose" type="button">Cerrar</button>
+    </div>
+    <div class="kpi-row" id="ordKpis"></div>
+    <div class="table-wrap"><table id="ordTable"></table></div>
+    <p class="note" id="ordNote"></p>
+  </div>
+</div>
 <script>
 (function(){
   "use strict";
@@ -456,11 +476,50 @@
       var servLbl = (SERVICIOS.filter(function(s){ return s[0] === r.servicio; })[0] || [0, r.servicio])[1];
       var obs = r.alerta || ((r.seguimiento && String(r.seguimiento).length > 10) ? r.seguimiento : "");
       if(r.alerta && r.seguimiento && String(r.seguimiento).length > 10 && r.estatus === "no_realizado") obs = r.seguimiento + " — " + r.alerta;
-      html += '<tr><td><b>' + esc(r.economico) + '</b></td><td>' + esc(cedisName(r.cedis)) + '</td><td>' + esc(servLbl) + '</td><td>' + esc(nombreMec(r)) + '</td><td>' + badge(r.estatus) + '</td><td>' + esc(r.orden) + '</td><td>' + esc(fechaCorta(r.fecha_orden)) + '</td><td class="num">' + (r.costo_real === null || r.costo_real === undefined ? "" : money(r.costo_real)) + '</td><td class="alert-txt">' + esc(obs) + '</td></tr>';
+      html += '<tr><td><b>' + esc(r.economico) + '</b></td><td>' + esc(cedisName(r.cedis)) + '</td><td>' + esc(servLbl) + '</td><td>' + esc(nombreMec(r)) + '</td><td>' + badge(r.estatus) + '</td><td>' + (r.orden ? '<button type="button" class="ord-link" data-orden="' + esc(r.orden) + '" title="Ver materiales de la orden">' + esc(r.orden) + '</button>' : '') + '</td><td>' + esc(fechaCorta(r.fecha_orden)) + '</td><td class="num">' + (r.costo_real === null || r.costo_real === undefined ? "" : money(r.costo_real)) + '</td><td class="alert-txt">' + esc(obs) + '</td></tr>';
     });
     if(!out.length) html += '<tr><td colspan="9" class="empty-hint">Sin servicios con este filtro.</td></tr>';
     $("detTable").innerHTML = html + '</tbody>';
   }
+
+  function abrirOrden(orden){
+    var r = rows.filter(function(x){ return String(x.orden) === String(orden); })[0] || {};
+    var servLbl = (SERVICIOS.filter(function(x){ return x[0] === r.servicio; })[0] || [0, r.servicio || ""])[1];
+    $("ordTitle").textContent = "Materiales de la orden " + orden;
+    $("ordSub").textContent = [r.economico, servLbl, r.cedis ? cedisName(r.cedis) : "", r.mecanico ? "Mecánico: " + nombreMec(r) : ""].filter(Boolean).join(" · ");
+    $("ordKpis").innerHTML = ""; $("ordNote").textContent = "";
+    $("ordTable").innerHTML = '<tbody><tr><td class="empty-hint">Cargando materiales…</td></tr></tbody>';
+    $("ordModal").hidden = false;
+    sbGet("preventivos_ordmov?select=*&orden=eq." + encodeURIComponent(orden) + "&order=fecha_documento.asc").then(function(items){
+      var map = {}, keys = [];
+      items.forEach(function(i){
+        var k = i.material + "|" + i.unidad_medida;
+        if(!map[k]){ map[k] = {material:i.material, texto:i.texto_material, unidad:i.unidad_medida, cant:0, imp:0, fecha:i.fecha_documento}; keys.push(k); }
+        map[k].cant += Number(i.cantidad || 0); map[k].imp += Number(i.importe || 0);
+        if(i.fecha_documento > map[k].fecha) map[k].fecha = i.fecha_documento;
+      });
+      var mats = keys.map(function(k){ return map[k]; }).filter(function(m){ return Math.abs(m.cant) > 1e-9 || Math.abs(m.imp) > 0.005; });
+      var suma = mats.reduce(function(t, m){ return t + m.imp; }, 0);
+      var costo = (r.costo_real === null || r.costo_real === undefined) ? null : Number(r.costo_real);
+      var coincide = costo !== null && Math.abs(costo - suma) < 1;
+      $("ordKpis").innerHTML =
+        '<div class="kpi-tile"><span class="kpi-label">Materiales</span><span class="kpi-value">' + mats.length + '</span><span class="kpi-sub">conceptos distintos</span></div>' +
+        '<div class="kpi-tile accent"><span class="kpi-label">Suma de materiales</span><span class="kpi-value">' + money(suma) + '</span><span class="kpi-sub">importe</span></div>' +
+        '<div class="kpi-tile"><span class="kpi-label">Costo de la orden</span><span class="kpi-value">' + (costo === null ? "—" : money(costo)) + '</span><span class="kpi-sub">' + (costo === null ? "" : (coincide ? "coincide con los materiales" : "diferencia: " + money(costo - suma))) + '</span></div>';
+      if(!mats.length){
+        $("ordTable").innerHTML = '<tbody><tr><td class="empty-hint">Esta orden no tiene movimientos de material registrados' + ((costo === null || costo === 0) ? " (costo en cero: no se tomó material)." : ".") + '</td></tr></tbody>';
+        return;
+      }
+      var html = '<thead><tr><th>Fecha</th><th>Material</th><th>Descripción</th><th class="num">Cantidad</th><th>Unidad</th><th class="num">Importe</th></tr></thead><tbody>';
+      mats.forEach(function(m){
+        html += '<tr><td>' + esc(fechaCorta(m.fecha)) + '</td><td>' + esc(m.material) + '</td><td>' + esc(m.texto) + '</td><td class="num">' + esc(Number(m.cant.toFixed(3))) + '</td><td>' + esc(m.unidad) + '</td><td class="num">' + money(m.imp) + '</td></tr>';
+      });
+      $("ordTable").innerHTML = html + '</tbody>';
+    }).catch(function(e){
+      $("ordTable").innerHTML = '<tbody><tr><td class="empty-hint">No se pudieron leer los materiales (' + esc(e.message) + ').</td></tr></tbody>';
+    });
+  }
+  function cerrarOrden(){ $("ordModal").hidden = true; }
 
   function renderAll(){
     var list = filteredRows();
@@ -534,6 +593,10 @@
   $("detEstatus").addEventListener("change", function(){ renderDetalle(filteredRows()); });
   $("detServicio").addEventListener("change", function(){ renderDetalle(filteredRows()); });
   $("detExport").addEventListener("click", exportExcel);
+  $("detTable").addEventListener("click", function(ev){ var b = ev.target.closest && ev.target.closest(".ord-link"); if(b) abrirOrden(b.getAttribute("data-orden")); });
+  $("ordClose").addEventListener("click", cerrarOrden);
+  $("ordModal").addEventListener("click", function(ev){ if(ev.target === $("ordModal")) cerrarOrden(); });
+  document.addEventListener("keydown", function(ev){ if(ev.key === "Escape") cerrarOrden(); });
 
   refreshCedisOptions();
   init();
