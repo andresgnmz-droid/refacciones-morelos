@@ -1,202 +1,773 @@
-<!doctype html>
-<html lang="es">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
 <title>Unidades en piso</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="erp-auth.js"></script>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Semi+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
-  :root{
-    --ink:#142433; --ink-soft:#48607A; --ink-faint:#7C93A6;
-    --bg:#EEF2F5; --surface:#FFFFFF; --surface-alt:#E4EAEF; --border:#D3DCE3;
-    --accent:#0E7C86; --accent-ink:#FFFFFF; --accent-soft:#DCEEF0;
-    --shadow:0 1px 2px rgba(20,36,51,.06),0 4px 14px rgba(20,36,51,.07);
-    --good:#0b8a0b; --warn:#b07400; --bad:#d63a39; --none:#8FA1B0;
-  }
-  @media (prefers-color-scheme: dark){
-    :root:not([data-theme="light"]){
-      --ink:#E7EDF2; --ink-soft:#9AB0C2; --ink-faint:#7C93A6;
-      --bg:#0F1620; --surface:#182230; --surface-alt:#1F2C3C; --border:#2B3B4D;
-      --accent:#35B6C2; --accent-ink:#06232A; --accent-soft:#163238;
-      --shadow:0 1px 2px rgba(0,0,0,.3),0 4px 14px rgba(0,0,0,.35);
-      --good:#2fbf2f; --warn:#d99a1a; --bad:#e66767;
-    }
-  }
-  :root[data-theme="dark"]{
-    --ink:#E7EDF2; --ink-soft:#9AB0C2; --ink-faint:#7C93A6;
-    --bg:#0F1620; --surface:#182230; --surface-alt:#1F2C3C; --border:#2B3B4D;
-    --accent:#35B6C2; --accent-ink:#06232A; --accent-soft:#163238;
-    --shadow:0 1px 2px rgba(0,0,0,.3),0 4px 14px rgba(0,0,0,.35);
-    --good:#2fbf2f; --warn:#d99a1a; --bad:#e66767;
-  }
-  *{box-sizing:border-box;}
-  body{background:var(--bg);color:var(--ink);font-family:'Inter',system-ui,sans-serif;margin:0;}
-  h1,h2,h3{font-family:'Barlow Semi Condensed',system-ui,sans-serif;font-weight:700;margin:0;}
-  p{margin:0;}
-  button,input,select{font-family:inherit;}
-  button{cursor:pointer;}
-  .wrap{max-width:1180px;margin:0 auto;padding:20px 16px 48px;display:flex;flex-direction:column;gap:18px;}
-  .hero h1{font-size:26px;}
-  .hero p{font-size:14px;color:var(--ink-soft);line-height:1.5;max-width:80ch;margin-top:4px;}
-  .bar{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:12px 14px;box-shadow:var(--shadow);}
-  .field{display:flex;flex-direction:column;gap:3px;}
-  .field label{font-size:10.5px;font-weight:700;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.5px;}
-  .field select,.field input{padding:8px 10px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--ink);font-size:13px;min-width:150px;}
-  .btn{border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);font-weight:600;font-size:13px;padding:9px 14px;border-radius:10px;}
-  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;}
-  .kpi{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:4px;}
-  .kpi .l{font-size:11px;font-weight:600;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.5px;}
-  .kpi .v{font-family:'Barlow Semi Condensed',sans-serif;font-size:28px;font-weight:700;line-height:1.1;}
-  .kpi .s{font-size:12px;color:var(--ink-soft);}
-  .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px 18px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:10px;}
-  .card h3{font-size:17px;}
-  .note{font-size:12.5px;color:var(--ink-soft);line-height:1.55;}
-  .tbl{overflow:auto;border:1px solid var(--border);border-radius:14px;background:var(--surface);box-shadow:var(--shadow);}
-  table{border-collapse:collapse;width:100%;font-size:13px;}
-  th{background:var(--surface-alt);text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--ink-faint);padding:9px 12px;white-space:nowrap;}
-  td{padding:8px 12px;border-top:1px solid var(--border);vertical-align:top;}
-  .mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;}
-  .days{display:flex;align-items:center;gap:8px;min-width:150px;}
-  .days .track{flex:1;height:8px;border-radius:99px;background:var(--surface-alt);overflow:hidden;}
-  .days .fill{height:100%;border-radius:99px;}
-  .days b{font-variant-numeric:tabular-nums;min-width:34px;text-align:right;}
-  .msg{font-size:13px;color:var(--ink-soft);}
-  .msg.err{color:var(--bad);}
-  .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;}
+/* Concepto: tablero de taller. Franja de estado por unidad, tipografía semicondensada tipo rotulación vehicular, datos en mono. */
+:root{
+  --bg:#f1f3f5;--surface:#ffffff;--surface2:#e8ecf0;--line:#d3d9e0;--fg:#16212b;--muted:#586675;--accent:#0b5cab;--accent-bg:#dbe9f8;
+  --crit:#bf2a2a;--crit-bg:#fbe3e1;--warn:#9a5b00;--warn-bg:#fbeccb;--good:#1b7443;--good-bg:#d9f1e2;--info:#14609f;--info-bg:#dcebf8;--teal:#0a7570;--teal-bg:#d5f0ee;--adm:#5a4bb2;--adm-bg:#e7e3f8;--zj:#0b5cab;--zd:#c25b00;
+  --f-head:"Barlow Semi Condensed","Arial Narrow",system-ui,sans-serif;--f-body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;--f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#10161c;--surface:#171f27;--surface2:#202b35;--line:#2e3b47;--fg:#e5ebf0;--muted:#92a0ae;--accent:#62aeff;--accent-bg:#17304c;
+  --crit:#ff7a72;--crit-bg:#3d1c1d;--warn:#f2b44d;--warn-bg:#3a2b10;--good:#59d08c;--good-bg:#12331f;--info:#6bb4ff;--info-bg:#15304a;--teal:#4fd1c8;--teal-bg:#103532;--adm:#a99cf2;--adm-bg:#2a2450;--zj:#62aeff;--zd:#ffa24d;color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#10161c;--surface:#171f27;--surface2:#202b35;--line:#2e3b47;--fg:#e5ebf0;--muted:#92a0ae;--accent:#62aeff;--accent-bg:#17304c;
+  --crit:#ff7a72;--crit-bg:#3d1c1d;--warn:#f2b44d;--warn-bg:#3a2b10;--good:#59d08c;--good-bg:#12331f;--info:#6bb4ff;--info-bg:#15304a;--teal:#4fd1c8;--teal-bg:#103532;--adm:#a99cf2;--adm-bg:#2a2450;--zj:#62aeff;--zd:#ffa24d;color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:14px;line-height:1.45;padding-block:20px 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+h1,h2,h3{font-family:var(--f-head);margin:0;text-wrap:balance}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)}
+/* encabezado */
+.top{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px 24px;align-items:flex-end}
+.top h1{font-size:34px;font-weight:700;letter-spacing:.01em;line-height:1}
+.top .sub{color:var(--muted);margin-top:6px;font-size:13px}
+.stamp{font-family:var(--f-mono);font-size:12px;background:var(--surface2);padding:6px 10px;border-radius:4px;color:var(--muted)}
+.zonas{display:flex;flex-wrap:wrap;gap:6px}
+.zbtn{font-family:var(--f-head);font-weight:600;font-size:14px;letter-spacing:.03em;text-transform:uppercase;padding:6px 12px;border:1px solid var(--line);background:var(--surface);border-radius:4px;display:flex;gap:8px;align-items:baseline}
+.zbtn b{font-family:var(--f-mono);font-weight:500;font-size:12px;color:var(--muted)}
+.zbtn[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.zbtn[aria-pressed="true"] b{color:inherit;opacity:.8}
+.zbtn.vacia{opacity:.5}
+/* resumen */
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:6px}
+.kpi{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,2fr) minmax(0,1fr);gap:0}
+.kpi>div{padding:16px 18px;min-width:0}
+.kpi>div+div{border-left:1px solid var(--line)}
+.big{font-family:var(--f-head);font-weight:700;font-size:54px;line-height:.9}
+.lbl{font-family:var(--f-head);font-weight:600;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.seg{display:flex;height:14px;border-radius:3px;overflow:hidden;margin:10px 0 12px;background:var(--surface2);gap:2px}
+.seg i{display:block;min-width:3px}
+.leg{display:flex;flex-wrap:wrap;gap:6px 18px}
+.leg span{display:flex;align-items:center;gap:6px;font-size:13px}
+.leg em{font-style:normal;font-family:var(--f-mono);font-weight:500}
+.dot{width:10px;height:10px;border-radius:2px;display:inline-block;flex:none}
+.mini{display:flex;flex-direction:column;gap:6px}
+.mini div{display:flex;justify-content:space-between;gap:10px;font-size:13px}
+.s-sin{--c:var(--crit);--cb:var(--crit-bg)}.s-esp{--c:var(--warn);--cb:var(--warn-bg)}.s-ok{--c:var(--good);--cb:var(--good-bg)}
+.l-sol{--c:var(--crit);--cb:var(--crit-bg)}.l-ped{--c:var(--warn);--cb:var(--warn-bg)}.l-par{--c:var(--info);--cb:var(--info-bg)}.l-lleg{--c:var(--teal);--cb:var(--teal-bg)}.l-sal{--c:var(--good);--cb:var(--good-bg)}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:99px;background:var(--cb);color:var(--c);font-family:var(--f-head);font-weight:600;font-size:13px;line-height:1.15}
+.pill::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--c);flex:none}
+/* tabs */
+.tabs{display:flex;gap:2px;border-bottom:2px solid var(--line);overflow-x:auto}
+.tab{font-family:var(--f-head);font-weight:600;font-size:16px;letter-spacing:.02em;padding:9px 16px;border:0;background:none;color:var(--muted);border-bottom:3px solid transparent;margin-bottom:-2px;white-space:nowrap}
+.tab[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--accent)}
+.tools{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;justify-content:space-between}
+.tools label{display:flex;gap:8px;align-items:center;color:var(--muted);font-size:13px}
+select,input[type=search]{font:inherit;background:var(--surface);color:var(--fg);border:1px solid var(--line);border-radius:4px;padding:6px 8px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);background:var(--surface);border-radius:99px;padding:3px 11px;font-size:13px}
+.chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .chip[aria-pressed="true"]{color:#06121f}}
+:root[data-theme="dark"] .chip[aria-pressed="true"]{color:#06121f}
+/* unidades */
+.zhead{font-family:var(--f-head);font-weight:700;font-size:15px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:10px;margin:6px 0 2px}
+.zhead::after{content:"";flex:1;height:1px;background:var(--line)}
+.unit{border:1px solid var(--line);border-left:6px solid var(--c);background:var(--surface);border-radius:4px;margin-bottom:8px}
+.urow{display:grid;grid-template-columns:minmax(150px,1.1fr) minmax(130px,1.2fr) minmax(140px,1.2fr) minmax(110px,.9fr) minmax(150px,1.3fr) minmax(170px,1.2fr);gap:8px 16px;align-items:center;padding:12px 14px;width:100%;text-align:left;background:none;border:0;min-width:0}
+.urow>*{min-width:0}
+.eco{font-family:var(--f-head);font-weight:700;font-size:24px;letter-spacing:.02em;line-height:1}
+.eco small{display:block;font-family:var(--f-body);font-weight:400;font-size:12px;color:var(--muted);letter-spacing:0;margin-top:3px}
+.cell .lbl{display:block;font-size:10.5px;margin-bottom:2px}
+.cell .v{overflow-wrap:anywhere}
+.days{font-family:var(--f-mono);font-weight:500;font-size:20px}
+.days small{font-size:12px;color:var(--muted)}
+.steps{display:flex;gap:3px;margin-bottom:4px}
+.steps i{flex:1;height:8px;border-radius:2px;background:var(--surface2)}
+.steps i.on{background:var(--c)}
+.detail{border-top:1px dashed var(--line);padding:12px 14px 14px;background:var(--surface2);display:flex;flex-direction:column;gap:10px}
+.detail[hidden]{display:none}
+.ltab{width:100%;border-collapse:collapse;background:var(--surface);font-size:13px}
+.ltab th{font-family:var(--f-head);font-weight:600;font-size:11.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);text-align:left;padding:7px 9px;border-bottom:1px solid var(--line);white-space:nowrap}
+.ltab td{padding:7px 9px;border-bottom:1px solid var(--line);vertical-align:top}
+.ltab tr:last-child td{border-bottom:0}
+.scroll{overflow-x:auto;border:1px solid var(--line);border-radius:4px;background:var(--surface)}
+.note{font-size:12.5px;color:var(--muted)}
+.empty{padding:14px;color:var(--muted);background:var(--surface);border:1px dashed var(--line);border-radius:4px}
+.badge{font-size:11.5px;font-family:var(--f-mono);color:var(--muted);background:var(--surface2);border-radius:3px;padding:1px 5px;white-space:nowrap}
+/* gantt */
+.gantt{padding:14px 14px 10px;overflow-x:auto}
+.ginner{min-width:760px}
+.grow{display:grid;grid-template-columns:150px 1fr;align-items:center;gap:12px;height:44px;border-bottom:1px solid var(--line)}
+.grow:last-child{border-bottom:0}
+.gl{font-family:var(--f-head);font-weight:700;font-size:17px;line-height:1.05;min-width:0}
+.gl small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gl small{display:block;font-family:var(--f-body);font-weight:400;font-size:11.5px;color:var(--muted)}
+.gt{position:relative;height:100%}
+.gbar{position:absolute;top:15px;height:14px;background:var(--c);opacity:.28;border-radius:2px}
+.gbar.cut{border-top-left-radius:0;border-bottom-left-radius:0}
+.gdays{position:absolute;top:2px;font-family:var(--f-mono);font-size:11px;color:var(--muted);white-space:nowrap}
+.mk{position:absolute;top:13px;width:18px;height:18px;margin-left:-9px;display:grid;place-items:center;font-size:0}
+.mk::before{content:"";display:block;background:var(--c)}
+.mk.ped::before{width:10px;height:10px;transform:rotate(45deg)}
+.mk.lleg::before{width:12px;height:11px;clip-path:polygon(50% 0,100% 100%,0 100%);background:var(--teal)}
+.mk.sal::before{width:11px;height:11px;border-radius:50%;background:var(--good)}
+.mk.ped::before{background:var(--warn)}
+.gax{display:grid;grid-template-columns:150px 1fr;gap:12px;margin-bottom:6px}
+.gaxt{position:relative;height:26px;border-bottom:1px solid var(--line)}
+.tick{position:absolute;top:0;bottom:0;border-left:1px solid var(--line);padding-left:4px;font-family:var(--f-mono);font-size:11px;color:var(--muted)}
+.gtoday{position:absolute;right:0;top:0;bottom:0;border-right:2px solid var(--accent)}
+.gl2{display:flex;flex-wrap:wrap;gap:6px 18px;padding:2px 2px 12px;font-size:13px;align-items:center}
+.gl2 span{display:flex;align-items:center;gap:6px}
+.sin-fecha{position:absolute;left:0;top:14px;font-size:12.5px;color:var(--muted);font-style:italic}
+/* mecánicos */
+.mgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:12px}
+.mcard{padding:14px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.mcard h3{font-size:20px;line-height:1.1}
+.mu{display:flex;justify-content:space-between;gap:8px;align-items:center;font-size:13px;border-top:1px solid var(--line);padding-top:8px}
+/* notas */
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+.box{padding:16px 18px;min-width:0}
+.box h3{font-size:19px;margin-bottom:8px}
+.box ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px}
+.tag{font-family:var(--f-mono);font-size:11.5px;background:var(--surface2);padding:1px 6px;border-radius:3px}
+@media (max-width:900px){
+  .kpi{grid-template-columns:1fr}.kpi>div+div{border-left:0;border-top:1px solid var(--line)}
+  .urow{grid-template-columns:1fr 1fr}
+  .urow .c-eco{grid-column:1/-1}
+  .top h1{font-size:28px}
+}
+@media (prefers-reduced-motion:no-preference){.unit,.zbtn,.chip{transition:background .15s,border-color .15s}}
+.s-nd{--c:var(--muted);--cb:var(--surface2)}
+.nw{white-space:nowrap}
+.alink{font-family:var(--f-mono);font-weight:500;border:1px solid var(--line);background:var(--surface);border-radius:4px;padding:0 8px;min-width:30px}
+.alink.hot{background:var(--crit-bg);color:var(--crit);border-color:var(--crit)}
+.cnt{font-family:var(--f-mono);font-size:12px;background:var(--crit);color:#fff;border-radius:99px;padding:0 7px;margin-left:4px;vertical-align:1px}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .cnt{color:#2a0b0b}}
+:root[data-theme="dark"] .cnt{color:#2a0b0b}
+.dctl{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center}
+.dctl label{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--muted)}
+input[type=date],input[type=number],textarea{font:inherit;background:var(--surface);color:var(--fg);border:1px solid var(--line);border-radius:4px;padding:5px 8px}
+input[type=number]{width:70px;font-family:var(--f-mono)}
+textarea{width:100%;font-family:var(--f-mono);font-size:12.5px;resize:vertical}
+.mini-btn{font-size:13px;border:1px solid var(--line);background:var(--surface);border-radius:4px;padding:4px 10px}
+.mini-btn:hover{border-color:var(--accent);color:var(--accent)}
+.kvs{display:flex;flex-wrap:wrap;gap:8px}
+.kv{background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:6px 10px;font-size:13px;min-width:0;max-width:100%;overflow-wrap:anywhere}
+.kv .lbl{display:block;font-size:10.5px}
+.detail h3{font-size:16px;letter-spacing:.02em}
+.alist,.agrp{display:flex;flex-direction:column;gap:6px}
+.agrp{margin-bottom:12px}
+.al{padding:7px 10px;border-radius:4px;font-size:13px;background:var(--cb);border-left:4px solid var(--c)}
+.al.crit{--c:var(--crit);--cb:var(--crit-bg)}.al.warn{--c:var(--warn);--cb:var(--warn-bg)}.al.info{--c:var(--info);--cb:var(--info-bg)}
+.thr{display:flex;flex-direction:column;gap:8px;margin-bottom:8px}
+.thr label{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.s-adm{--c:var(--adm);--cb:var(--adm-bg)}
+.s-out{--c:var(--muted);--cb:var(--surface2)}
+.unit.s-out{opacity:.75}
+.zbtn.zz{font-weight:700;border-width:2px}
+.albs{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.alb{font-size:12px;line-height:1.25;padding:2px 7px;border-radius:3px;background:var(--cb);color:var(--c);border-left:3px solid var(--c);font-weight:500}
+.alb.crit{--c:var(--crit);--cb:var(--crit-bg)}.alb.warn{--c:var(--warn);--cb:var(--warn-bg)}.alb.info{--c:var(--info);--cb:var(--info-bg)}
+.alsum{line-height:1.6}
+.stg{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+.stgb{background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:8px 10px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.stgb b{font-size:22px;font-weight:500}
+.stgb.max{border-color:var(--warn);background:var(--warn-bg)}
+.salctl{padding-bottom:10px;border-bottom:1px dashed var(--line)}
+.mini-btn.go{background:var(--accent);color:#fff;border-color:var(--accent)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .mini-btn.go{color:#06121f}}
+:root[data-theme="dark"] .mini-btn.go{color:#06121f}
+.prow{display:grid;grid-template-columns:minmax(130px,1.1fr) minmax(80px,2fr) auto;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line)}
+.plbl{display:flex;flex-direction:column;min-width:0}
+.pbar{height:12px;background:var(--surface2);border-radius:2px;overflow:hidden}
+.pbar i{display:block;height:100%;background:var(--accent)}
+td.hot{color:var(--crit);font-weight:600}
+.zhd{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+.zcard{padding:16px 18px;display:flex;flex-direction:column;gap:8px;min-width:0;border-top:4px solid var(--zc)}
+.zcard.cj{--zc:var(--zj)}.zcard.cd{--zc:var(--zd)}
+.zcard .big{font-size:46px}
+.zbig{display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap}
+.zleg{display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center;margin-bottom:10px}
+.zleg i{display:inline-block;width:12px;height:12px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+i.zj{background:var(--zj)}i.zd{background:var(--zd)}
+.zrow{display:grid;grid-template-columns:minmax(150px,1.3fr) minmax(0,1fr) minmax(0,1fr);gap:8px 14px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
+.zrow.sub{padding-left:14px}
+.zl{display:flex;flex-direction:column;min-width:0}
+.zb{position:relative;height:24px;background:var(--surface2);border-radius:3px;overflow:hidden;display:flex;align-items:center}
+.zb i{position:absolute;left:0;top:0;bottom:0;opacity:.4}
+.zb span{position:relative;padding-left:8px;font-size:13px}
+.zb span.win{font-weight:700}
+@media (max-width:600px){.zrow{grid-template-columns:1fr 1fr}.zl{grid-column:1/-1}}
+
+.alsum{display:block;min-width:0;overflow-wrap:anywhere}
+.mini div.alsum{display:block}
 </style>
-</head>
-<body>
+
 <div class="wrap">
-  <div class="hero">
-    <h1>Unidades en piso</h1>
-    <p>Unidades que hoy están en taller, con su mecánico, diagnóstico, motivo, material prestado a otra unidad y los días que llevan en piso.</p>
-  </div>
-
-  <div class="bar">
-    <div class="field"><label>CEDIS</label><select id="fCedis"><option value="">Todos</option></select></div>
-    <div class="field"><label>Buscar</label><input id="fTexto" placeholder="económico, mecánico, motivo…"></div>
-    <button class="btn" id="bExcel">Exportar a Excel</button>
-    <span class="msg" id="msg">Cargando…</span>
-  </div>
-
-  <div class="kpis" id="kpis"></div>
-
-  <div class="card">
-    <h3>Disponibilidad por CEDIS</h3>
-    <div class="tbl"><table><thead><tr><th>CEDIS</th><th>Unidades activas</th><th>En piso</th><th>Disponibilidad</th></tr></thead><tbody id="tbCedis"></tbody></table></div>
-  </div>
-
-  <div class="card">
-    <h3>Detalle</h3>
-    <div class="tbl"><table><thead><tr><th>Económico</th><th>CEDIS</th><th>Unidad</th><th>Mecánico</th><th>Diagnóstico</th><th>Motivo</th><th>Material prestado</th><th>Días en piso</th></tr></thead><tbody id="tbDet"></tbody></table></div>
-    <p class="note"><span class="dot" style="background:var(--good)"></span>hasta 30 días <span class="dot" style="background:var(--warn);margin-left:10px"></span>31 a 90 <span class="dot" style="background:var(--bad);margin-left:10px"></span>más de 90 <span class="dot" style="background:var(--none);margin-left:10px"></span>sin dato.<br>
-    Los días se calculan en vivo desde la última carga de combustible de la unidad (se asume que deja de cargar al entrar a taller). Método provisional: si una unidad ya cargaba poco antes de entrar, el número puede salir inflado; hay que validarlo con las unidades de más de 90 días.</p>
-  </div>
+  <header class="top">
+    <div>
+      <h1>Unidades en piso</h1>
+      <div class="sub" id="sub"></div>
+    </div>
+    <div class="stamp" id="stamp"></div>
+  </header>
+  <div class="zonas" id="zonas" role="group" aria-label="Filtrar por zona"></div>
+  <section class="panel kpi" id="kpi" aria-label="Resumen"></section>
+  <div class="tabs" role="tablist" id="tabs"></div>
+  <main id="view"></main>
 </div>
 
 <script>
-(function(){
-  "use strict";
-  var SB_URL = "https://aoutudbxwawlnbwvypir.supabase.co";
-  var SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFvdXR1ZGJ4d2F3bG5id3Z5cGlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU4NzQzNTMsImV4cCI6MjEwMTQ1MDM1M30.cfdjH9rwQDYyxrrKZIAw7JpcQKYcFWtiEYXEDF8fa_E";
-  var PREFIJO = { MCV:"Cuernavaca", MCU:"Cuautla", MJO:"Jojutla", MPU:"Puente de Ixtla", MAX:"Axochiapan", MCC:"Cocoyoc" };
-  var ORDEN_CEDIS = ["Cuernavaca","Cuautla","Jojutla","Puente de Ixtla","Axochiapan","Cocoyoc"];
-  var piso = [], act = {}, filas = [];
+let DATA=null;
+const CEDIS_ALL=["Cuernavaca","Cuautla","Jojutla","Puente de Ixtla","Axochiapan","Cocoyoc"];
+const ZONAS={JUAN:{n:"Zona Juan",resp:"Juan Daniel Soler",cedis:["Cuernavaca","Jojutla","Puente de Ixtla"]},DAVID:{n:"Zona David",resp:"José David Muñiz",cedis:["Cuautla","Axochiapan","Cocoyoc"]}};
+const zonaDe=c=>ZONAS.JUAN.cedis.includes(c)?"JUAN":"DAVID";
+let CORTE=0;const DAY=86400000;
+const HOY=new Date().toISOString().slice(0,10);
+const ST={sol:"Solicitada, sin pedido",ped:"Pedida, por llegar",par:"Llegó parcial",lleg:"Llegó, sin surtir a la unidad",sal:"Surtida a la unidad"};
+const UST={sin:"Sin pedidos desde su ingreso",esp:"Esperando material",ok:"Material completo",adm:"Detenida por trámite",nd:"Sin información disponible"};
+const STG={sol:"Sin solicitar material",ped:"Esperando pedido (compras)",lleg:"Esperando llegada del proveedor",sur:"En almacén, sin surtir a la unidad",rep:"Material surtido, en reparación"};
+const MOTIVOS=["Refacción","Mano de obra","Servicio externo","Diagnóstico","Gestoría","Corralón","Otro"];
+const CLS={OM01:"Correctivo",OM02:"Preventivo",OM03:"OM03",OM12:"OM12"};
+const MES=["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const T=s=>Date.parse(s+"T00:00:00Z");
+const dd=(a,b)=>Math.round((T(b)-T(a))/DAY);
+const fmt=s=>{if(!s)return"—";const d=new Date(T(s));return d.getUTCDate()+" "+MES[d.getUTCMonth()]+" "+String(d.getUTCFullYear()).slice(2)};
+const num=n=>Number.isInteger(n)?String(n):n.toFixed(2).replace(/0+$/,"").replace(/\.$/,"");
+const money=n=>"$"+Math.round(n).toLocaleString("es-MX");
+const pct=n=>n==null?"—":n.toFixed(1).replace(/\.0$/,"")+"%";
+const dias=n=>n==null?"—":n+" d";
+function lsGet(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}}
+function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+let CFG=Object.assign({n1:3,n2:3,n3:7,n4:15},lsGet("uep_cfg",{}));
+let OV={};
+let SNAPS=[];
+let SAL={},OWNER=false,DBS=true,DBMSG="";
+let tab="unidades",zona="Todas",sortBy="dias",fEstado="todos",fLinea="todos",fClase="todos",q="",open=new Set(),gW=90;
 
-  function $(id){ return document.getElementById(id); }
-  function get(path){
-    return fetch(SB_URL+"/rest/v1/"+path, { headers:{ apikey:SB_KEY, Authorization:"Bearer "+SB_KEY } })
-      .then(function(r){ if(!r.ok) throw new Error(r.status+" "+path); return r.json(); });
+function categoria(f){
+  if(/GESTOR/.test(f))return"Gestoría";
+  if(/CORRAL/.test(f))return"Corralón";
+  if(/AIRE/.test(f))return"Neumático (aire)";
+  if(/GAS/.test(f))return"Gas LP";
+  if(/VELOCIDADES|TRANSMISI|NO AVANZA/.test(f))return"Transmisión";
+  if(/ARRANCA|APAGA|POTENCIA|MOTOR/.test(f))return"Motor";
+  return"Otra";
+}
+const pend3=l=>["sol","ped","par"].includes(l.st);
+function derive(u){
+  const ov=OV[u.eco]||{};
+  const ing=ov.ingreso||u.ingreso||null;
+  const sv=SAL[u.eco];
+  const salio=!!(sv&&(sv.ingreso||"")===(u.ingreso||""));
+  const fsalida=salio?sv.fecha:null;
+  const days=ing?Math.round(((salio?T(fsalida):CORTE)-T(ing))/DAY):null;
+  const L=ing?u.lines.filter(l=>l.f>=ing):[];
+  const prev=ing?u.lines.length-L.length:0;
+  const M=ing?u.mats.filter(m=>m.f>=ing):[];
+  const cat=categoria(u.falla);
+  const adm=cat==="Gestoría"||cat==="Corralón";
+  const state=adm?"adm":!ing?"nd":!L.length?"sin":L.some(pend3)?"esp":"ok";
+  const cnt={sol:0,ped:0,par:0,lleg:0,sal:0};L.forEach(l=>cnt[l.st]++);
+  const by=new Map();
+  M.forEach(r=>{let g=by.get(r.m);if(!g){g={m:r.m,t:r.t,u:r.u,q:0,imp:0,ords:new Map(),last:r.f};by.set(r.m,g)}
+    g.q+=r.q;g.imp+=r.i;g.ords.set(r.o,r.c);if(r.f>g.last)g.last=r.f});
+  const mats=[...by.values()].filter(g=>Math.abs(g.q)>1e-9).sort((a,b)=>a.last<b.last?1:-1);
+  const impTot=mats.reduce((s,g)=>s+g.imp,0);
+  const corrAb=u.ords.filter(o=>o.ab&&o.c==="OM01");
+  let slow=null;
+  L.forEach(l=>{const pend=pend3(l);const d=Math.round(((pend||!l.fi?CORTE:T(l.fi))-T(l.f))/DAY);if(!slow||d>slow.d)slow={d,txt:l.txt,pend}});
+  const lastArr=L.filter(l=>l.fi).map(l=>l.fl||l.fi).sort().pop()||null;
+  const auto=adm?cat:state==="esp"?"Refacción":state==="ok"?"Mano de obra":"Por definir";
+  /* tiempos del proceso: ingreso → 1ª solicitud → pedido → llegada → surtido */
+  const tP=[],tL=[],tS=[];
+  L.forEach(l=>{if(l.fp)tP.push(dd(l.f,l.fp));if(l.fi)tL.push(dd(l.fp||l.f,l.fi));if(l.fi&&l.fsal)tS.push(dd(l.fi,l.fsal))});
+  const avg=a=>a.length?Math.round(a.reduce((s,x)=>s+x,0)/a.length):null;
+  const f1=L.length?L.reduce((m,l)=>l.f<m?l.f:m,L[0].f):null;
+  const dSol=(ing&&f1)?dd(ing,f1):null;
+  let bott=null;
+  if(!adm&&ing&&!salio){
+    if(!L.length)bott={k:"sol",w:days};
+    else{L.forEach(l=>{let k=null,w=0;
+      if(l.st==="sol"){k="ped";w=dd(l.f,DATA.corte)}
+      else if(l.st==="ped"||l.st==="par"){k="lleg";w=dd(l.fp||l.f,DATA.corte)}
+      else if(l.st==="lleg"){k="sur";w=dd(l.fi||l.f,DATA.corte)}
+      if(k&&(!bott||w>bott.w))bott={k,w}});
+      if(!bott)bott={k:"rep",w:lastArr?dd(lastArr,DATA.corte):null}}}
+  const proc={dSol,tP:avg(tP),tL:avg(tL),tS:avg(tS),f1,bott,
+    pendSol:!L.length&&!!ing&&!adm,
+    curP:L.some(l=>l.st==="sol"),curL:L.some(l=>l.st==="ped"||l.st==="par"),curS:L.some(l=>l.st==="lleg")};
+  const d={...u,ing,days,manual:!!ov.ingreso,L,prev,M,state,cnt,mats,impTot,corrAb,slow,lastArr,motivo:ov.motivo||auto,motivoAuto:!ov.motivo,cat,adm,
+    salio,fsalida,proc,dSol,tLbl:u.mec_hoja,
+    mecLbl:adm?"Sin mecánico (trámite)":(u.mec||u.mec_hoja+" (sin cruce)"),alerts:[]};
+  if(!salio){
+    if(adm){if(days!=null&&days>=CFG.n4)d.alerts.push({k:"adm",sev:"info",lbl:`${cat} · ${days} d`,txt:`Detenida por ${cat.toLowerCase()} desde hace ${days} días. No es falla mecánica.`})}
+    else{
+      if(state==="sin"&&days>=CFG.n1)d.alerts.push({k:"sin",sev:"crit",lbl:`Sin pedidos · ${days} d`,txt:`Sin pedidos desde su ingreso; lleva ${days} días en piso.`});
+      const atr=L.filter(l=>pend3(l)&&Math.round((CORTE-T(l.f))/DAY)>=CFG.n3);
+      if(atr.length){const w=atr.map(l=>({l,d:Math.round((CORTE-T(l.f))/DAY)})).sort((a,b)=>b.d-a.d)[0];
+        d.alerts.push({k:"atr",sev:"warn",lbl:`${atr.length>1?atr.length+" refacciones":"1 refacción"} sin llegar · ${w.d} d`,txt:`${atr.length>1?atr.length+" refacciones":"1 refacción"} sin llegar tras ${CFG.n3} días o más. La más tardada: ${w.l.txt.toLowerCase()} (${w.d} d${w.l.st==="sol"?", sin pedido":""}).`})}
+      if(state==="ok"&&lastArr){const dl=Math.round((CORTE-T(lastArr))/DAY);
+        if(dl>=CFG.n2)d.alerts.push({k:"ok",sev:"info",lbl:`Material completo · ${dl} d sin salir`,txt:`Material completo desde hace ${dl} días y la unidad sigue en piso${cnt.sal===L.length?" (todo ya surtido a la unidad)":" (hay material sin surtir a la unidad)"}.`})}
+    }
   }
-  function td(txt, cls){ var c=document.createElement("td"); if(cls) c.className=cls; c.textContent = (txt==null||txt==="") ? "—" : String(txt); return c; }
-  function cedisDe(eco, bodega){
-    if(bodega) return bodega;
-    return PREFIJO[(eco||"").slice(0,3).toUpperCase()] || "Sin CEDIS";
-  }
-  function dias(f){
-    if(!f) return null;
-    var p = f.split("-"); var d = new Date(+p[0], +p[1]-1, +p[2]);
-    var hoy = new Date(); hoy = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
-    return Math.max(0, Math.round((hoy - d)/86400000));
-  }
-  function color(n){ return n==null ? "var(--none)" : n<=30 ? "var(--good)" : n<=90 ? "var(--warn)" : "var(--bad)"; }
-  function pct(a,b){ return b ? (Math.round((1-a/b)*1000)/10)+"%" : "—"; }
+  return d;
+}
+let UNITS=[];
+function recompute(){UNITS=DATA.units.map(derive)}
+const inZona=u=>zona==="Todas"||(zona==="Z:JUAN"&&zonaDe(u.cedis)==="JUAN")||(zona==="Z:DAVID"&&zonaDe(u.cedis)==="DAVID")||u.cedis===zona;
+function filtered(){return UNITS.filter(u=>inZona(u)&&(fEstado==="salio"?u.salio:(!u.salio&&(fEstado==="todos"||u.state===fEstado))))}
+function zoneUnits(){return UNITS.filter(u=>!u.salio&&inZona(u))}
+function sorted(a){
+  const s=[...a];
+  if(sortBy==="dias")s.sort((x,y)=>(y.days??-1)-(x.days??-1));
+  if(sortBy==="eco")s.sort((x,y)=>x.eco.localeCompare(y.eco));
+  if(sortBy==="mec")s.sort((x,y)=>(x.mec||"").localeCompare(y.mec||"")||x.eco.localeCompare(y.eco));
+  if(sortBy==="estado"){const o={sin:0,esp:1,ok:2,adm:3,nd:4};s.sort((x,y)=>o[x.state]-o[y.state]||(y.days??-1)-(x.days??-1))}
+  return s;
+}
+function median(a){const b=a.filter(x=>x!=null).sort((x,y)=>x-y);if(!b.length)return null;const m=b.length>>1;return b.length%2?b[m]:Math.round((b[m-1]+b[m])/2)}
+const allAlerts=()=>zoneUnits().flatMap(u=>u.alerts.map(a=>({...a,eco:u.eco,days:u.days})));
+const ZLBL=z=>z==="Todas"?"Todas":z==="Z:JUAN"?"Zona Juan":z==="Z:DAVID"?"Zona David":z;
 
-  function kpi(l, v, s){
-    var d = document.createElement("div"); d.className="kpi";
-    [["l",l],["v",v],["s",s]].forEach(function(x){ var e=document.createElement("span"); e.className=x[0]; e.textContent=x[1]; d.appendChild(e); });
-    return d;
+function head(){
+  document.getElementById("sub").textContent="Cruce de pedidos, ingresos y material surtido por económico en taller";
+  document.getElementById("stamp").textContent="Corte "+fmt(DATA.corte)+" · archivo Unidades_en_piso_22102026";
+  const z=document.getElementById("zonas");
+  const act=UNITS.filter(u=>!u.salio);
+  const cuenta=n=>n==="Todas"?act.length:act.filter(u=>inZonaK(u,n)).length;
+  z.innerHTML=["Todas","Z:JUAN","Z:DAVID",...CEDIS_ALL].map(n=>{
+    const c=cuenta(n);
+    return `<button class="zbtn ${c?"":"vacia"} ${n.startsWith("Z:")?"zz":""}" data-z="${esc(n)}" aria-pressed="${zona===n}">${esc(ZLBL(n))}<b>${c}</b></button>`}).join("");
+  z.querySelectorAll("button").forEach(b=>b.onclick=()=>{zona=b.dataset.z;render()});
+}
+function inZonaK(u,n){return n==="Z:JUAN"?zonaDe(u.cedis)==="JUAN":n==="Z:DAVID"?zonaDe(u.cedis)==="DAVID":u.cedis===n}
+function kpi(){
+  const us=zoneUnits();
+  const c={sin:0,esp:0,ok:0,adm:0,nd:0};us.forEach(u=>c[u.state]++);
+  const lines=us.flatMap(u=>u.L);
+  const med=median(us.filter(u=>!u.adm).map(u=>u.days));
+  const col={sin:"var(--crit)",esp:"var(--warn)",ok:"var(--good)",adm:"var(--adm)",nd:"var(--muted)"};
+  const ks=["sin","esp","ok","adm","nd"].filter(k=>c[k]);
+  const A=allAlerts();const na=A.length;
+  const nsal=UNITS.filter(u=>u.salio&&inZona(u)).length;
+  document.getElementById("kpi").innerHTML=`
+   <div><div class="lbl">En piso${zona==="Todas"?"":" · "+esc(ZLBL(zona))}</div><div class="big">${us.length}</div><div class="note" style="margin-top:8px">unidad${us.length===1?"":"es"} detenida${us.length===1?"":"s"} en taller${nsal?` · ${nsal} ya salió${nsal>1?"eron":""}`:""}</div></div>
+   <div><div class="lbl">Estado del material</div>
+     <div class="seg" role="img" aria-label="Distribución por estado">${ks.map(k=>`<i style="flex:${c[k]};background:${col[k]}"></i>`).join("")}</div>
+     <div class="leg">${ks.map(k=>`<span><span class="dot" style="background:${col[k]}"></span>${UST[k]} <em>${c[k]}</em></span>`).join("")}</div></div>
+   <div class="mini"><div><span class="muted">Mediana en piso (mecánicas)</span><b class="mono">${med==null?"—":med+" d"}</b></div>
+     <div><span class="muted">Líneas de refacción</span><b class="mono">${lines.length}</b></div>
+     <div><span class="muted">Alertas activas</span><button class="alink ${na?"hot":""}" data-go="alertas">${na}</button></div>
+     ${na?`<div class="note alsum">${A.slice(0,4).map(a=>`<b class="mono">${a.eco}</b> ${esc(a.lbl)}`).join(" · ")}${na>4?` · y ${na-4} más`:""}</div>`:""}</div>`;
+  document.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>{tab=b.dataset.go;render()});
+}
+function tabs(){
+  const na=allAlerts().length;
+  const t=[["unidades","Unidades"],["proceso","Proceso"],["zonas","Zonas"],["gantt","Gantt"],["refs","Refacciones"],["surtido","Material surtido"],["mec","Mecánicos"],["alertas","Alertas"+(na?` <span class="cnt">${na}</span>`:"")],["hist","Histórico"],["notas","Reglas y pendientes"]];
+  const el=document.getElementById("tabs");
+  el.innerHTML=t.map(([k,l])=>`<button class="tab" role="tab" data-t="${k}" aria-selected="${tab===k}">${l}</button>`).join("");
+  el.querySelectorAll(".tab").forEach(b=>b.onclick=()=>{tab=b.dataset.t;render()});
+}
+function espera(l){const pend=pend3(l);return Math.round(((pend||!l.fi?CORTE:T(l.fi))-T(l.f))/DAY)}
+function lineTable(L){
+  if(!L.length)return `<div class="empty">Sin pedidos de refacciones desde su ingreso a taller.</div>`;
+  return `<div class="scroll"><table class="ltab"><thead><tr>${L[0].eco?"<th>Económico</th>":""}<th>Solicitud</th><th>Material</th><th>Descripción</th><th>Cant.</th><th>Pedido</th><th>Llegada a almacén</th><th>Surtida a la unidad</th><th>Espera</th><th>Estado</th></tr></thead><tbody>`+
+  L.map(l=>`<tr class="l-${l.st}">${l.eco?`<td class="mono"><b>${esc(l.eco)}</b></td>`:""}<td class="mono nw">${fmt(l.f)}</td><td class="mono">${esc(l.mat)}</td><td>${esc(l.txt)}${l.n>1?` <span class="badge" title="Pedido compartido: ${esc(l.nec)}. Cantidad total ${num(l.qtot)} entre ${l.n} económicos">compartido ÷${l.n}</span>`:""}${l.tras?` <span class="badge" title="Traspaso 301 recibido en la bodega después de la solicitud">traspaso ${num(l.tras)}</span>`:""}</td><td class="mono">${num(l.q)}</td><td class="mono">${esc(l.ped||"—")}</td><td class="mono nw">${l.fi?fmt(l.fi)+" · "+num(l.arr):"—"}</td><td class="mono nw" title="${l.osal?"Órdenes "+l.osal.join(", "):""}">${l.fsal?fmt(l.fsal)+" · "+num(l.sal):"—"}</td><td class="mono nw">${espera(l)} d</td><td><span class="pill">${ST[l.st]}</span></td></tr>`).join("")+`</tbody></table></div>`;
+}
+function matTable(rows,withUnit){
+  if(!rows.length)return `<div class="empty">No hay material surtido a la unidad desde su ingreso.</div>`;
+  return `<div class="scroll"><table class="ltab"><thead><tr>${withUnit?"<th>Económico</th>":""}<th>Material</th><th>Descripción</th><th>Cantidad</th><th>Órdenes</th><th>Última salida</th><th>Importe</th></tr></thead><tbody>`+
+  rows.map(g=>`<tr>${withUnit?`<td class="mono"><b>${esc(g.eco)}</b></td>`:""}<td class="mono">${esc(g.m)}</td><td>${esc(g.t)}</td><td class="mono nw"><b>${num(g.q)}</b> ${esc(g.u)}</td><td class="mono">${[...g.ords.entries()].map(([o,c])=>`<span class="badge" title="${CLS[c]||c}">${o} · ${c}</span>`).join(" ")}</td><td class="mono nw">${fmt(g.last)}</td><td class="mono nw">${money(g.imp)}</td></tr>`).join("")+`</tbody></table></div>`;
+}
+function steps(u){
+  const L=u.L.length;if(!L)return `<div class="steps"><i></i><i></i><i></i><i></i></div><div class="note">${u.adm?"No aplica: trámite administrativo":u.state==="nd"?"Sin fecha de ingreso":"0 de 0 líneas"}</div>`;
+  const pedido=L-u.cnt.sol,llego=u.cnt.lleg+u.cnt.sal,salio=u.cnt.sal;
+  const mk=n=>`<i class="${n>=L?"on":""}" style="${n>0&&n<L?"background:linear-gradient(90deg,var(--c) "+(n/L*100)+"%,var(--surface2) 0)":""}"></i>`;
+  return `<div class="steps" title="Solicitadas ${L} · Pedidas ${pedido} · Llegaron ${llego} · Surtidas ${salio}">${mk(L)}${mk(pedido)}${mk(llego)}${mk(salio)}</div><div class="note">${pedido}/${L} pedidas · ${llego}/${L} llegaron · ${salio}/${L} surtidas</div>`;
+}
+/* tramos del proceso de una unidad */
+function stageBoxes(u){
+  const p=u.proc;
+  const defs=[
+    ["Ingreso → 1ª solicitud",p.dSol,p.pendSol,p.pendSol?u.days:null,"Taller"],
+    ["Solicitud → pedido",p.tP,p.curP,null,"Compras"],
+    ["Pedido → llegada",p.tL,p.curL,null,"Proveedor"],
+    ["Llegada → surtido",p.tS,p.curS,null,"Almacén y taller"]];
+  const vals=defs.map(d=>d[1]).filter(x=>x!=null);const mx=vals.length?Math.max(...vals):null;
+  return `<div class="stg">${defs.map(([t,v,pend,w,who])=>`<div class="stgb ${v!=null&&v===mx&&vals.length>1?"max":""}"><span class="lbl">${t}</span><b class="mono">${pend&&v==null?(w!=null?w+" d":"—"):dias(v)}</b><span class="note">${pend?(v==null?"sin solicitar aún":"promedio · hay líneas en espera"):v==null?"sin datos aún":"promedio por línea"} · ${who}</span></div>`).join("")}</div>`;
+}
+function salidaCtl(u){
+  let h="";
+  if(u.salio){
+    h=`<span class="note"><b>Salió de taller el ${fmt(u.fsalida)}</b>${u.days!=null?` · ${u.days} días en taller`:""}.</span>`+(OWNER?`<button class="mini-btn" data-undo="${u.eco}">Deshacer</button>`:"");
+  }else if(OWNER){
+    h=`<label>Fecha de salida <input type="date" id="fs-${u.eco}" value="${HOY}" max="${HOY}"></label><button class="mini-btn go" data-out="${u.eco}">Ya salió de taller</button>`;
+  }else{
+    h=`<span class="note">Solo el administrador puede marcar que la unidad ya salió de taller.</span>`;
   }
-
-  function pintar(){
-    var cedis = $("fCedis").value, q = $("fTexto").value.trim().toLowerCase();
-    var vis = filas.filter(function(r){
-      if(cedis && r.cedis !== cedis) return false;
-      if(!q) return true;
-      return [r.economico,r.mecanico,r.diagnostico,r.motivo,r.material,r.marca,r.destino].join(" ").toLowerCase().indexOf(q) >= 0;
+  if(DBMSG)h+=`<span class="note" style="color:var(--crit)">${esc(DBMSG)}</span>`;
+  return `<div class="dctl salctl"><span class="lbl">Salida de taller</span>${h}</div>`;
+}
+function detail(u){
+  const chips=[];
+  if(u.slow&&!u.adm)chips.push(`<span class="kv"><span class="lbl">Refacción más tardada</span><b>${esc(u.slow.txt.toLowerCase())}</b> <span class="mono">${u.slow.d} d${u.slow.pend?" sin llegar":""}</span></span>`);
+  chips.push(`<span class="kv"><span class="lbl">Correctivos abiertos</span><b class="mono">${u.corrAb.length}</b>${u.corrAb.length?` <span class="note">${u.corrAb.map(o=>o.o+" "+esc(o.t.slice(0,28))).join(" · ")}</span>`:""}</span>`);
+  chips.push(`<span class="kv"><span class="lbl">Material surtido</span><b class="mono">${u.mats.length}</b> materiales · <span class="mono">${money(u.impTot)}</span></span>`);
+  if(u.proc.bott&&u.proc.bott.k)chips.push(`<span class="kv"><span class="lbl">Dónde está detenida hoy</span><b>${STG[u.proc.bott.k]}</b>${u.proc.bott.w!=null?` <span class="mono">${u.proc.bott.w} d</span>`:""}</span>`);
+  return `<div class="detail" ${open.has(u.eco)?"":"hidden"}>
+    ${salidaCtl(u)}
+    <div class="dctl">
+      <label>Fecha real de ingreso <input type="date" id="fi-${u.eco}" data-fi="${u.eco}" value="${u.ing||""}" max="${DATA.corte}"></label>
+      ${u.manual?`<button class="mini-btn" data-reset="${u.eco}">Volver a la última carga</button>`:`<span class="note">${u.ing?"Calculada con la última carga de litros.":"Sin carga de combustible; captura la fecha para ver pedidos y material."}</span>`}
+      <label>Motivo de espera <select id="mo-${u.eco}" data-mo="${u.eco}">${MOTIVOS.concat(["Por definir"]).map(m=>`<option ${m===u.motivo?"selected":""}>${m}</option>`).join("")}</select></label>
+      ${u.motivoAuto?`<span class="note">sugerido</span>`:`<button class="mini-btn" data-moreset="${u.eco}">Quitar</button>`}
+    </div>
+    <div class="kvs">${chips.join("")}</div>
+    ${u.adm?`<div class="al info">Esta unidad está detenida por <b>${esc(u.cat.toLowerCase())}</b>, no por falla mecánica. No cuenta como refacción pendiente ni en los tiempos del proceso de refacciones.</div>`:`<h3>Tiempos del proceso</h3>${stageBoxes(u)}`}
+    ${u.alerts.length?`<div class="alist">${u.alerts.map(a=>`<div class="al ${a.sev}">${esc(a.txt)}</div>`).join("")}</div>`:""}
+    <h3>Pedidos de refacciones</h3>
+    ${lineTable(u.L.map(l=>({...l,eco:undefined})))}
+    <div class="note">${u.prev?`Hay ${u.prev} línea${u.prev>1?"s":""} de pedido anteriores al ingreso, que no se cuentan.`:"No hay pedidos anteriores al ingreso."}</div>
+    <h3>Material surtido desde su ingreso</h3>
+    ${u.ing?matTable(u.mats.map(g=>({...g,eco:undefined})),false):`<div class="empty">Sin fecha de ingreso, no se puede separar el material de esta estancia.</div>`}
+  </div>`;
+}
+function procCell(u){
+  if(u.adm)return `<div class="note">${esc(u.cat)}: sin refacciones</div>`;
+  if(!u.ing)return "";
+  if(u.dSol!=null)return `<div class="note">Ingreso → 1ª solicitud: <b class="mono">${u.dSol} d</b></div>`;
+  return `<div class="note" style="color:var(--crit)">Sin solicitar material · <b class="mono">${u.days} d</b></div>`;
+}
+function vUnidades(){
+  const list=sorted(filtered());
+  const est=[["todos","Todos"],["sin",UST.sin],["esp",UST.esp],["ok",UST.ok],["adm",UST.adm]];if(zoneUnits().some(u=>u.state==="nd"))est.push(["nd",UST.nd]);
+  const nsal=UNITS.filter(u=>u.salio&&inZona(u)).length;if(nsal)est.push(["salio","Ya salieron ("+nsal+")"]);
+  let h=`<div class="tools"><div class="chips" role="group" aria-label="Filtrar por estado">${est.map(([k,t])=>`<button class="chip" data-e="${k}" aria-pressed="${fEstado===k}">${t}</button>`).join("")}</div>
+   <label>Ordenar por <select id="ord"><option value="dias">Días en piso</option><option value="estado">Estado</option><option value="eco">Económico</option><option value="mec">Mecánico</option></select></label></div>`;
+  if(!list.length)return h+`<div class="empty">No hay unidades con este filtro.</div>`;
+  [...new Set(list.map(u=>u.cedis))].forEach(z=>{
+    h+=`<div class="zhead">${esc(z)}</div>`;
+    list.filter(u=>u.cedis===z).forEach(u=>{
+      const isOpen=open.has(u.eco);
+      h+=`<article class="unit s-${u.salio?"out":u.state}"><button class="urow" data-u="${u.eco}" aria-expanded="${isOpen}">
+        <div class="c-eco"><div class="eco">${u.eco}<small>${esc(u.marca)} · ${u.modelo} · ${esc(u.area)}</small></div></div>
+        <div class="cell"><span class="lbl">Diagnóstico de ingreso</span><span class="v">${esc(u.falla)}</span><div class="note">Motivo: ${esc(u.motivo)}${u.motivoAuto?" (sugerido)":""}</div></div>
+        <div class="cell"><span class="lbl">Mecánico asignado</span><span class="v">${esc(u.mecLbl)}</span>${u.corrAb.length?`<div class="note">${u.corrAb.length} correctivo${u.corrAb.length>1?"s":""} abierto${u.corrAb.length>1?"s":""}</div>`:""}</div>
+        <div class="cell"><span class="lbl">${u.salio?"Días en taller":"En piso desde "+(u.manual?"(fecha capturada)":u.ing?"(última carga)":"")}</span>${u.days==null?`<span class="v muted">Sin información disponible</span>`:`<span class="days">${u.days} <small>días</small></span><div class="note mono">${fmt(u.ing)}${u.salio?" → "+fmt(u.fsalida):""}</div>`}${procCell(u)}</div>
+        <div class="cell"><span class="lbl">Refacciones</span>${steps(u)}<div class="note">Surtido: ${u.mats.length} materiales</div></div>
+        <div class="cell"><span class="pill">${u.salio?"Ya salió de taller":UST[u.state]}</span>${u.alerts.length?`<div class="albs">${u.alerts.map(a=>`<span class="alb ${a.sev}" title="${esc(a.txt)}">${esc(a.lbl)}</span>`).join("")}</div>`:""}</div></button>
+        ${detail(u)}</article>`;
     });
-
-    var totAct = 0, totPiso = 0;
-    ORDEN_CEDIS.forEach(function(c){ if(!cedis || cedis===c){ totAct += (act[c]||0); totPiso += filas.filter(function(r){return r.cedis===c;}).length; } });
-    var conDias = vis.filter(function(r){return r.dias!=null;});
-    var prom = conDias.length ? Math.round(conDias.reduce(function(s,r){return s+r.dias;},0)/conDias.length) : null;
-    var largas = vis.filter(function(r){return r.dias!=null && r.dias>90;}).length;
-    var k = $("kpis"); k.textContent = "";
-    k.appendChild(kpi("Unidades en piso", String(vis.length), cedis || "Toda la zona"));
-    k.appendChild(kpi("Disponibilidad", pct(totPiso, totAct), totAct+" unidades activas"));
-    k.appendChild(kpi("Promedio en piso", prom==null ? "—" : prom+" días", conDias.length+" con fecha"));
-    k.appendChild(kpi("Más de 90 días", String(largas), "a revisar"));
-
-    var tc = $("tbCedis"); tc.textContent = "";
-    ORDEN_CEDIS.forEach(function(c){
-      var n = filas.filter(function(r){return r.cedis===c;}).length;
-      var tr = document.createElement("tr");
-      tr.appendChild(td(c)); tr.appendChild(td(act[c]||0)); tr.appendChild(td(n)); tr.appendChild(td(pct(n, act[c]||0)));
-      tc.appendChild(tr);
-    });
-
-    var tb = $("tbDet"); tb.textContent = "";
-    vis.sort(function(a,b){ return (b.dias==null?-1:b.dias) - (a.dias==null?-1:a.dias); });
-    vis.forEach(function(r){
-      var tr = document.createElement("tr");
-      tr.appendChild(td(r.economico,"mono")); tr.appendChild(td(r.cedis));
-      tr.appendChild(td([r.marca, r.modelo].filter(Boolean).join(" ")));
-      tr.appendChild(td(r.mecanico)); tr.appendChild(td(r.diagnostico)); tr.appendChild(td(r.motivo));
-      tr.appendChild(td(r.material ? r.material + (r.destino ? " → "+r.destino : "") : ""));
-      var c = document.createElement("td"); var w = document.createElement("div"); w.className="days";
-      var tk = document.createElement("div"); tk.className="track"; var f = document.createElement("div"); f.className="fill";
-      f.style.width = r.dias==null ? "0%" : Math.min(100, r.dias/180*100)+"%"; f.style.background = color(r.dias); tk.appendChild(f);
-      var b = document.createElement("b"); b.textContent = r.dias==null ? "—" : r.dias;
-      w.appendChild(tk); w.appendChild(b); c.appendChild(w); tr.appendChild(c);
-      tb.appendChild(tr);
-    });
-    $("msg").textContent = vis.length+" de "+filas.length+" unidades en piso.";
-  }
-
-  $("fCedis").addEventListener("change", pintar);
-  $("fTexto").addEventListener("input", pintar);
-  $("bExcel").addEventListener("click", function(){
-    var rows = filas.map(function(r){ return { Economico:r.economico, CEDIS:r.cedis, Marca:r.marca, Modelo:r.modelo, Mecanico:r.mecanico, Diagnostico:r.diagnostico, Motivo:r.motivo, "Material prestado":r.material, "Prestado a":r.destino, "Fecha ingreso a taller":r.fecha, "Dias en piso":r.dias }; });
-    var wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), "Unidades en piso");
-    XLSX.writeFile(wb, "unidades_en_piso_"+new Date().toISOString().slice(0,10)+".xlsx");
   });
-
-  Promise.all([
-    get("unidades_piso?select=*&limit=1000"),
-    get("catalogo_unidades?select=economico,marca,modelo,bodega,activo&limit=2000")
-  ]).then(function(r){
-    var cat = {}; r[1].forEach(function(u){ cat[u.economico] = u; if(u.activo) act[u.bodega] = (act[u.bodega]||0)+1; });
-    piso = r[0];
-    filas = piso.map(function(p){
-      var u = cat[p.economico] || {};
-      return { economico:p.economico, cedis:cedisDe(p.economico, u.bodega), marca:u.marca, modelo:u.modelo, mecanico:p.mecanico, diagnostico:p.diagnostico, motivo:p.motivo, material:p.material_prestado_desc || p.material_prestado_texto, destino:p.material_prestado_a, fecha:p.fecha_ingreso_taller, dias:dias(p.fecha_ingreso_taller) };
-    });
-    ORDEN_CEDIS.forEach(function(c){ var o=document.createElement("option"); o.value=o.textContent=c; $("fCedis").appendChild(o); });
-    pintar();
-  }).catch(function(e){ $("msg").textContent = "No se pudo cargar: "+e.message; $("msg").className="msg err"; });
-})();
+  return h;
+}
+/* ---------- Proceso ---------- */
+function vProceso(){
+  const us=zoneUnits().filter(u=>!u.adm);
+  const lines=us.flatMap(u=>u.L);
+  const sinSol=us.filter(u=>u.proc.pendSol);
+  const a1=median(us.filter(u=>u.dSol!=null).map(u=>u.dSol));
+  const a2=median(lines.filter(l=>l.fp).map(l=>dd(l.f,l.fp)));
+  const a3=median(lines.filter(l=>l.fi).map(l=>dd(l.fp||l.f,l.fi)));
+  const a4=median(lines.filter(l=>l.fi&&l.fsal).map(l=>dd(l.fi,l.fsal)));
+  const defs=[["Ingreso → 1ª solicitud",a1,"Taller",`${us.filter(u=>u.dSol!=null).length} unidades`],["Solicitud → pedido",a2,"Compras",`${lines.filter(l=>l.fp).length} líneas`],["Pedido → llegada",a3,"Proveedor",`${lines.filter(l=>l.fi).length} líneas`],["Llegada → surtido",a4,"Almacén y taller",`${lines.filter(l=>l.fi&&l.fsal).length} líneas`]];
+  const mx=Math.max(1,...defs.map(d=>d[1]||0));
+  const by={};us.forEach(u=>{const k=u.proc.bott?u.proc.bott.k:null;if(k)(by[k]=by[k]||[]).push(u)});
+  const rows=sorted(us).filter(u=>u.ing);
+  const cell=(v,pend,mxv)=>`<td class="mono ${v!=null&&v===mxv&&mxv>0?"hot":""}">${pend&&v==null?"…":dias(v)}</td>`;
+  return `<div class="cols">
+   <section class="panel box"><h3>Dónde pierde tiempo el proceso</h3>
+    <div class="note" style="margin-bottom:10px">Mediana de días por tramo, solo unidades con falla mecánica${zona==="Todas"?"":" · "+esc(ZLBL(zona))}. Las líneas anteriores al ingreso no cuentan.</div>
+    ${defs.map(([t,v,who,n])=>`<div class="prow"><div class="plbl"><b>${t}</b><span class="note">${who} · ${n}</span></div><div class="pbar"><i style="width:${v==null?0:Math.max(3,v/mx*100)}%"></i></div><b class="mono">${dias(v)}</b></div>`).join("")}
+    ${sinSol.length?`<div class="al crit" style="margin-top:10px"><b>${sinSol.length}</b> unidad${sinSol.length>1?"es siguen":" sigue"} sin solicitar material: ${sinSol.sort((a,b)=>b.days-a.days).map(u=>`<b class="mono">${u.eco}</b> ${u.days} d`).join(" · ")}.</div>`:""}</section>
+   <section class="panel box"><h3>Dónde está detenida cada unidad hoy</h3>
+    ${Object.keys(STG).filter(k=>by[k]).map(k=>`<div class="agrp"><div class="lbl">${STG[k]} <span class="mono">${by[k].length}</span></div><div class="note">${by[k].sort((a,b)=>(b.proc.bott.w??0)-(a.proc.bott.w??0)).map(u=>`<b class="mono">${u.eco}</b> ${u.proc.bott.w??"—"} d`).join(" · ")}</div></div>`).join("")||`<div class="empty">Sin unidades con falla mecánica en este filtro.</div>`}
+    <div class="note">Se toma la línea que lleva más tiempo esperando en cada unidad.</div></section>
+   <section class="panel box" style="grid-column:1/-1"><h3>Tiempos por unidad</h3>
+    <div class="scroll"><table class="ltab"><thead><tr><th>Económico</th><th>Mecánico</th><th>En piso</th><th>Ingreso → 1ª solicitud</th><th>Solicitud → pedido</th><th>Pedido → llegada</th><th>Llegada → surtido</th><th>Detenida hoy en</th></tr></thead><tbody>
+    ${rows.map(u=>{const p=u.proc;const m=Math.max(p.dSol??-1,p.tP??-1,p.tL??-1,p.tS??-1);return `<tr><td class="mono"><b>${u.eco}</b></td><td>${esc(u.mecLbl)}</td><td class="mono">${u.days} d</td>${cell(p.dSol,p.pendSol,m)}${cell(p.tP,p.curP,m)}${cell(p.tL,p.curL,m)}${cell(p.tS,p.curS,m)}<td>${p.bott?esc(STG[p.bott.k])+(p.bott.w!=null?` <span class="badge">${p.bott.w} d</span>`:""):"—"}</td></tr>`}).join("")}
+    </tbody></table></div>
+    <div class="note" style="margin-top:8px">Los tiempos de cada tramo son promedio por línea de pedido. El tramo más largo de la unidad va resaltado. “…” indica que el tramo sigue en curso y aún no hay línea terminada.</div></section></div>`;
+}
+/* ---------- Zonas: Juan vs David ---------- */
+function zstats(key){
+  const cs=ZONAS[key].cedis;
+  const act=UNITS.filter(u=>!u.salio&&cs.includes(u.cedis));
+  const mec=act.filter(u=>!u.adm),tr=act.filter(u=>u.adm);
+  const flota=cs.reduce((s,c)=>s+(DATA.flota[c]||0),0);
+  const ds=mec.map(u=>u.days).filter(x=>x!=null);
+  const mecs=new Set(act.filter(u=>u.mec).map(u=>u.mec));
+  const sal=UNITS.filter(u=>u.salio&&cs.includes(u.cedis));
+  return {key,flota,piso:act.length,mec:mec.length,tr:tr.length,
+    dispT:flota?(1-act.length/flota)*100:null,dispM:flota?(1-mec.length/flota)*100:null,
+    med:median(ds),p30:ds.length?ds.filter(d=>d>30).length/ds.length*100:null,
+    dsol:median(mec.filter(u=>u.dSol!=null).map(u=>u.dSol)),sinSol:mec.filter(u=>u.state==="sin").length,
+    ok:mec.filter(u=>u.state==="ok").length,nmec:mecs.size,porMec:mecs.size?mec.length/mecs.size:null,
+    sal:sal.length,salMed:median(sal.map(u=>u.days)),alert:act.reduce((s,u)=>s+u.alerts.length,0),act};
+}
+function vZonas(){
+  const J=zstats("JUAN"),D=zstats("DAVID");
+  /* [etiqueta, nota, fn valor, formato, mejor: 1 más alto, -1 más bajo, 0 sin juicio] */
+  const R=[
+   ["Flota total","Catálogo de unidades activas",s=>s.flota,v=>v,0],
+   ["Unidades en piso","Todas las que siguen en taller",s=>s.piso,v=>v,0],
+   ["  por falla mecánica","Cuentan para medir al taller",s=>s.mec,v=>v,0],
+   ["  por gestoría o corralón","Trámite, no falla mecánica",s=>s.tr,v=>v,0],
+   ["Disponibilidad de flota","Flota menos unidades en piso",s=>s.dispT,pct,1],
+   ["Disponibilidad sin trámites","Flota menos unidades en piso por falla mecánica",s=>s.dispM,pct,1],
+   ["Mediana de días en piso","Fallas mecánicas",s=>s.med,dias,-1],
+   ["Unidades con más de 30 días","% de las unidades en piso por falla mecánica",s=>s.p30,pct,-1],
+   ["Ingreso → 1ª solicitud","Mediana de días",s=>s.dsol,dias,-1],
+   ["Unidades sin solicitar material","Fallas mecánicas",s=>s.sinSol,v=>v,-1],
+   ["Material completo en la unidad","Esperan reparación, no refacciones",s=>s.ok,v=>v,0],
+   ["Unidades por mecánico en piso","Mecánicos con unidad asignada",s=>s.porMec,v=>v==null?"—":v.toFixed(1),-1],
+   ["Alertas activas","Según los umbrales de la pestaña Alertas",s=>s.alert,v=>v,-1],
+   ["Salidas registradas","Marcadas por el administrador",s=>s.sal,v=>v,0],
+   ["Días en taller de las que salieron","Mediana",s=>s.salMed,dias,-1]];
+  const rowH=R.map(([l,n,f,fm,best])=>{
+    const a=f(J),b=f(D);const mx=Math.max(a||0,b||0,1);
+    const bj=best&&a!=null&&b!=null&&a!==b?((best>0?a>b:a<b)?"J":"D"):"";
+    const bar=(v,c,w)=>`<div class="zb"><i class="${c}" style="width:${v==null||!isFinite(v)?0:Math.max(v>0?2:0,v/mx*100)}%"></i><span class="mono ${w?"win":""}">${v==null?"—":fm(v)}${w?" ✓":""}</span></div>`;
+    return `<div class="zrow ${l.startsWith("  ")?"sub":""}"><div class="zl"><b>${esc(l.trim())}</b><span class="note">${esc(n)}</span></div>${bar(a,"zj",bj==="J")}${bar(b,"zd",bj==="D")}</div>`}).join("");
+  const ced=CEDIS_ALL.map(c=>{const act=UNITS.filter(u=>!u.salio&&u.cedis===c);const mec=act.filter(u=>!u.adm);const fl=DATA.flota[c]||0;
+    return {c,z:zonaDe(c),fl,piso:act.length,mec:mec.length,tr:act.length-mec.length,disp:fl?(1-act.length/fl)*100:null,med:median(mec.map(u=>u.days))}});
+  const lec=[];
+  if(J.dispM!=null&&D.dispM!=null){const hi=J.dispM>=D.dispM?[J,D]:[D,J];lec.push(`Disponibilidad sin trámites: ${ZONAS[hi[0].key].n} ${pct(hi[0].dispM)} frente a ${pct(hi[1].dispM)} de ${ZONAS[hi[1].key].n}.`)}
+  if(J.med!=null&&D.med!=null)lec.push(`Mediana en piso: Juan ${J.med} d, David ${D.med} d.`);
+  return `<div class="zhd">
+    ${[J,D].map(s=>`<section class="panel zcard ${s.key==="JUAN"?"cj":"cd"}"><div class="lbl">${ZONAS[s.key].n} · ${esc(ZONAS[s.key].resp)}</div>
+     <div class="zbig"><span class="big">${pct(s.dispM)}</span><span class="note">de la flota disponible<br>sin contar gestoría ni corralón</span></div>
+     <div class="note">${s.flota} unidades · ${s.piso} en piso (${s.mec} mecánicas, ${s.tr} por trámite) · ${ZONAS[s.key].cedis.join(", ")}</div></section>`).join("")}
+   </div>
+   <section class="panel box"><div class="zleg"><span><i class="zj"></i>Zona Juan</span><span><i class="zd"></i>Zona David</span><span class="note">✓ marca el mejor valor cuando hay juicio claro. Las barras de cada fila comparten escala.</span></div>
+    <div class="zbody">${rowH}</div>
+    ${lec.length?`<div class="note" style="margin-top:10px">${lec.join(" ")}</div>`:""}</section>
+   <section class="panel box"><h3>Detalle por CEDIS</h3>
+    <div class="scroll"><table class="ltab"><thead><tr><th>CEDIS</th><th>Zona</th><th>Flota</th><th>En piso</th><th>Mecánicas</th><th>Trámite</th><th>Disponibilidad</th><th>Mediana en piso</th></tr></thead><tbody>
+    ${ced.map(r=>`<tr><td><b>${esc(r.c)}</b></td><td>${ZONAS[r.z].n}</td><td class="mono">${r.fl}</td><td class="mono">${r.piso}</td><td class="mono">${r.mec}</td><td class="mono">${r.tr}</td><td class="mono">${pct(r.disp)}</td><td class="mono">${dias(r.med)}</td></tr>`).join("")}
+    </tbody></table></div></section>
+   <section class="panel box"><h3>Cómo se mide</h3><ul>
+    <li><b>Disponibilidad</b> = 1 − unidades en piso ÷ flota activa del catálogo. La versión “sin trámites” deja fuera gestoría y corralón, para que el taller no cargue con paros que no son suyos.</li>
+    <li><b>Efectividad del taller</b> se lee con cuatro números: mediana de días en piso, % con más de 30 días, días de ingreso a la 1ª solicitud y unidades sin solicitar. Aún no hay una calificación única; falta que definas el peso de cada uno.</li>
+    <li>Solo cuenta lo que aparece en el archivo de unidades en piso. Si una unidad está parada y no se capturó ahí, no resta a la disponibilidad.</li>
+    <li>Con pocas unidades en piso, una sola unidad mueve mucho el porcentaje. Revisa el conteo antes de comparar.</li>
+    <li>Flota: unidades activas del catálogo maestro (${J.flota+D.flota}), incluyendo tráfico y montacargas.</li></ul></section>`;
+}
+function vGantt(){
+  const list=sorted(filtered());
+  const W=gW;
+  const ings=list.filter(u=>u.ing).map(u=>T(u.ing));
+  const start=W==="todo"?Math.min(...ings,CORTE)-7*DAY:CORTE-W*DAY,span=CORTE-start;
+  const x=t=>(t-start)/span*100;
+  const ticks=[];let d=new Date(start);d=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+1,1));
+  const step=(W==="todo"&&span/DAY>300)?3:1;
+  while(d.getTime()<CORTE){ticks.push(d.getTime());d=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+step,1))}
+  let h=`<div class="tools"><div class="chips" role="group" aria-label="Ventana de tiempo">${[[30,"30 días"],[90,"90 días"],[180,"180 días"],["todo","Todo"]].map(([k,t])=>`<button class="chip" data-w="${k}" aria-pressed="${W===k}">${t}</button>`).join("")}</div>
+   <div class="note">Cada barra va de la fecha de ingreso al corte. Ordenado como en la pestaña Unidades.</div></div>`;
+  h+=`<div class="panel gantt"><div class="ginner"><div class="gl2">
+   <span><i class="mk ped" style="position:relative;margin:0;top:0"></i>Pedido solicitado</span><span><i class="mk lleg" style="position:relative;margin:0;top:0"></i>Llegada a almacén</span><span><i class="mk sal" style="position:relative;margin:0;top:0"></i>Material surtido a la unidad</span><span><span class="dot" style="background:var(--accent)"></span>Corte ${fmt(DATA.corte)}</span></div>
+   <div class="gax"><div></div><div class="gaxt">${ticks.map(t=>{const dd2=new Date(t);return `<div class="tick" style="left:${x(t)}%">${MES[dd2.getUTCMonth()]}${dd2.getUTCMonth()===0?" "+dd2.getUTCFullYear():""}</div>`}).join("")}<div class="gtoday"></div></div></div>`;
+  if(!list.length)h+=`<div class="empty">No hay unidades con este filtro.</div>`;
+  list.forEach(u=>{
+    h+=`<div class="grow s-${u.state}"><div class="gl">${u.eco}<small>${esc(u.falla)}</small></div><div class="gt">`;
+    if(!u.ing){h+=`<div class="sin-fecha">Sin información disponible de ingreso</div>`}
+    else{
+      const t0=T(u.ing),cut=t0<start,l=Math.max(0,x(t0));
+      h+=`<div class="gbar ${cut?"cut":""}" style="left:${l}%;width:${100-l}%"></div><div class="gdays" style="${l>82?"right:0":"left:"+(l+0.5)+"%"}">${cut?"◂ ":""}${u.days} d en piso</div>`;
+      const ev={};
+      const add=(k,f,txt)=>{if(!f||T(f)<start)return;const key=k+f;(ev[key]=ev[key]||{k,f,txt:[]}).txt.push(txt)};
+      u.L.forEach(q=>{add("ped",q.f,q.txt);add("lleg",q.fi,q.txt)});
+      u.M.forEach(m=>add("sal",m.f,num(m.q)+" × "+m.t));
+      Object.values(ev).forEach(e=>{const nm={ped:"Solicitud",lleg:"Llegada",sal:"Surtido"}[e.k];
+        h+=`<span class="mk ${e.k}" style="left:${x(T(e.f))}%" title="${nm} ${fmt(e.f)}: ${esc(e.txt.slice(0,6).join("; "))}${e.txt.length>6?" y "+(e.txt.length-6)+" más":""}">${nm}</span>`});
+    }
+    h+=`</div></div>`;
+  });
+  return h+`</div></div>`;
+}
+function vRefs(){
+  let L=filtered().flatMap(u=>u.L.map(l=>({...l,eco:u.eco})));
+  const all=L.length;
+  if(fLinea!=="todos")L=L.filter(l=>l.st===fLinea);
+  L.sort((a,b)=>a.f<b.f?1:-1);
+  return `<div class="tools"><div class="chips" role="group" aria-label="Filtrar por estado de línea">${[["todos","Todas"],...Object.entries(ST)].map(([k,t])=>`<button class="chip" data-l="${k}" aria-pressed="${fLinea===k}">${t}</button>`).join("")}</div><div class="note">${L.length} de ${all} líneas</div></div>`+
+   (L.length?lineTable(L):`<div class="empty">No hay líneas con este filtro.</div>`);
+}
+function vSurtido(){
+  let rows=filtered().flatMap(u=>u.mats.map(g=>({...g,eco:u.eco})));
+  const all=rows.length;
+  if(fClase!=="todos")rows=rows.filter(g=>[...g.ords.values()].includes(fClase));
+  const qq=q.trim().toLowerCase();
+  if(qq)rows=rows.filter(g=>(g.m+" "+g.t+" "+g.eco).toLowerCase().includes(qq));
+  rows.sort((a,b)=>a.eco.localeCompare(b.eco)||(a.last<b.last?1:-1));
+  const tot=rows.reduce((s,g)=>s+g.imp,0);
+  return `<div class="tools"><div class="chips" role="group" aria-label="Clase de orden">${[["todos","Todas las órdenes"],["OM01","Correctivo"],["OM02","Preventivo"],["OM03","OM03"]].map(([k,t])=>`<button class="chip" data-c="${k}" aria-pressed="${fClase===k}">${t}</button>`).join("")}</div>
+   <label>Buscar <input type="search" id="q" value="${esc(q)}" placeholder="Material o económico"></label></div>
+   <div class="note">Salidas de almacén cargadas a órdenes de cada unidad, desde su fecha de ingreso. ${rows.length} de ${all} materiales · ${money(tot)}. La cantidad es neta: las devoluciones restan.</div>`+
+   matTable(rows,true);
+}
+function vMec(){
+  const us=filtered(),by={};
+  us.forEach(u=>{const k=u.mecLbl;(by[k]=by[k]||[]).push(u)});
+  const ks=Object.keys(by).sort((a,b)=>by[b].length-by[a].length||a.localeCompare(b));
+  if(!ks.length)return `<div class="empty">No hay unidades con este filtro.</div>`;
+  return `<div class="mgrid">`+ks.map(k=>{const L=by[k];const pend=L.flatMap(u=>u.L).filter(pend3).length;const ab=L.reduce((s,u)=>s+u.corrAb.length,0);
+   return `<section class="panel mcard"><div><h3>${esc(k)}</h3><div class="note">${L.length} unidad${L.length>1?"es":""} en piso · ${ab} correctivo${ab===1?"":"s"} abierto${ab===1?"":"s"} · ${pend} refacción${pend===1?"":"es"} por llegar</div></div>`+
+   L.sort((a,b)=>(b.days??-1)-(a.days??-1)).map(u=>`<div class="mu s-${u.state}"><span><b class="mono">${u.eco}</b> <span class="muted">${esc(u.falla.toLowerCase())}</span></span><span class="pill" title="${UST[u.state]}">${u.days==null?"s/d":u.days+" d"}</span></div>`).join("")+`</section>`}).join("")+`</div>`;
+}
+const AGRP=[["sin","Sin pedidos desde su ingreso","crit"],["atr","Refacciones sin llegar","warn"],["ok","Material completo y la unidad sigue en piso","info"],["adm","Detenidas por gestoría o corralón","info"]];
+function resumenTexto(){
+  const A=allAlerts();
+  let t=`Unidades en piso${zona==="Todas"?"":" · "+ZLBL(zona)} · corte ${fmt(DATA.corte)}\n${zoneUnits().length} unidades, ${A.length} alertas\n`;
+  AGRP.forEach(([k,tt])=>{const a=A.filter(x=>x.k===k);if(a.length){t+=`\n${tt}:\n`+a.map(x=>`- ${x.eco}: ${x.txt}`).join("\n")+"\n"}});
+  return t.trim();
+}
+function vAlertas(){
+  const A=allAlerts(),txt=resumenTexto();
+  return `<div class="cols">
+   <section class="panel box"><h3>Alertas activas <span class="cnt">${A.length}</span></h3>
+    ${A.length?AGRP.map(([k,t,s])=>{const a=A.filter(x=>x.k===k);return a.length?`<div class="agrp"><div class="lbl">${t}</div>${a.map(x=>`<div class="al ${s}"><b class="mono">${x.eco}</b> ${esc(x.txt)}</div>`).join("")}</div>`:""}).join(""):`<div class="empty">Sin alertas con los umbrales actuales.</div>`}</section>
+   <section class="panel box"><h3>Umbrales</h3>
+    <div class="thr"><label>Unidad sin pedidos desde <input type="number" min="0" id="n1" value="${CFG.n1}"> días</label>
+    <label>Refacción sin llegar desde <input type="number" min="0" id="n3" value="${CFG.n3}"> días</label>
+    <label>Material completo, sigue en piso desde <input type="number" min="0" id="n2" value="${CFG.n2}"> días</label>
+    <label>Gestoría o corralón desde <input type="number" min="0" id="n4" value="${CFG.n4}"> días</label></div>
+    <div class="note">Los umbrales se guardan en este navegador.</div>
+    <h3 style="margin-top:16px">Cómo te llegan</h3>
+    <ul><li><b>En esta página:</b> contador en la pestaña, motivo en cada unidad y resumen. Ya funciona.</li>
+     <li><b>Resumen para copiar</b> a WhatsApp o correo. Ya funciona (abajo).</li>
+     <li><b>Aviso automático diario</b> al celular o correo: por definir. Necesita que el cruce corra solo sobre los datos del ERP, no sobre un archivo cargado a mano.</li></ul></section>
+   <section class="panel box" style="grid-column:1/-1"><h3>Resumen para enviar</h3>
+    <textarea id="resumen" readonly rows="${Math.min(14,txt.split("\n").length+1)}">${esc(txt)}</textarea>
+    <div class="dctl" style="margin-top:8px"><button class="mini-btn" id="copiar">Copiar resumen</button><span class="note" id="copiado"></span></div></section></div>`;
+}
+function vHist(){
+  const us=zoneUnits();
+  const fal={};us.forEach(u=>{if(u.days==null)return;(fal[u.cat]=fal[u.cat]||[]).push(u)});
+  const rows=Object.entries(fal).map(([k,a])=>({k,n:a.length,avg:Math.round(a.reduce((s,u)=>s+u.days,0)/a.length),max:Math.max(...a.map(u=>u.days)),ecos:a.map(u=>u.eco).join(", ")})).sort((a,b)=>b.avg-a.avg);
+  const act=UNITS.filter(u=>!u.salio);
+  const c={sin:0,esp:0,ok:0,adm:0,nd:0};act.forEach(u=>c[u.state]++);
+  const live={corte:DATA.corte,total:act.length,...c,med:median(act.filter(u=>!u.adm).map(u=>u.days))};
+  const list=[live,...SNAPS.filter(s=>s.corte!==DATA.corte)].sort((a,b)=>a.corte<b.corte?1:-1);
+  const saved=SNAPS.some(s=>s.corte===DATA.corte);
+  return `<div class="cols">
+   <section class="panel box"><h3>Días en piso por tipo de falla</h3>
+    <div class="scroll"><table class="ltab"><thead><tr><th>Tipo</th><th>Unidades</th><th>Promedio</th><th>Máximo</th></tr></thead><tbody>${rows.map(r=>`<tr><td title="${esc(r.ecos)}"><b>${esc(r.k)}</b></td><td class="mono">${r.n}</td><td class="mono">${r.avg} d</td><td class="mono">${r.max} d</td></tr>`).join("")}</tbody></table></div>
+    <div class="note" style="margin-top:8px">Con un solo corte es una foto, no un histórico. Gestoría y corralón van aparte porque no son fallas mecánicas.</div></section>
+   <section class="panel box"><h3>Cortes guardados</h3>
+    <div class="scroll"><table class="ltab"><thead><tr><th>Corte</th><th>En piso</th><th>Sin pedidos</th><th>Esperando</th><th>Completo</th><th>Trámite</th><th>Mediana</th></tr></thead><tbody>${list.map(s=>`<tr><td class="mono nw">${fmt(s.corte)}${s.corte===DATA.corte&&!saved?' <span class="badge">sin guardar</span>':''}</td><td class="mono">${s.total}</td><td class="mono">${s.sin}</td><td class="mono">${s.esp}</td><td class="mono">${s.ok}</td><td class="mono">${s.adm??"—"}</td><td class="mono">${s.med==null?"—":s.med+" d"}</td></tr>`).join("")}</tbody></table></div>
+    <div class="dctl" style="margin-top:8px"><button class="mini-btn" id="guardar">Guardar el corte del ${fmt(DATA.corte)}</button></div>
+    <div class="note" style="margin-top:8px">Los cortes guardados se conservan en la base de datos del ERP para medir tiempos por tipo de falla y por mecánico. Solo quien administra esta pestaña puede guardar un corte.</div></section></div>`;
+}
+function vNotas(){
+  return `<div class="cols">
+  <section class="panel box"><h3>Reglas aplicadas</h3><ul>
+   <li><b>Ingreso a taller</b>: fecha de la última carga en litros (<span class="tag">l</span>) de Cargas, sin límite de antigüedad. Sin carga: “Sin información disponible”. Se puede capturar la fecha real en cada unidad.</li>
+   <li><b>Pedidos</b>: se ligan por “Número de necesidad” con el prefijo del centro (MMCV = MCV). Solo cuentan los solicitados el día del ingreso o después.</li>
+   <li><b>Varios económicos en un pedido</b> (“1055-1090”): la línea cuenta completa para cada unidad y la cantidad se divide entre ellos.</li>
+   <li><b>Cantidad base</b>: la pedida; si es 0 y ya hay pedido, la solicitada.</li>
+   <li><b>Llegada</b>: ingresos 101 con el mismo pedido y material. Parcial si lo recibido es menor a lo pedido.</li>
+   <li><b>Material surtido</b>: pestañas Uso y Usoc. Se toman las órdenes del equipo y el material con fecha de contabilización desde el ingreso. Las devoluciones restan.</li>
+   <li><b>Surtida a la unidad</b>: la refacción pedida aparece cargada a una orden de la unidad después de llegar.</li>
+   <li><b>Correctivo abierto</b>: orden OM01 cuyo estatus no empieza con CERR.</li>
+   <li><b>Mecánico</b>: se cruza con la tabla de personal por alias y nombre de pila.</li>
+   <li><b>Tiempos del proceso</b>: ingreso → 1ª solicitud (fecha de solicitud más temprana desde el ingreso), solicitud → pedido (fecha de pedido), pedido → llegada (primer ingreso 101) y llegada → surtido (primera salida cargada a la unidad).</li>
+   <li><b>Gestoría y corralón</b>: si el diagnóstico de ingreso dice gestoría o corralón, la unidad se marca “Detenida por trámite”. No se mide en refacciones ni en los tiempos del proceso, y se separa en la disponibilidad.</li>
+   <li><b>Ya salió de taller</b>: solo el administrador (dueño de este tablero) puede marcarlo. Se guarda en el tablero y lo ven todos. Si la unidad vuelve a entrar con otra fecha de ingreso, se vuelve a contar como en piso.</li>
+   <li><b>Zonas</b>: Juan = Cuernavaca, Jojutla y Puente de Ixtla. David = Cuautla, Axochiapan y Cocoyoc. La flota sale del catálogo maestro.</li></ul></section>
+  <section class="panel box"><h3>Por validar con este archivo</h3><ul>
+   <li>MCV1291, MCV1286 y MCV1055 cargaron combustible hace 3 a 6 días y casi no tienen pedidos posteriores.</li>
+   <li>MCV1009 queda en 461 días por su última carga de julio de 2025. Su balero llegó el 25 de agosto y nunca se cargó a una orden de la unidad.</li>
+   <li>MCU2602 queda en 549 días por su última carga de abril de 2025.</li>
+   <li>MCV1050 no tiene cargas; con la fecha capturada se calculan sus pedidos y su material.</li>
+   <li>MCC6408 (gestoría) tiene fecha de ingreso por su última carga de combustible; confirma que ese día fue el ingreso.</li>
+   <li>El material surtido incluye órdenes preventivas o de otro tipo que se abrieron durante la estancia. El filtro por clase de orden las separa.</li>
+   <li>Una refacción que no aparece como surtida puede haberse usado sin cargarse a la orden de la unidad.</li></ul></section>
+  <section class="panel box"><h3>Falta decidir</h3><ul>
+   <li>Cómo medir la efectividad de cada zona con una sola calificación y qué peso lleva cada indicador.</li>
+   <li>Si la disponibilidad debe contar toda la flota o solo las unidades de reparto y preventa.</li>
+   <li>Cómo llegan los avisos: contador en la página y resumen para copiar ya están. Falta el aviso automático (push o correo) y a qué hora.</li>
+   <li>Los umbrales de 3, 3, 7 y 15 días son de arranque. Ajústalos en la pestaña Alertas.</li>
+   <li>Valores del motivo de espera: Refacción, Mano de obra, Servicio externo, Diagnóstico, Gestoría, Corralón y Otro.</li>
+   <li>Fechas capturadas, motivos, umbrales y cortes se guardan solo en este navegador. Las salidas de taller sí se comparten. En el ERP todo iría a Supabase.</li></ul></section></div>`;
+}
+function render(){
+  recompute();head();kpi();tabs();
+  const v=document.getElementById("view");
+  v.innerHTML=({unidades:vUnidades,proceso:vProceso,zonas:vZonas,gantt:vGantt,refs:vRefs,surtido:vSurtido,mec:vMec,alertas:vAlertas,hist:vHist,notas:vNotas})[tab]();
+  v.querySelectorAll("[data-e]").forEach(b=>b.onclick=()=>{fEstado=b.dataset.e;render()});
+  v.querySelectorAll("[data-l]").forEach(b=>b.onclick=()=>{fLinea=b.dataset.l;render()});
+  v.querySelectorAll("[data-c]").forEach(b=>b.onclick=()=>{fClase=b.dataset.c;render()});
+  v.querySelectorAll("[data-w]").forEach(b=>b.onclick=()=>{gW=b.dataset.w==="todo"?"todo":+b.dataset.w;render()});
+  v.querySelectorAll("[data-u]").forEach(b=>b.onclick=()=>{const k=b.dataset.u;open.has(k)?open.delete(k):open.add(k);render()});
+  v.querySelectorAll("[data-fi]").forEach(i=>i.onchange=()=>{const k=i.dataset.fi;OV[k]=OV[k]||{};if(i.value)OV[k].ingreso=i.value;else delete OV[k].ingreso;saveOV(k);render()});
+  v.querySelectorAll("[data-reset]").forEach(b=>b.onclick=()=>{const k=b.dataset.reset;if(OV[k])delete OV[k].ingreso;saveOV(k);render()});
+  v.querySelectorAll("[data-mo]").forEach(s=>s.onchange=()=>{const k=s.dataset.mo;OV[k]=OV[k]||{};OV[k].motivo=s.value;saveOV(k);render()});
+  v.querySelectorAll("[data-moreset]").forEach(b=>b.onclick=()=>{const k=b.dataset.moreset;if(OV[k])delete OV[k].motivo;saveOV(k);render()});
+  v.querySelectorAll("[data-out]").forEach(b=>b.onclick=()=>marcarSalida(b.dataset.out));
+  v.querySelectorAll("[data-undo]").forEach(b=>b.onclick=()=>deshacerSalida(b.dataset.undo));
+  const o=document.getElementById("ord");if(o){o.value=sortBy;o.onchange=()=>{sortBy=o.value;render()}}
+  const qi=document.getElementById("q");if(qi)qi.oninput=()=>{q=qi.value;const p=qi.selectionStart;render();const n=document.getElementById("q");n.focus();n.setSelectionRange(p,p)};
+  ["n1","n2","n3","n4"].forEach(id=>{const e=document.getElementById(id);if(e)e.onchange=()=>{CFG[id]=Math.max(0,+e.value||0);lsSet("uep_cfg",CFG);render()}});
+  const cp=document.getElementById("copiar");if(cp)cp.onclick=()=>{const ta=document.getElementById("resumen"),m=document.getElementById("copiado");
+    const sel=()=>{ta.focus();ta.select();m.textContent="Texto seleccionado; cópialo con Ctrl+C."};
+    try{navigator.clipboard.writeText(ta.value).then(()=>{m.textContent="Copiado."},sel)}catch(e){sel()}};
+  if(!OWNER)v.querySelectorAll("[data-fi],[data-mo],[data-reset],[data-moreset],#guardar").forEach(e=>{e.disabled=true;e.title="Solo lo modifica quien administra esta pestaña"});
+  const gu=document.getElementById("guardar");if(gu)gu.onclick=()=>{const act=UNITS.filter(u=>!u.salio);const c={sin:0,esp:0,ok:0,adm:0,nd:0};act.forEach(u=>c[u.state]++);
+    SNAPS=SNAPS.filter(s=>s.corte!==DATA.corte).concat([{corte:DATA.corte,total:act.length,...c,med:median(act.filter(u=>!u.adm).map(u=>u.days))}]);saveSnap();render()};
+}
+/* ---------- Datos en Supabase (lee quien tenga acceso a la pestaña; escribe quien tenga permiso de edición) ---------- */
+function errMsg(e){return /401|403|42501/.test(String(e&&e.message))?"Sin permiso para guardar en esta pestaña.":"No se pudo guardar. Intenta de nuevo."}
+function saveOV(k){
+  if(!OWNER)return;
+  const o=OV[k]||{};DBMSG="";
+  const p=(!o.ingreso&&!o.motivo)
+    ?ERP.rest("unidades_piso_ajustes?eco=eq."+encodeURIComponent(k),{method:"DELETE",prefer:"return=minimal"})
+    :ERP.rest("unidades_piso_ajustes?on_conflict=eco",{method:"POST",prefer:"resolution=merge-duplicates,return=minimal",body:[{eco:k,ingreso:o.ingreso||null,motivo:o.motivo||null,updated_at:new Date().toISOString()}]});
+  p.catch(e=>{DBMSG=errMsg(e);render()});
+}
+function saveSnap(){
+  if(!OWNER)return;
+  const r=SNAPS.find(s=>s.corte===DATA.corte);if(!r)return;DBMSG="";
+  ERP.rest("unidades_piso_cortes?on_conflict=corte",{method:"POST",prefer:"resolution=merge-duplicates,return=minimal",body:[{corte:r.corte,resumen:r}]}).catch(e=>{DBMSG=errMsg(e);render()});
+}
+function marcarSalida(eco){
+  if(!OWNER)return;
+  const u=DATA.units.find(x=>x.eco===eco);const el=document.getElementById("fs-"+eco);
+  const f=(el&&el.value)||HOY;DBMSG="";
+  const reg={eco,ingreso:u.ingreso||"",fecha:f,at:new Date().toISOString()};
+  SAL[eco]=reg;render();
+  ERP.rest("unidades_piso_salidas?on_conflict=eco",{method:"POST",prefer:"resolution=merge-duplicates,return=minimal",body:[reg]}).catch(e=>{delete SAL[eco];DBMSG=errMsg(e);render()});
+}
+function deshacerSalida(eco){
+  if(!OWNER)return;DBMSG="";
+  const prev=SAL[eco];delete SAL[eco];render();
+  ERP.rest("unidades_piso_salidas?eco=eq."+encodeURIComponent(eco),{method:"DELETE",prefer:"return=minimal"}).catch(e=>{SAL[eco]=prev;DBMSG=errMsg(e);render()});
+}
+function vacio(msg){
+  ["sub","stamp","zonas","kpi","tabs"].forEach(id=>{document.getElementById(id).innerHTML=""});
+  document.getElementById("view").innerHTML='<section class="panel" style="padding:28px 22px"><h3>'+esc(msg)+'</h3><p class="muted" style="margin:8px 0 0">'+(OWNER?"Sube el corte desde Ajustes → Cargas de Excel → Unidades en piso.":"El administrador debe cargar el corte vigente.")+'</p></section>';
+}
+async function cargar(primera){
+  try{
+    const [dat,sal,aj,cor]=await Promise.all([
+      ERP.rest("unidades_piso_datos?select=corte,datos&id=eq.1"),
+      ERP.rest("unidades_piso_salidas?select=*"),
+      ERP.rest("unidades_piso_ajustes?select=*"),
+      ERP.rest("unidades_piso_cortes?select=resumen&order=corte")]);
+    SAL={};(sal||[]).forEach(r=>{SAL[r.eco]=r});
+    OV={};(aj||[]).forEach(r=>{OV[r.eco]={};if(r.ingreso)OV[r.eco].ingreso=r.ingreso;if(r.motivo)OV[r.eco].motivo=r.motivo});
+    SNAPS=(cor||[]).map(r=>r.resumen);
+    if(!dat||!dat.length||!dat[0].datos||!dat[0].datos.units){DATA=null;vacio("Todavía no hay un corte de unidades en piso");return}
+    DATA=dat[0].datos;DATA.corte=DATA.corte||dat[0].corte;
+    CORTE=Date.parse(DATA.corte+"T00:00:00Z");DBMSG="";
+    render();
+  }catch(e){
+    if(!DATA)vacio("No se pudo leer la información: "+(e.message||e));
+    else{DBMSG="No se pudo actualizar desde la base de datos.";render()}
+  }
+}
+OWNER=ERP.puede("piso");
+cargar(true);
+setInterval(()=>{const a=document.activeElement;if(!document.hidden&&!(a&&/INPUT|SELECT|TEXTAREA/.test(a.tagName)))cargar(false)},60000);
 </script>
 <script src="offline.js"></script>
-</body>
-</html>
+</body></html>

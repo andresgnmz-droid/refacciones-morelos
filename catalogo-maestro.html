@@ -85,6 +85,9 @@
   .update-form input[type=password]{padding:9px 12px; border-radius:10px; border:1px solid var(--border); background:var(--bg); color:var(--ink); font-size:13px; max-width:220px;}
   .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap;}
 </style>
+<script src="erp-auth.js"></script>
+<script>if(/[?&]modo=carga/.test(location.search))document.documentElement.classList.add("modo-carga");</script>
+<style>html:not(.modo-carga) #cardActualizar{display:none !important}html.modo-carga .card:not(#cardActualizar),html.modo-carga .hero,html.modo-carga .kpi-row{display:none !important}html.modo-carga #cardActualizar{display:block !important}</style>
 </head>
 <body>
 <div class="wrap">
@@ -114,14 +117,13 @@
     </div>
   </div>
 
-  <div class="card">
+  <div class="card" id="cardActualizar">
     <div class="card-head">
       <h2>Actualizar catálogo</h2>
       <span class="card-sub">Sube el Excel mensual (pestaña "Morelos") para reflejar altas, bajas y cambios en Supabase</span>
     </div>
     <div class="update-form">
       <div class="row">
-        <input id="pwBox" type="password" placeholder="Contraseña">
         <input id="fileInput" type="file" accept=".xlsx,.xls" hidden>
         <button id="btnPick" class="btn-ghost">Elegir archivo</button>
         <span class="note" id="fileMeta"></span>
@@ -148,9 +150,8 @@
   "use strict";
 
   var SUPABASE_URL = "https://aoutudbxwawlnbwvypir.supabase.co";
-  var SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFvdXR1ZGJ4d2F3bG5id3Z5cGlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU4NzQzNTMsImV4cCI6MjEwMTQ1MDM1M30.cfdjH9rwQDYyxrrKZIAw7JpcQKYcFWtiEYXEDF8fa_E";
+  var SUPABASE_KEY = ERP.KEY;
   var TABLE = "catalogo_unidades";
-  var UPDATE_PASSWORD = "morelos2026";
 
   var BODEGA_CANON = {
     "CUERNAVACA":"Cuernavaca", "CUAUTLA":"Cuautla", "JOJUTLA":"Jojutla",
@@ -163,11 +164,7 @@
   };
   var CEDIS_ORDER = ["Cuernavaca","Cuautla","Jojutla","Puente de Ixtla","Axochiapan","Cocoyoc"];
 
-  function sbHeaders(extra){
-    var h = { "apikey": SUPABASE_KEY, "Authorization": "Bearer " + SUPABASE_KEY, "Content-Type": "application/json" };
-    if(extra) for(var k in extra) h[k] = extra[k];
-    return h;
-  }
+  function sbHeaders(extra){ return ERP.headers(extra); }
 
   var state = { rows: [], parsedNew: null };
 
@@ -353,10 +350,9 @@
 
   document.getElementById("btnConfirm").addEventListener("click", function(){
     var statusBox = document.getElementById("statusBox");
-    var pw = document.getElementById("pwBox").value;
-    if(pw !== UPDATE_PASSWORD){
+    if(!ERP.puede("catalogo_unidades")){
       statusBox.hidden = false; statusBox.className = "status-box err";
-      statusBox.textContent = "Contraseña incorrecta.";
+      statusBox.textContent = "No tienes permiso para actualizar esta información. Entra al ERP con un usuario autorizado.";
       return;
     }
     var btn = document.getElementById("btnConfirm");
@@ -388,7 +384,6 @@
       statusBox.className = "status-box ok";
       statusBox.textContent = "Listo — " + toUpsert.length + " unidades creadas/actualizadas, " + bajaEcos.length + " marcadas de baja.";
       document.getElementById("diffPreview").hidden = true;
-      document.getElementById("pwBox").value = "";
       document.getElementById("fileMeta").textContent = "";
       return loadCatalog();
     }).catch(function(err){

@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ERP Automotriz Morelos</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="erp-auth.js"></script>
 <style>
   :root{
     --ink:#142433; --ink-soft:#48607A; --ink-faint:#7C93A6;
@@ -34,22 +36,43 @@
   body{margin:0;background:var(--bg);color:var(--ink);font-family:'Inter',system-ui,-apple-system,sans-serif;display:flex;flex-direction:column;}
   h1,h2,h3{font-family:'Barlow Semi Condensed',system-ui,sans-serif;font-weight:700;margin:0;letter-spacing:.2px;}
   p{margin:0;}
-  button{font-family:inherit;cursor:pointer;}
+  button,input,select{font-family:inherit;}
+  button{cursor:pointer;}
   [hidden]{display:none !important;}
 
+  /* acceso */
+  #acceso{flex:1;display:flex;align-items:center;justify-content:center;padding:20px;}
+  .login{width:100%;max-width:400px;background:var(--surface);border:1px solid var(--border);border-radius:18px;box-shadow:var(--shadow);padding:26px 24px;display:flex;flex-direction:column;gap:14px;}
+  .login h1{font-size:26px;}
+  .login .sub{font-size:13px;color:var(--ink-soft);line-height:1.5;}
+  .login label{font-size:11px;font-weight:700;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px;}
+  .login input{width:100%;padding:11px 12px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--ink);font-size:15px;}
+  .login .link{background:none;border:0;color:var(--accent);font-size:13px;font-weight:600;padding:0;text-align:left;}
+  .msg{font-size:13px;line-height:1.45;}
+  .msg.err{color:var(--bad);}
+  .msg.ok{color:var(--good);}
+
+  .btn{border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);font-weight:600;font-size:13.5px;padding:10px 16px;border-radius:10px;}
+  .btn.ghost{background:transparent;color:var(--accent);}
+  .btn.danger{background:transparent;border-color:var(--bad);color:var(--bad);}
+  .btn.sm{padding:6px 10px;font-size:12.5px;}
+  .btn:disabled{opacity:.55;cursor:wait;}
+
+  /* app */
+  #app{flex:1;min-height:0;display:flex;flex-direction:column;}
   .top{background:var(--surface);border-bottom:1px solid var(--border);box-shadow:var(--shadow);position:relative;z-index:10;}
-  .top-row{display:flex;align-items:center;gap:12px;padding:10px 16px;}
+  .top-row{display:flex;align-items:center;gap:10px;padding:10px 16px;}
   .brand{display:flex;flex-direction:column;line-height:1.1;}
   .brand h1{font-size:19px;}
   .brand span{font-size:11px;color:var(--ink-faint);}
   .grow{flex:1;}
+  .who{font-size:12.5px;color:var(--ink-soft);text-align:right;line-height:1.3;}
+  .who b{color:var(--ink);display:block;font-size:13px;}
   .icon-btn{border:1px solid var(--border);background:var(--bg);color:var(--ink);border-radius:10px;padding:7px 11px;font-size:13px;font-weight:600;}
-  nav{display:flex;gap:4px;overflow-x:auto;padding:0 12px 0;scrollbar-width:thin;}
+  nav{display:flex;gap:4px;overflow-x:auto;padding:0 12px;scrollbar-width:thin;}
   nav button{border:0;background:transparent;color:var(--ink-soft);font-weight:600;font-size:13.5px;padding:10px 14px;border-bottom:3px solid transparent;white-space:nowrap;display:flex;gap:6px;align-items:center;}
   nav button:hover{color:var(--ink);}
   nav button.on{color:var(--accent);border-bottom-color:var(--accent);}
-  nav .lock{font-size:11px;}
-
   main{flex:1;min-height:0;position:relative;}
   .panel{position:absolute;inset:0;overflow:auto;}
   .panel iframe{width:100%;height:100%;border:0;display:block;background:var(--bg);}
@@ -63,236 +86,625 @@
   .kpi .l{font-size:11px;font-weight:600;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.5px;}
   .kpi .v{font-family:'Barlow Semi Condensed',sans-serif;font-size:30px;font-weight:700;line-height:1.1;}
   .kpi .s{font-size:12px;color:var(--ink-soft);}
-  .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px 18px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:8px;}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px 18px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:10px;}
   .card h3{font-size:17px;}
   .card p,.card li{font-size:13.5px;color:var(--ink-soft);line-height:1.55;}
   .card ul{margin:0;padding-left:18px;}
-  .pill{display:inline-block;font-size:11px;font-weight:700;border-radius:999px;padding:3px 9px;background:var(--accent-soft);color:var(--accent);}
+  .pill{display:inline-block;font-size:11px;font-weight:700;border-radius:999px;padding:3px 9px;background:var(--accent-soft);color:var(--accent);white-space:nowrap;}
   .pill.warn{background:rgba(176,116,0,.15);color:var(--warn);}
+  .pill.bad{background:rgba(214,58,57,.15);color:var(--bad);}
   .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;}
   .locked{border-style:dashed;}
-  .sub{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;}
-  .sub span{font-size:12.5px;border:1px solid var(--border);border-radius:10px;padding:6px 10px;color:var(--ink-faint);background:var(--bg);}
-  .err{color:var(--bad);font-size:13px;}
+  .sub-items{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px;}
+  .sub-items span,.sub-items a{font-size:12.5px;border:1px solid var(--border);border-radius:10px;padding:6px 10px;color:var(--ink-faint);background:var(--bg);text-decoration:none;}
+  .sub-items a{color:var(--accent);}
+
+  /* ajustes */
+  .stabs{display:flex;gap:6px;flex-wrap:wrap;}
+  .stabs button{border:1px solid var(--border);background:var(--surface);color:var(--ink-soft);font-weight:600;font-size:13px;padding:8px 14px;border-radius:10px;}
+  .stabs button.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);}
+  .tbl{overflow:auto;border:1px solid var(--border);border-radius:14px;background:var(--surface);}
+  table{border-collapse:collapse;width:100%;font-size:13px;}
+  th{background:var(--surface-alt);text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--ink-faint);padding:9px 12px;white-space:nowrap;position:sticky;top:0;}
+  td{padding:8px 12px;border-top:1px solid var(--border);vertical-align:middle;}
+  td.acts{white-space:nowrap;display:flex;gap:6px;flex-wrap:wrap;}
+  .form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;}
+  .f label{font-size:11px;font-weight:700;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px;}
+  .f input,.f select,.mat select{width:100%;padding:9px 10px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--ink);font-size:13.5px;}
+  .checks{display:flex;gap:10px;flex-wrap:wrap;}
+  .checks label{font-size:13px;color:var(--ink-soft);display:flex;gap:5px;align-items:center;text-transform:none;letter-spacing:0;font-weight:500;margin:0;}
+  .checks input{width:auto;}
+  .mat select{padding:6px 8px;font-size:12.5px;min-width:96px;}
+  .mat td.mod{min-width:230px;font-weight:500;}
+  .mat tr.grp td{background:var(--surface-alt);font-size:11px;font-weight:700;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.5px;}
+  .mat select.ch{border-color:var(--warn);background:rgba(176,116,0,.12);}
+  .cargas{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;}
+  .carga-frame{height:70vh;border:1px solid var(--border);border-radius:14px;overflow:hidden;background:var(--surface);}
+  .carga-frame iframe{width:100%;height:100%;border:0;}
+  .dlg{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;padding:16px;z-index:50;}
+  .dlg .box{background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);width:100%;max-width:460px;max-height:90vh;overflow:auto;padding:20px;display:flex;flex-direction:column;gap:12px;}
+  .dlg .row{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;}
+  .code{font-family:ui-monospace,Menlo,Consolas,monospace;background:var(--bg);border:1px dashed var(--border);border-radius:10px;padding:10px 12px;font-size:15px;letter-spacing:.5px;word-break:break-all;}
 </style>
 </head>
 <body>
-<header class="top">
-  <div class="top-row">
-    <div class="brand"><h1>ERP Automotriz Morelos</h1><span>Embotelladora Mexicana · Zona Morelos</span></div>
-    <div class="grow"></div>
-    <span id="estado" class="pill">Conectando…</span>
-    <button class="icon-btn" id="tema" title="Cambiar tema">Tema</button>
-  </div>
-  <nav id="nav"></nav>
-</header>
-<main id="main"></main>
+
+<section id="acceso">
+  <form class="login" id="formLogin" autocomplete="on">
+    <div><h1>ERP Automotriz Morelos</h1><p class="sub">Embotelladora Mexicana · Zona Morelos</p></div>
+    <div><label for="lUser">Usuario</label><input id="lUser" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" required></div>
+    <div><label for="lPass">Contraseña</label><input id="lPass" name="password" type="password" autocomplete="current-password" required></div>
+    <button class="btn" id="bEntrar" type="submit">Entrar</button>
+    <p class="msg" id="lMsg"></p>
+    <button class="link" id="bActivar" type="button" hidden>Primer acceso: activar al administrador</button>
+  </form>
+
+  <form class="login" id="formActivar" hidden autocomplete="off">
+    <div><h1>Activar administrador</h1><p class="sub">Se hace una sola vez. Necesitas el código de activación que dejaste en Supabase (Edge Functions · Secrets · SETUP_CODE).</p></div>
+    <div><label for="aCodigo">Código de activación</label><input id="aCodigo" type="password" autocomplete="off" required></div>
+    <div><label for="aUser">Usuario</label><input id="aUser" autocapitalize="none" spellcheck="false" placeholder="ej. agaytan" required></div>
+    <div><label for="aNombre">Nombre completo</label><input id="aNombre" required></div>
+    <div><label for="aPass">Contraseña (mínimo 8 caracteres)</label><input id="aPass" type="password" autocomplete="new-password" minlength="8" required></div>
+    <button class="btn" id="bCrearAdmin" type="submit">Crear administrador y entrar</button>
+    <p class="msg" id="aMsg"></p>
+    <button class="link" id="bVolver" type="button">Volver al inicio de sesión</button>
+  </form>
+</section>
+
+<div id="app" hidden>
+  <header class="top">
+    <div class="top-row">
+      <div class="brand"><h1>ERP Automotriz Morelos</h1><span>Embotelladora Mexicana · Zona Morelos</span></div>
+      <div class="grow"></div>
+      <div class="who" id="who"></div>
+      <button class="icon-btn" id="bCuenta" title="Mi cuenta">Mi cuenta</button>
+      <button class="icon-btn" id="tema" title="Cambiar tema">Tema</button>
+      <button class="icon-btn" id="bSalir">Salir</button>
+    </div>
+    <nav id="nav"></nav>
+  </header>
+  <main id="main"></main>
+</div>
 
 <script>
 (function(){
   "use strict";
-  var SB_URL = "https://aoutudbxwawlnbwvypir.supabase.co";
-  var SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFvdXR1ZGJ4d2F3bG5id3Z5cGlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU4NzQzNTMsImV4cCI6MjEwMTQ1MDM1M30.cfdjH9rwQDYyxrrKZIAw7JpcQKYcFWtiEYXEDF8fa_E";
-  // Varios se mantiene bloqueado hasta que se concluya la parte de Varios (cambiar a false para liberarlo).
+  var SB_URL = ERP.URL, SB_KEY = ERP.KEY;
+  var FN = SB_URL + "/functions/v1/admin-usuarios";
+  var sb = supabase.createClient(SB_URL, SB_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false } });
+  // Varios sigue bloqueado hasta cerrar los ajustes de la semana (cambiar a false para liberarlo).
   var VARIOS_BLOQUEADO = true;
+  var CEDIS = ["Cuernavaca","Cuautla","Jojutla","Puente de Ixtla","Axochiapan","Cocoyoc"];
+
+  function $(id){ return document.getElementById(id); }
+  function el(tag, cls, txt){ var e = document.createElement(tag); if(cls) e.className = cls; if(txt != null) e.textContent = txt; return e; }
+  function norm(s){ return String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, ""); }
+  function emailDe(u){ return norm(u) + "@erp-morelos.local"; }
+  function fmtFecha(iso){
+    try{ return new Date(iso).toLocaleString("es-MX", { day:"2-digit", month:"short", year:"numeric", hour:"2-digit", minute:"2-digit" }); }
+    catch(e){ return iso || "—"; }
+  }
+  function llamarFn(cuerpo){
+    return fetch(FN, { method:"POST", headers:{ apikey:SB_KEY, Authorization:"Bearer " + (ERP.token() || SB_KEY), "Content-Type":"application/json" }, body:JSON.stringify(cuerpo) })
+      .then(function(r){ return r.json().catch(function(){ return { error:"Respuesta no válida del servidor." }; }); });
+  }
+  function claveAleatoria(){
+    var abc = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789", out = "", a = new Uint32Array(10);
+    crypto.getRandomValues(a);
+    for(var i = 0; i < a.length; i++) out += abc[a[i] % abc.length];
+    return out;
+  }
+
+  /* ================= acceso ================= */
+  var perfil = null;
+
+  function mostrarAcceso(){
+    $("app").hidden = true; $("acceso").hidden = false;
+    $("formLogin").hidden = false; $("formActivar").hidden = true;
+    llamarFn({ accion:"estado" }).then(function(r){
+      $("bActivar").hidden = !(r && r.hayAdmin === false);
+    }).catch(function(){});
+  }
+
+  $("formLogin").addEventListener("submit", function(e){
+    e.preventDefault();
+    var b = $("bEntrar"), m = $("lMsg"); b.disabled = true; m.className = "msg"; m.textContent = "Entrando…";
+    sb.auth.signInWithPassword({ email: emailDe($("lUser").value), password: $("lPass").value }).then(function(r){
+      if(r.error){
+        m.className = "msg err";
+        m.textContent = /Invalid login|credentials/i.test(r.error.message) ? "Usuario o contraseña incorrectos." : "No se pudo entrar: " + r.error.message;
+        b.disabled = false; return;
+      }
+      return iniciarSesion().then(function(ok){
+        b.disabled = false;
+        if(!ok){ m.className = "msg err"; m.textContent = "Tu usuario no tiene acceso activo. Avisa al administrador."; }
+      });
+    }).catch(function(err){ b.disabled = false; m.className = "msg err"; m.textContent = "Sin conexión: " + err.message; });
+  });
+
+  $("bActivar").addEventListener("click", function(){ $("formLogin").hidden = true; $("formActivar").hidden = false; });
+  $("bVolver").addEventListener("click", function(){ $("formLogin").hidden = false; $("formActivar").hidden = true; });
+  $("formActivar").addEventListener("submit", function(e){
+    e.preventDefault();
+    var b = $("bCrearAdmin"), m = $("aMsg"); b.disabled = true; m.className = "msg"; m.textContent = "Creando…";
+    llamarFn({ accion:"bootstrap", codigo:$("aCodigo").value, usuario:$("aUser").value, nombre:$("aNombre").value, password:$("aPass").value }).then(function(r){
+      if(r.error){ m.className = "msg err"; m.textContent = r.error; b.disabled = false; return; }
+      return sb.auth.signInWithPassword({ email: emailDe($("aUser").value), password: $("aPass").value }).then(function(s){
+        b.disabled = false;
+        if(s.error){ m.className = "msg err"; m.textContent = "Se creó la cuenta pero no se pudo entrar: " + s.error.message; return; }
+        return iniciarSesion();
+      });
+    }).catch(function(err){ b.disabled = false; m.className = "msg err"; m.textContent = "Sin conexión: " + err.message; });
+  });
+
+  function iniciarSesion(){
+    return sb.rpc("mi_sesion").then(function(r){
+      if(r.error || !r.data){
+        return sb.auth.signOut().then(function(){ try{ localStorage.removeItem("erp_perfil"); }catch(e){} return false; });
+      }
+      perfil = r.data;
+      try{ localStorage.setItem("erp_perfil", JSON.stringify(perfil)); }catch(e){}
+      arrancarApp();
+      return true;
+    });
+  }
+
+  function salir(){
+    sb.auth.signOut().then(function(){
+      try{ localStorage.removeItem("erp_perfil"); }catch(e){}
+      var lim = (window.caches && caches.keys) ? caches.keys().then(function(ks){ return Promise.all(ks.filter(function(k){ return k.indexOf("erp-datos") === 0; }).map(function(k){ return caches.delete(k); })); }) : Promise.resolve();
+      lim.then(function(){ location.hash = ""; location.reload(); });
+    });
+  }
+  $("bSalir").addEventListener("click", salir);
+
+  /* ================= permisos ================= */
+  function nivel(m){ return (perfil && perfil.permisos && perfil.permisos[m]) || "oculto"; }
+  function ve(m){ return nivel(m) !== "oculto"; }
+  function esAdmin(){ return perfil && perfil.rol === "admin"; }
 
   var TABS = [
-    { id:"inicio", t:"Inicio" },
-    { id:"preventivos", t:"Preventivos", src:"preventivos.html" },
-    { id:"correctivos", t:"Correctivos", src:"carga-mecanicos.html" },
-    { id:"hojalateria", t:"Hojalatería y Pintura", src:"hojalateria.html" },
-    { id:"piso", t:"Unidades en piso", src:"unidades-piso.html" },
-    { id:"varios", t:"Varios", lock:VARIOS_BLOQUEADO },
-    { id:"historial", t:"Histórico y respaldo", src:"historial.html" },
-    { id:"ajustes", t:"Ajustes" }
+    { id:"inicio", t:"Inicio", visible:function(){ return true; } },
+    { id:"preventivos", t:"Preventivos", src:"preventivos.html", visible:function(){ return ve("preventivos") || ve("cronograma_preventivos"); } },
+    { id:"correctivos", t:"Correctivos", src:"carga-mecanicos.html", visible:function(){ return ve("correctivos"); } },
+    { id:"hojalateria", t:"Hojalatería y Pintura", src:"hojalateria.html", visible:function(){ return ve("hojalateria"); } },
+    { id:"piso", t:"Unidades en piso", src:"unidades-piso.html", visible:function(){ return ve("piso"); } },
+    { id:"varios", t:"Varios", lock:VARIOS_BLOQUEADO, visible:function(){ return ["combustible","llantas","catalogo_refacciones","catalogo_unidades","horas_extras"].some(ve); } },
+    { id:"historial", t:"Histórico y respaldo", src:"historial.html", visible:function(){ return ve("historial"); } },
+    { id:"ajustes", t:"Ajustes", visible:function(){ return nivel("ajustes") === "editar"; } }
   ];
   var VARIOS_ITEMS = [
-    { t:"Combustible", src:"rendimientos.html" },
-    { t:"Control de llantas" },
-    { t:"Catálogo de refacciones", src:"index.html" },
-    { t:"Catálogo de unidades", src:"catalogo-maestro.html" },
-    { t:"Horas extras" },
-    { t:"Recursos" }
+    { t:"Combustible", src:"rendimientos.html", m:"combustible" },
+    { t:"Control de llantas", m:"llantas" },
+    { t:"Catálogo de refacciones", src:"index.html", m:"catalogo_refacciones" },
+    { t:"Catálogo de unidades", src:"catalogo-maestro.html", m:"catalogo_unidades" },
+    { t:"Horas extras", m:"horas_extras" }
   ];
 
-  var nav = document.getElementById("nav"), main = document.getElementById("main");
-  var panels = {};
+  var panels = {}, vistas = [], armada = false, obsoleto = false;
 
-  function el(tag, cls, txt){ var e=document.createElement(tag); if(cls) e.className=cls; if(txt!=null) e.textContent=txt; return e; }
+  function arrancarApp(){
+    $("acceso").hidden = true; $("app").hidden = false;
+    var rolTxt = (rolesTxt[perfil.rol] || perfil.rol);
+    $("who").textContent = "";
+    var b = el("b", "", perfil.nombre); $("who").appendChild(b); $("who").appendChild(document.createTextNode(rolTxt));
+    if(!armada){
+      armada = true;
+      TABS.forEach(function(tab){
+        var btn = el("button", "", tab.t); btn.dataset.id = tab.id;
+        if(tab.lock) btn.appendChild(el("span", "", "🔒"));
+        btn.addEventListener("click", function(){ location.hash = tab.id; });
+        $("nav").appendChild(btn);
+        var p = el("section", "panel"); p.hidden = true; p.id = "p-" + tab.id;
+        $("main").appendChild(p);
+        panels[tab.id] = { tab:tab, node:p, btn:btn, loaded:false, stale:false };
+      });
+      window.addEventListener("hashchange", function(){ mostrar(location.hash.slice(1)); });
+    }
+    TABS.forEach(function(t){ panels[t.id].btn.hidden = !t.visible(); });
+    // limpiar contenido de una sesión anterior
+    TABS.forEach(function(t){ var P = panels[t.id]; P.node.textContent = ""; P.loaded = false; });
+    mostrar(location.hash.slice(1) || "inicio");
+  }
 
+  function mostrar(id){
+    if(!panels[id] || !panels[id].tab.visible()) id = "inicio";
+    TABS.forEach(function(t){ panels[t.id].node.hidden = (t.id !== id); });
+    TABS.forEach(function(t){ panels[t.id].btn.classList.toggle("on", t.id === id); });
+    var P = panels[id];
+    if(P.loaded && P.stale && P.tab.src){ P.node.textContent = ""; P.loaded = false; }
+    if(!P.loaded){
+      P.loaded = true; P.stale = false;
+      if(P.tab.src){
+        var f = document.createElement("iframe"); f.title = P.tab.t; f.src = P.tab.src; P.node.appendChild(f);
+      } else if(id === "inicio") buildInicio(P.node);
+      else if(id === "varios") buildVarios(P.node);
+      else if(id === "ajustes") buildAjustes(P.node);
+    }
+  }
+  function marcarObsoletos(){ TABS.forEach(function(t){ if(t.src) panels[t.id].stale = true; }); panels.inicio.stale = false; }
+
+  /* ================= Inicio ================= */
   function api(path, extra){
-    var h = { apikey:SB_KEY, Authorization:"Bearer "+SB_KEY };
-    if(extra) for(var k in extra) h[k]=extra[k];
-    return fetch(SB_URL+"/rest/v1/"+path, { headers:h }).then(function(r){
-      if(!r.ok) throw new Error(path+" → "+r.status);
+    return fetch(SB_URL + "/rest/v1/" + path, { headers: ERP.headers(extra) }).then(function(r){
+      if(!r.ok) throw new Error(path + " → " + r.status);
       return r;
     });
   }
   function json(path){ return api(path).then(function(r){ return r.json(); }); }
   function count(path){
     return api(path, { Prefer:"count=exact", Range:"0-0" }).then(function(r){
-      var cr = r.headers.get("content-range") || "";
-      var n = parseInt(cr.split("/")[1], 10);
+      var n = parseInt((r.headers.get("content-range") || "").split("/")[1], 10);
       return isNaN(n) ? 0 : n;
     });
   }
-  function fmtFecha(iso){
-    try{ return new Date(iso).toLocaleString("es-MX", { day:"2-digit", month:"short", year:"numeric", hour:"2-digit", minute:"2-digit" }); }
-    catch(e){ return iso || "—"; }
-  }
-
-  /* ---------- navegación ---------- */
-  TABS.forEach(function(tab){
-    var b = el("button", "", tab.t);
-    b.dataset.id = tab.id;
-    if(tab.lock){ var l = el("span","lock","🔒"); b.appendChild(l); }
-    b.addEventListener("click", function(){ location.hash = tab.id; });
-    nav.appendChild(b);
-    var p = el("section","panel"); p.hidden = true; p.id = "p-"+tab.id;
-    main.appendChild(p);
-    panels[tab.id] = { tab:tab, node:p, loaded:false };
-  });
-
-  function show(id){
-    if(!panels[id]) id = "inicio";
-    TABS.forEach(function(t){ panels[t.id].node.hidden = (t.id !== id); });
-    Array.prototype.forEach.call(nav.children, function(b){ b.classList.toggle("on", b.dataset.id === id); });
-    var P = panels[id];
-    if(!P.loaded){
-      P.loaded = true;
-      if(P.tab.src){
-        var f = document.createElement("iframe");
-        f.title = P.tab.t; f.src = P.tab.src;
-        P.node.appendChild(f);
-      } else if(id === "inicio") buildInicio(P.node);
-      else if(id === "varios") buildVarios(P.node);
-      else if(id === "ajustes") buildAjustes(P.node);
-    }
-  }
-  window.addEventListener("hashchange", function(){ show(location.hash.slice(1)); });
-
-  /* ---------- Inicio ---------- */
   function kpi(label, value, sub, goto){
-    var b = el("button","kpi");
-    b.appendChild(el("span","l",label));
-    var v = el("span","v",value); b.appendChild(v);
-    b.appendChild(el("span","s",sub));
+    var b = el("button", "kpi"); b.appendChild(el("span", "l", label));
+    var v = el("span", "v", value); b.appendChild(v);
+    var s = el("span", "s", sub); b.appendChild(s);
     b.addEventListener("click", function(){ location.hash = goto; });
-    return { node:b, set:function(val, s){ v.textContent = val; if(s!=null) b.lastChild.textContent = s; } };
+    b.hidden = !panels[goto] || !panels[goto].tab.visible();
+    return { node:b, set:function(val, sub2){ v.textContent = val; if(sub2 != null) s.textContent = sub2; } };
   }
 
   function buildInicio(root){
-    var w = el("div","wrap"); root.appendChild(w);
-    var hero = el("div","hero");
-    hero.appendChild(el("h2","","Resumen de la zona"));
-    hero.appendChild(el("p","","Datos en vivo desde la base del ERP. Toca un indicador para abrir su módulo."));
+    var w = el("div", "wrap"); root.appendChild(w);
+    var hero = el("div", "hero");
+    hero.appendChild(el("h2", "", "Hola, " + perfil.nombre.split(" ")[0]));
+    hero.appendChild(el("p", "", "Resumen de la zona con datos en vivo. Toca un indicador para abrir su módulo."));
     w.appendChild(hero);
+    var row = el("div", "kpi-row"); w.appendChild(row);
+    var kP = kpi("Cumplimiento preventivos", "…", "Último mes cargado", "preventivos");
+    var kH = kpi("Avance hojalatería", "…", "Cronograma vigente", "hojalateria");
+    var kS = kpi("Unidades en piso", "…", "Corte vigente", "piso");
+    var kU = kpi("Unidades activas", "…", "Catálogo maestro", "varios");
+    [kP, kH, kS, kU].forEach(function(k){ row.appendChild(k.node); });
+    var estado = el("span", "pill", "Conectando…");
+    function fail(e){ console.error(e); estado.textContent = "Sin conexión a datos"; estado.className = "pill warn"; }
 
-    var row = el("div","kpi-row"); w.appendChild(row);
-    var kU = kpi("Unidades activas","…","Catálogo maestro","varios");
-    var kP = kpi("Cumplimiento preventivos","…","Último mes cargado","preventivos");
-    var kH = kpi("Avance hojalatería","…","Cronograma vigente","hojalateria");
-    var kS = kpi("Unidades en piso","…","Estado vigente","piso");
-    var kD = kpi("Disponibilidad de flota","…","Activas menos en piso","piso");
-    [kU,kP,kH,kS,kD].forEach(function(k){ row.appendChild(k.node); });
-    kU.node.addEventListener("click", function(){ location.hash = VARIOS_BLOQUEADO ? "inicio" : "varios"; });
-
-    var g = el("div","grid2"); w.appendChild(g);
-    var cH = el("div","card"); cH.appendChild(el("h3","","Histórico y respaldo"));
-    var pH = el("p","","Cargando estado del histórico…"); cH.appendChild(pH);
-    var go = el("button","icon-btn","Abrir histórico y respaldo"); go.addEventListener("click", function(){ location.hash="historial"; });
-    cH.appendChild(go); g.appendChild(cH);
-    var cV = el("div","card locked"); cV.appendChild(el("h3","","Varios"));
-    cV.appendChild(el("p","","En afinación; se libera al concluir los ajustes de la semana."));
-    var pill = el("span","pill warn","Bloqueado"); cV.appendChild(pill);
-    g.appendChild(cV);
-
-    var estado = document.getElementById("estado");
-    var fallos = 0;
-    function fail(e){ fallos++; console.error(e); estado.textContent = "Sin conexión a datos"; estado.className = "pill warn"; }
-
-    count("catalogo_unidades?activo=eq.true&select=economico").then(function(n){
-      kU.set(String(n)); return count("unidades_piso?select=economico");
-    }).then(function(piso){
-      kS.set(String(piso));
-      var act = parseInt(kU.node.querySelector(".v").textContent,10) || 0;
-      kD.set(act ? (Math.round((1-piso/act)*1000)/10)+"%" : "—");
-    }).catch(fail);
-
+    if(!kU.node.hidden || true){
+      count("catalogo_unidades?activo=eq.true&select=economico").then(function(n){ kU.set(String(n)); }).catch(fail);
+    }
     json("preventivos_cargas?select=periodo&order=periodo.desc&limit=1").then(function(r){
-      if(!r.length) return kP.set("—","Sin cargas");
+      if(!r.length) return kP.set("—", "Sin cargas");
       var per = r[0].periodo;
-      return json("preventivos_programa?select=estatus&periodo=eq."+per+"&limit=2000").then(function(rows){
-        var ins = rows.filter(function(x){return x.estatus==="inhabilitado";}).length;
-        var rea = rows.filter(function(x){return x.estatus==="realizado";}).length;
+      return json("preventivos_programa?select=estatus&periodo=eq." + per + "&limit=2000").then(function(rows){
+        var ins = rows.filter(function(x){ return x.estatus === "inhabilitado"; }).length;
+        var rea = rows.filter(function(x){ return x.estatus === "realizado"; }).length;
         var den = rows.length - ins;
-        kP.set(den ? (Math.round(rea/den*1000)/10)+"%" : "—", per.slice(0,7)+" · "+rea+" de "+den);
+        kP.set(den ? (Math.round(rea / den * 1000) / 10) + "%" : "—", per.slice(0,7) + " · " + rea + " de " + den);
       });
     }).catch(fail);
-
     json("hojalateria_cronograma?select=estatus&limit=1000").then(function(rows){
-      var rea = rows.filter(function(x){return (x.estatus||"").toUpperCase()==="REALIZADO";}).length;
-      kH.set(rows.length ? (Math.round(rea/rows.length*1000)/10)+"%" : "—", rea+" de "+rows.length+" unidades");
+      var rea = rows.filter(function(x){ return (x.estatus || "").toUpperCase() === "REALIZADO"; }).length;
+      kH.set(rows.length ? (Math.round(rea / rows.length * 1000) / 10) + "%" : "—", rea + " de " + rows.length + " unidades");
     }).catch(fail);
+    json("unidades_piso_datos?select=corte,datos&id=eq.1").then(function(r){
+      if(!r.length){ kS.set("—", "Sin corte cargado"); return; }
+      var us = (r[0].datos && r[0].datos.units) || [];
+      kS.set(String(us.length), "Corte " + r[0].corte);
+    }).catch(function(){ kS.set("—", "Sin corte cargado"); });
 
-    Promise.all([
-      json("snapshots?select=tomado_at&order=tomado_at.desc&limit=1"),
-      json("historial_cambios?select=cambiado_at&order=cambiado_at.desc&limit=1"),
-      count("historial_cambios?select=id")
-    ]).then(function(r){
-      var s = r[0][0], c = r[1][0];
-      pH.textContent = "Última foto semanal: " + (s ? fmtFecha(s.tomado_at) : "aún ninguna") +
-        ". Último cambio registrado: " + (c ? fmtFecha(c.cambiado_at) : "ninguno") +
-        ". Cambios guardados: " + r[2] + ".";
-      if(!fallos){ estado.textContent = "En línea"; estado.className = "pill"; }
-    }).catch(fail);
+    var g = el("div", "grid2"); w.appendChild(g);
+    var cH = el("div", "card"); cH.appendChild(el("h3", "", "Histórico y respaldo"));
+    var pH = el("p", "", "Cargando…"); cH.appendChild(pH);
+    if(ve("historial")){
+      var go = el("button", "btn ghost", "Abrir histórico y respaldo"); go.style.alignSelf = "flex-start";
+      go.addEventListener("click", function(){ location.hash = "historial"; }); cH.appendChild(go);
+      g.appendChild(cH);
+      Promise.all([ json("snapshots?select=tomado_at&order=tomado_at.desc&limit=1"), json("historial_cambios?select=cambiado_at&order=cambiado_at.desc&limit=1"), count("historial_cambios?select=id") ]).then(function(r){
+        pH.textContent = "Última foto semanal: " + (r[0][0] ? fmtFecha(r[0][0].tomado_at) : "aún ninguna") + ". Último cambio registrado: " + (r[1][0] ? fmtFecha(r[1][0].cambiado_at) : "ninguno") + ". Cambios guardados: " + r[2] + ".";
+        if(estado.textContent === "Conectando…"){ estado.textContent = "En línea"; }
+      }).catch(fail);
+    }
+    var cV = el("div", "card locked"); cV.appendChild(el("h3", "", "Varios"));
+    cV.appendChild(el("p", "", "En afinación; se libera al concluir los ajustes de la semana."));
+    cV.appendChild(el("span", "pill warn", "Bloqueado")); g.appendChild(cV);
   }
 
-  /* ---------- Varios (bloqueado) ---------- */
+  /* ================= Varios ================= */
   function buildVarios(root){
-    var w = el("div","wrap"); root.appendChild(w);
-    var hero = el("div","hero");
-    hero.appendChild(el("h2","","Varios"));
-    hero.appendChild(el("p","", VARIOS_BLOQUEADO
-      ? "Esta sección está bloqueada mientras se afinan los detalles. Se libera al concluir la semana."
-      : "Herramientas complementarias."));
+    var w = el("div", "wrap"); root.appendChild(w);
+    var hero = el("div", "hero");
+    hero.appendChild(el("h2", "", "Varios"));
+    hero.appendChild(el("p", "", VARIOS_BLOQUEADO ? "Esta sección está bloqueada mientras se afinan los detalles. Se libera al concluir la semana." + (esAdmin() ? " Como administrador puedes abrir las herramientas que ya existen." : "") : "Herramientas complementarias."));
     w.appendChild(hero);
-    var c = el("div","card locked");
-    c.appendChild(el("h3","","Contenido de la sección"));
-    var s = el("div","sub");
+    var c = el("div", "card" + (VARIOS_BLOQUEADO ? " locked" : "")); c.appendChild(el("h3", "", "Contenido de la sección"));
+    var s = el("div", "sub-items");
     VARIOS_ITEMS.forEach(function(it){
-      if(VARIOS_BLOQUEADO || !it.src){ s.appendChild(el("span","",it.t + (it.src ? "" : " · pendiente"))); }
-      else { var a = el("a","",it.t); a.href = it.src; a.target = "_blank"; a.style.cssText="font-size:12.5px;border:1px solid var(--border);border-radius:10px;padding:6px 10px;color:var(--accent);text-decoration:none;"; s.appendChild(a); }
+      if(!ve(it.m)) return;
+      var abre = it.src && (!VARIOS_BLOQUEADO || esAdmin());
+      if(abre){ var a = el("a", "", it.t); a.href = it.src; a.target = "_blank"; a.rel = "noopener"; s.appendChild(a); }
+      else s.appendChild(el("span", "", it.t + (it.src ? "" : " · pendiente")));
     });
-    c.appendChild(s);
-    w.appendChild(c);
+    c.appendChild(s); w.appendChild(c);
   }
 
-  /* ---------- Ajustes ---------- */
-  function buildAjustes(root){
-    var w = el("div","wrap"); root.appendChild(w);
-    var hero = el("div","hero");
-    hero.appendChild(el("h2","","Ajustes del ERP"));
-    hero.appendChild(el("p","","Usuarios, roles y permisos por pestaña."));
-    w.appendChild(hero);
-    var c = el("div","card");
-    c.appendChild(el("h3","","Estado de permisos"));
-    c.appendChild(el("p","","Hoy el control de acceso depende de la contraseña de cada herramienta; la base permite escritura pública en varias tablas. Los permisos reales por rol (Andrés, Beatriz, jefes de zona, gerencia) quedan para la fase con Supabase Auth."));
-    c.appendChild(el("span","pill warn","Pendiente: Supabase Auth"));
-    w.appendChild(c);
+  /* ================= Mi cuenta ================= */
+  function dialogo(contenido){
+    var d = el("div", "dlg"); var box = el("div", "box"); d.appendChild(box); contenido(box, function(){ d.remove(); });
+    d.addEventListener("click", function(e){ if(e.target === d) d.remove(); });
+    document.body.appendChild(d); return d;
   }
-
-  /* ---------- tema ---------- */
-  document.getElementById("tema").addEventListener("click", function(){
-    var r = document.documentElement;
-    var dark = r.dataset.theme ? r.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
-    r.dataset.theme = dark ? "light" : "dark";
-    Array.prototype.forEach.call(document.querySelectorAll("iframe"), function(f){
-      try{ f.contentDocument.documentElement.dataset.theme = r.dataset.theme; }catch(e){}
+  $("bCuenta").addEventListener("click", function(){
+    dialogo(function(box, cerrar){
+      box.appendChild(el("h3", "", "Mi cuenta"));
+      box.appendChild(el("p", "msg", perfil.nombre + " · usuario " + perfil.usuario));
+      var f = el("div", "f"); f.appendChild(el("label", "", "Nueva contraseña (mínimo 8 caracteres)"));
+      var i = el("input"); i.type = "password"; i.autocomplete = "new-password"; f.appendChild(i); box.appendChild(f);
+      var m = el("p", "msg"); box.appendChild(m);
+      var row = el("div", "row"); var c = el("button", "btn ghost", "Cerrar"); var g = el("button", "btn", "Cambiar contraseña");
+      c.addEventListener("click", cerrar);
+      g.addEventListener("click", function(){
+        if(i.value.length < 8){ m.className = "msg err"; m.textContent = "Mínimo 8 caracteres."; return; }
+        g.disabled = true;
+        sb.auth.updateUser({ password:i.value }).then(function(r){
+          g.disabled = false;
+          if(r.error){ m.className = "msg err"; m.textContent = r.error.message; }
+          else { m.className = "msg ok"; m.textContent = "Contraseña actualizada."; i.value = ""; }
+        });
+      });
+      row.appendChild(c); row.appendChild(g); box.appendChild(row);
     });
   });
 
-  show(location.hash.slice(1) || "inicio");
+  /* ================= Ajustes (solo administrador) ================= */
+  var rolesTxt = {}, rolesLista = [], modulosLista = [];
+
+  function cargarCatalogos(){
+    return Promise.all([ json("roles?select=*&order=orden"), json("modulos?select=*&order=orden") ]).then(function(r){
+      rolesLista = r[0]; modulosLista = r[1];
+      rolesTxt = {}; rolesLista.forEach(function(x){ rolesTxt[x.rol] = x.descripcion; });
+    });
+  }
+
+  function buildAjustes(root){
+    var w = el("div", "wrap"); root.appendChild(w);
+    var hero = el("div", "hero");
+    hero.appendChild(el("h2", "", "Panel de control"));
+    hero.appendChild(el("p", "", "Aquí das de alta a los usuarios, decides qué puede hacer cada rol en cada pestaña y subes los Excel de actualización. Solo tú ves esta sección."));
+    w.appendChild(hero);
+    var tabs = el("div", "stabs"); w.appendChild(tabs);
+    var cuerpo = el("div"); cuerpo.style.cssText = "display:flex;flex-direction:column;gap:14px"; w.appendChild(cuerpo);
+    var secs = [ ["usuarios", "Usuarios", ajUsuarios], ["permisos", "Permisos por pestaña", ajPermisos], ["cargas", "Cargas de Excel", ajCargas] ];
+    function ir(id){
+      Array.prototype.forEach.call(tabs.children, function(b){ b.classList.toggle("on", b.dataset.id === id); });
+      cuerpo.textContent = "";
+      secs.filter(function(s){ return s[0] === id; })[0][2](cuerpo);
+    }
+    secs.forEach(function(s){ var b = el("button", "", s[1]); b.dataset.id = s[0]; b.addEventListener("click", function(){ ir(s[0]); }); tabs.appendChild(b); });
+    cargarCatalogos().then(function(){ ir("usuarios"); }).catch(function(e){ cuerpo.appendChild(el("p", "msg err", "No se pudo leer roles y módulos: " + e.message)); });
+  }
+
+  /* ---- Usuarios ---- */
+  function ajUsuarios(root){
+    var top = el("div"); top.style.cssText = "display:flex;gap:10px;align-items:center;flex-wrap:wrap";
+    var nuevo = el("button", "btn", "Nuevo usuario"); var msg = el("span", "msg"); top.appendChild(nuevo); top.appendChild(msg); root.appendChild(top);
+    var tw = el("div", "tbl"); var t = el("table"); tw.appendChild(t); root.appendChild(tw);
+    root.appendChild(el("p", "msg", "El alcance por CEDIS se guarda con cada usuario; por ahora los permisos se aplican por pestaña (no por CEDIS)."));
+
+    function pintar(us){
+      t.textContent = "";
+      var th = el("thead"), hr = el("tr");
+      ["Usuario","Nombre","Rol","Alcance","Estado","Último acceso",""].forEach(function(h){ hr.appendChild(el("th", "", h)); });
+      th.appendChild(hr); t.appendChild(th);
+      var tb = el("tbody");
+      us.forEach(function(u){
+        var tr = el("tr");
+        tr.appendChild(el("td", "", u.usuario)); tr.appendChild(el("td", "", u.nombre)); tr.appendChild(el("td", "", rolesTxt[u.rol] || u.rol));
+        tr.appendChild(el("td", "", (u.cedis && u.cedis.length) ? u.cedis.join(", ") : "Todos"));
+        var st = el("td"); st.appendChild(el("span", "pill" + (u.activo ? "" : " bad"), u.activo ? "Activo" : "Inactivo")); tr.appendChild(st);
+        tr.appendChild(el("td", "", u.ultimo_acceso ? fmtFecha(u.ultimo_acceso) : "Nunca"));
+        var ac = el("td", "acts");
+        var e = el("button", "btn ghost sm", "Editar"); e.addEventListener("click", function(){ formUsuario(u); });
+        var p = el("button", "btn ghost sm", "Contraseña"); p.addEventListener("click", function(){ formPassword(u); });
+        ac.appendChild(e); ac.appendChild(p); tr.appendChild(ac); tb.appendChild(tr);
+      });
+      t.appendChild(tb);
+    }
+    function recargar(){
+      msg.className = "msg"; msg.textContent = "Cargando…";
+      llamarFn({ accion:"listar" }).then(function(r){
+        if(r.error){ msg.className = "msg err"; msg.textContent = r.error; return; }
+        msg.textContent = r.usuarios.length + " usuario(s)."; pintar(r.usuarios);
+      }).catch(function(e){ msg.className = "msg err"; msg.textContent = "Sin conexión: " + e.message; });
+    }
+
+    function opcionesRol(sel, valor){
+      rolesLista.forEach(function(r){ var o = el("option", "", r.descripcion); o.value = r.rol; if(r.rol === valor) o.selected = true; sel.appendChild(o); });
+    }
+    function checksCedis(valor){
+      var wrap = el("div", "checks");
+      CEDIS.forEach(function(c){
+        var l = el("label"); var i = el("input"); i.type = "checkbox"; i.value = c; i.checked = (valor || []).indexOf(c) >= 0;
+        l.appendChild(i); l.appendChild(document.createTextNode(c)); wrap.appendChild(l);
+      });
+      return wrap;
+    }
+    function leerCedis(wrap){ return Array.prototype.filter.call(wrap.querySelectorAll("input"), function(i){ return i.checked; }).map(function(i){ return i.value; }); }
+
+    function formUsuario(u){
+      dialogo(function(box, cerrar){
+        box.appendChild(el("h3", "", u ? "Editar usuario" : "Nuevo usuario"));
+        var fu = el("div", "f"); fu.appendChild(el("label", "", "Usuario (para entrar)")); var iu = el("input"); iu.autocapitalize = "none"; iu.value = u ? u.usuario : ""; iu.disabled = !!u; iu.placeholder = "ej. dsoler"; fu.appendChild(iu); box.appendChild(fu);
+        var fn = el("div", "f"); fn.appendChild(el("label", "", "Nombre completo")); var inn = el("input"); inn.value = u ? u.nombre : ""; fn.appendChild(inn); box.appendChild(fn);
+        var fr = el("div", "f"); fr.appendChild(el("label", "", "Rol")); var sr = el("select"); opcionesRol(sr, u ? u.rol : "mecanico"); fr.appendChild(sr); box.appendChild(fr);
+        var fc = el("div", "f"); fc.appendChild(el("label", "", "Alcance por CEDIS (sin marcar = todos)")); var cc = checksCedis(u ? u.cedis : []); fc.appendChild(cc); box.appendChild(fc);
+        var ip = null, fp = null;
+        if(!u){
+          fp = el("div", "f"); fp.appendChild(el("label", "", "Contraseña inicial (mínimo 8 caracteres)")); ip = el("input"); ip.value = claveAleatoria(); fp.appendChild(ip);
+          var gen = el("button", "btn ghost sm", "Generar otra"); gen.type = "button"; gen.style.marginTop = "6px"; gen.addEventListener("click", function(){ ip.value = claveAleatoria(); }); fp.appendChild(gen);
+          box.appendChild(fp);
+        }
+        var ia = null;
+        if(u){
+          var fa = el("div", "checks"); var la = el("label"); ia = el("input"); ia.type = "checkbox"; ia.checked = u.activo; la.appendChild(ia); la.appendChild(document.createTextNode("Usuario activo")); fa.appendChild(la); box.appendChild(fa);
+        }
+        var m = el("p", "msg"); box.appendChild(m);
+        var row = el("div", "row"); var c = el("button", "btn ghost", "Cancelar"); var g = el("button", "btn", u ? "Guardar" : "Crear usuario");
+        c.addEventListener("click", cerrar);
+        g.addEventListener("click", function(){
+          g.disabled = true; m.className = "msg"; m.textContent = "Guardando…";
+          var cuerpo = u
+            ? { accion:"actualizar", usuario:u.usuario, nombre:inn.value, rol:sr.value, cedis:leerCedis(cc), activo:ia.checked }
+            : { accion:"crear_usuario", usuario:iu.value, nombre:inn.value, rol:sr.value, cedis:leerCedis(cc), password:ip.value };
+          llamarFn(cuerpo).then(function(r){
+            g.disabled = false;
+            if(r.error){ m.className = "msg err"; m.textContent = r.error; return; }
+            if(!u){
+              box.textContent = "";
+              box.appendChild(el("h3", "", "Usuario creado"));
+              box.appendChild(el("p", "msg", "Entrégale estos datos. Puede cambiar su contraseña en “Mi cuenta”."));
+              box.appendChild(el("div", "code", "Usuario: " + norm(iu.value) + "\nContraseña: " + ip.value)).style.whiteSpace = "pre-wrap";
+              var r2 = el("div", "row"); var ok = el("button", "btn", "Listo"); ok.addEventListener("click", function(){ cerrar(); recargar(); }); r2.appendChild(ok); box.appendChild(r2);
+            } else { cerrar(); recargar(); }
+          });
+        });
+        row.appendChild(c); row.appendChild(g);
+        if(u){
+          var del = el("button", "btn danger", "Eliminar"); del.addEventListener("click", function(){
+            if(!confirm("¿Eliminar a " + u.nombre + "? Esta acción no se puede deshacer. Si solo quieres quitarle el acceso, desactívalo.")) return;
+            llamarFn({ accion:"eliminar", usuario:u.usuario }).then(function(r){ if(r.error){ m.className = "msg err"; m.textContent = r.error; } else { cerrar(); recargar(); } });
+          });
+          row.insertBefore(del, row.firstChild);
+        }
+        box.appendChild(row);
+      });
+    }
+    function formPassword(u){
+      dialogo(function(box, cerrar){
+        box.appendChild(el("h3", "", "Nueva contraseña para " + u.nombre));
+        var f = el("div", "f"); f.appendChild(el("label", "", "Contraseña (mínimo 8 caracteres)")); var i = el("input"); i.value = claveAleatoria(); f.appendChild(i); box.appendChild(f);
+        var m = el("p", "msg"); box.appendChild(m);
+        var row = el("div", "row"); var c = el("button", "btn ghost", "Cancelar"); var g = el("button", "btn", "Cambiar");
+        c.addEventListener("click", cerrar);
+        g.addEventListener("click", function(){
+          g.disabled = true;
+          llamarFn({ accion:"cambiar_password", usuario:u.usuario, password:i.value }).then(function(r){
+            g.disabled = false;
+            if(r.error){ m.className = "msg err"; m.textContent = r.error; }
+            else { m.className = "msg ok"; m.textContent = "Listo. Entrégale la nueva contraseña: " + i.value; }
+          });
+        });
+        row.appendChild(c); row.appendChild(g); box.appendChild(row);
+      });
+    }
+    nuevo.addEventListener("click", function(){ formUsuario(null); });
+    recargar();
+  }
+
+  /* ---- Permisos ---- */
+  function ajPermisos(root){
+    var card = el("div", "card"); root.appendChild(card);
+    card.appendChild(el("h3", "", "Qué puede hacer cada rol en cada pestaña"));
+    card.appendChild(el("p", "", "Editar: puede subir o cambiar información. Ver: solo consulta. Oculto: no ve la pestaña. El administrador siempre puede editar todo."));
+    var m = el("p", "msg"); var guardar = el("button", "btn", "Guardar cambios"); guardar.disabled = true; guardar.style.alignSelf = "flex-start";
+    var tw = el("div", "tbl mat"); var t = el("table"); tw.appendChild(t);
+    card.appendChild(tw); card.appendChild(guardar); card.appendChild(m);
+    var original = {}, cambios = {};
+    json("permisos?select=*&limit=1000").then(function(rows){
+      rows.forEach(function(r){ original[r.rol + "|" + r.modulo] = r.nivel; });
+      var th = el("thead"), hr = el("tr"); hr.appendChild(el("th", "", "Pestaña"));
+      rolesLista.forEach(function(r){ hr.appendChild(el("th", "", r.descripcion)); });
+      th.appendChild(hr); t.appendChild(th);
+      var tb = el("tbody"), grupo = null;
+      modulosLista.forEach(function(mo){
+        if(mo.grupo !== grupo){ grupo = mo.grupo; var gr = el("tr", "grp"); var gtd = el("td", "", grupo); gtd.colSpan = rolesLista.length + 1; gr.appendChild(gtd); tb.appendChild(gr); }
+        var tr = el("tr"); tr.appendChild(el("td", "mod", mo.etiqueta));
+        rolesLista.forEach(function(r){
+          var td = el("td"); var k = r.rol + "|" + mo.modulo;
+          var s = el("select"); [["editar","Editar"],["ver","Ver"],["oculto","Oculto"]].forEach(function(o){ var op = el("option", "", o[1]); op.value = o[0]; s.appendChild(op); });
+          s.value = original[k] || "oculto";
+          if(r.rol === "admin"){ s.value = "editar"; s.disabled = true; }
+          s.addEventListener("change", function(){
+            if(s.value === original[k]){ delete cambios[k]; s.classList.remove("ch"); } else { cambios[k] = s.value; s.classList.add("ch"); }
+            var n = Object.keys(cambios).length; guardar.disabled = !n; m.className = "msg"; m.textContent = n ? n + " cambio(s) sin guardar." : "";
+          });
+          td.appendChild(s); tr.appendChild(td);
+        });
+        tb.appendChild(tr);
+      });
+      t.appendChild(tb);
+    }).catch(function(e){ m.className = "msg err"; m.textContent = "No se pudo leer la matriz: " + e.message; });
+    guardar.addEventListener("click", function(){
+      var filas = Object.keys(cambios).map(function(k){ var p = k.split("|"); return { rol:p[0], modulo:p[1], nivel:cambios[k] }; });
+      guardar.disabled = true; m.className = "msg"; m.textContent = "Guardando…";
+      ERP.rest("permisos?on_conflict=rol,modulo", { method:"POST", body:filas, prefer:"resolution=merge-duplicates,return=minimal" }).then(function(){
+        filas.forEach(function(f){ original[f.rol + "|" + f.modulo] = f.nivel; });
+        cambios = {}; Array.prototype.forEach.call(t.querySelectorAll("select.ch"), function(s){ s.classList.remove("ch"); });
+        m.className = "msg ok"; m.textContent = "Permisos guardados. Cada persona los verá la próxima vez que entre.";
+      }).catch(function(e){ guardar.disabled = false; m.className = "msg err"; m.textContent = "No se pudo guardar: " + e.message; });
+    });
+  }
+
+  /* ---- Cargas de Excel ---- */
+  function ajCargas(root){
+    marcarObsoletos();
+    var intro = el("div", "card");
+    intro.appendChild(el("h3", "", "Cargas de Excel"));
+    intro.appendChild(el("p", "", "Aquí subes los archivos con las modificaciones; las pestañas finales solo muestran la información ya limpia. Elige qué actualizar."));
+    root.appendChild(intro);
+    var grid = el("div", "cargas"); root.appendChild(grid);
+    var visor = el("div"); root.appendChild(visor);
+
+    function abrirFrame(src, titulo){
+      visor.textContent = "";
+      var h = el("h3", "", titulo); h.style.margin = "6px 0 8px"; visor.appendChild(h);
+      var fr = el("div", "carga-frame"); var f = document.createElement("iframe"); f.src = src; f.title = titulo; fr.appendChild(f); visor.appendChild(fr);
+      visor.scrollIntoView({ behavior:"smooth", block:"start" });
+    }
+    function tarjeta(titulo, desc, boton, accion, pendiente){
+      var c = el("div", "card"); c.appendChild(el("h3", "", titulo)); c.appendChild(el("p", "", desc));
+      if(pendiente){ c.appendChild(el("span", "pill warn", pendiente)); }
+      if(boton){ var b = el("button", "btn", boton); b.style.alignSelf = "flex-start"; b.addEventListener("click", accion); c.appendChild(b); }
+      grid.appendChild(c); return c;
+    }
+    tarjeta("Catálogo de unidades", "Excel mensual del catálogo (pestaña Morelos): altas, bajas y cambios.", "Subir archivo", function(){ abrirFrame("catalogo-maestro.html?modo=carga", "Catálogo de unidades"); });
+    tarjeta("Hojalatería y Pintura", "Archivo mensual con CRONOGRAMA, Remo y Remomov.", "Subir archivo", function(){ abrirFrame("hojalateria.html?modo=carga", "Hojalatería y Pintura"); });
+
+    var cpiso = tarjeta("Unidades en piso", "Corte ya procesado de unidades en piso (archivo .json). Reemplaza el corte vigente.", null, null, null);
+    var fi = el("input"); fi.type = "file"; fi.accept = ".json,application/json"; fi.hidden = true;
+    var bp = el("button", "btn", "Subir corte (.json)"); bp.style.alignSelf = "flex-start";
+    var mp = el("p", "msg");
+    bp.addEventListener("click", function(){ fi.click(); });
+    fi.addEventListener("change", function(){
+      var f = fi.files[0]; if(!f) return;
+      mp.className = "msg"; mp.textContent = "Leyendo…";
+      var rd = new FileReader();
+      rd.onload = function(){
+        var d; try{ d = JSON.parse(rd.result); }catch(e){ mp.className = "msg err"; mp.textContent = "El archivo no es un JSON válido."; return; }
+        if(!d || !d.corte || !Array.isArray(d.units)){ mp.className = "msg err"; mp.textContent = "No parece un corte de unidades en piso (faltan corte o units)."; return; }
+        if(!confirm("Reemplazar el corte vigente por el del " + d.corte + " con " + d.units.length + " unidades?")) return;
+        mp.textContent = "Subiendo…";
+        ERP.rest("unidades_piso_datos?on_conflict=id", { method:"POST", body:[{ id:1, corte:d.corte, datos:d, actualizado_at:new Date().toISOString() }], prefer:"resolution=merge-duplicates,return=minimal" }).then(function(){
+          mp.className = "msg ok"; mp.textContent = "Listo: corte del " + d.corte + " con " + d.units.length + " unidades.";
+        }).catch(function(e){ mp.className = "msg err"; mp.textContent = "No se pudo subir: " + e.message; });
+      };
+      rd.readAsText(f); fi.value = "";
+    });
+    cpiso.appendChild(bp); cpiso.appendChild(fi); cpiso.appendChild(mp);
+
+    tarjeta("Preventivos", "Archivo mensual de avance con Ordenes y Ordmov.", null, null, "Por conectar · hoy se carga con Claude");
+    tarjeta("Stock de refacciones", "CSV de existencias de SAP.", "Abrir carga", function(){ abrirFrame("index.html", "Stock de refacciones"); });
+  }
+
+  /* ================= tema ================= */
+  $("tema").addEventListener("click", function(){
+    var r = document.documentElement;
+    var dark = r.dataset.theme ? r.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+    r.dataset.theme = dark ? "light" : "dark";
+    Array.prototype.forEach.call(document.querySelectorAll("iframe"), function(f){ try{ f.contentDocument.documentElement.dataset.theme = r.dataset.theme; }catch(e){} });
+  });
+
+  /* ================= arranque ================= */
+  cargarCatalogos().catch(function(){}).then(function(){
+    return sb.auth.getSession();
+  }).then(function(r){
+    if(r && r.data && r.data.session){
+      return iniciarSesion().then(function(ok){ if(!ok) mostrarAcceso(); });
+    }
+    mostrarAcceso();
+  }).catch(function(){ mostrarAcceso(); });
 })();
 </script>
 <script src="offline.js"></script>
