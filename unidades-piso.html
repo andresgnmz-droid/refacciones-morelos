@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Unidades en piso</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --ink:#142433; --ink-soft:#48607A; --ink-faint:#7C93A6;
+    --bg:#EEF2F5; --surface:#FFFFFF; --surface-alt:#E4EAEF; --border:#D3DCE3;
+    --accent:#0E7C86; --accent-ink:#FFFFFF; --accent-soft:#DCEEF0;
+    --shadow:0 1px 2px rgba(20,36,51,.06),0 4px 14px rgba(20,36,51,.07);
+    --good:#0b8a0b; --warn:#b07400; --bad:#d63a39; --none:#8FA1B0;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --ink:#E7EDF2; --ink-soft:#9AB0C2; --ink-faint:#7C93A6;
+      --bg:#0F1620; --surface:#182230; --surface-alt:#1F2C3C; --border:#2B3B4D;
+      --accent:#35B6C2; --accent-ink:#06232A; --accent-soft:#163238;
+      --shadow:0 1px 2px rgba(0,0,0,.3),0 4px 14px rgba(0,0,0,.35);
+      --good:#2fbf2f; --warn:#d99a1a; --bad:#e66767;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ink:#E7EDF2; --ink-soft:#9AB0C2; --ink-faint:#7C93A6;
+    --bg:#0F1620; --surface:#182230; --surface-alt:#1F2C3C; --border:#2B3B4D;
+    --accent:#35B6C2; --accent-ink:#06232A; --accent-soft:#163238;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 4px 14px rgba(0,0,0,.35);
+    --good:#2fbf2f; --warn:#d99a1a; --bad:#e66767;
+  }
+  *{box-sizing:border-box;}
+  body{background:var(--bg);color:var(--ink);font-family:'Inter',system-ui,sans-serif;margin:0;}
+  h1,h2,h3{font-family:'Barlow Semi Condensed',system-ui,sans-serif;font-weight:700;margin:0;}
+  p{margin:0;}
+  button,input,select{font-family:inherit;}
+  button{cursor:pointer;}
+  .wrap{max-width:1180px;margin:0 auto;padding:20px 16px 48px;display:flex;flex-direction:column;gap:18px;}
+  .hero h1{font-size:26px;}
+  .hero p{font-size:14px;color:var(--ink-soft);line-height:1.5;max-width:80ch;margin-top:4px;}
+  .bar{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:12px 14px;box-shadow:var(--shadow);}
+  .field{display:flex;flex-direction:column;gap:3px;}
+  .field label{font-size:10.5px;font-weight:700;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.5px;}
+  .field select,.field input{padding:8px 10px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--ink);font-size:13px;min-width:150px;}
+  .btn{border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);font-weight:600;font-size:13px;padding:9px 14px;border-radius:10px;}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;}
+  .kpi{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:4px;}
+  .kpi .l{font-size:11px;font-weight:600;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.5px;}
+  .kpi .v{font-family:'Barlow Semi Condensed',sans-serif;font-size:28px;font-weight:700;line-height:1.1;}
+  .kpi .s{font-size:12px;color:var(--ink-soft);}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px 18px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:10px;}
+  .card h3{font-size:17px;}
+  .note{font-size:12.5px;color:var(--ink-soft);line-height:1.55;}
+  .tbl{overflow:auto;border:1px solid var(--border);border-radius:14px;background:var(--surface);box-shadow:var(--shadow);}
+  table{border-collapse:collapse;width:100%;font-size:13px;}
+  th{background:var(--surface-alt);text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--ink-faint);padding:9px 12px;white-space:nowrap;}
+  td{padding:8px 12px;border-top:1px solid var(--border);vertical-align:top;}
+  .mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;}
+  .days{display:flex;align-items:center;gap:8px;min-width:150px;}
+  .days .track{flex:1;height:8px;border-radius:99px;background:var(--surface-alt);overflow:hidden;}
+  .days .fill{height:100%;border-radius:99px;}
+  .days b{font-variant-numeric:tabular-nums;min-width:34px;text-align:right;}
+  .msg{font-size:13px;color:var(--ink-soft);}
+  .msg.err{color:var(--bad);}
+  .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hero">
+    <h1>Unidades en piso</h1>
+    <p>Unidades que hoy están en taller, con su mecánico, diagnóstico, motivo, material prestado a otra unidad y los días que llevan en piso.</p>
+  </div>
+
+  <div class="bar">
+    <div class="field"><label>CEDIS</label><select id="fCedis"><option value="">Todos</option></select></div>
+    <div class="field"><label>Buscar</label><input id="fTexto" placeholder="económico, mecánico, motivo…"></div>
+    <button class="btn" id="bExcel">Exportar a Excel</button>
+    <span class="msg" id="msg">Cargando…</span>
+  </div>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="card">
+    <h3>Disponibilidad por CEDIS</h3>
+    <div class="tbl"><table><thead><tr><th>CEDIS</th><th>Unidades activas</th><th>En piso</th><th>Disponibilidad</th></tr></thead><tbody id="tbCedis"></tbody></table></div>
+  </div>
+
+  <div class="card">
+    <h3>Detalle</h3>
+    <div class="tbl"><table><thead><tr><th>Económico</th><th>CEDIS</th><th>Unidad</th><th>Mecánico</th><th>Diagnóstico</th><th>Motivo</th><th>Material prestado</th><th>Días en piso</th></tr></thead><tbody id="tbDet"></tbody></table></div>
+    <p class="note"><span class="dot" style="background:var(--good)"></span>hasta 30 días <span class="dot" style="background:var(--warn);margin-left:10px"></span>31 a 90 <span class="dot" style="background:var(--bad);margin-left:10px"></span>más de 90 <span class="dot" style="background:var(--none);margin-left:10px"></span>sin dato.<br>
+    Los días se calculan en vivo desde la última carga de combustible de la unidad (se asume que deja de cargar al entrar a taller). Método provisional: si una unidad ya cargaba poco antes de entrar, el número puede salir inflado; hay que validarlo con las unidades de más de 90 días.</p>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var SB_URL = "https://aoutudbxwawlnbwvypir.supabase.co";
+  var SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFvdXR1ZGJ4d2F3bG5id3Z5cGlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU4NzQzNTMsImV4cCI6MjEwMTQ1MDM1M30.cfdjH9rwQDYyxrrKZIAw7JpcQKYcFWtiEYXEDF8fa_E";
+  var PREFIJO = { MCV:"Cuernavaca", MCU:"Cuautla", MJO:"Jojutla", MPU:"Puente de Ixtla", MAX:"Axochiapan", MCC:"Cocoyoc" };
+  var ORDEN_CEDIS = ["Cuernavaca","Cuautla","Jojutla","Puente de Ixtla","Axochiapan","Cocoyoc"];
+  var piso = [], act = {}, filas = [];
+
+  function $(id){ return document.getElementById(id); }
+  function get(path){
+    return fetch(SB_URL+"/rest/v1/"+path, { headers:{ apikey:SB_KEY, Authorization:"Bearer "+SB_KEY } })
+      .then(function(r){ if(!r.ok) throw new Error(r.status+" "+path); return r.json(); });
+  }
+  function td(txt, cls){ var c=document.createElement("td"); if(cls) c.className=cls; c.textContent = (txt==null||txt==="") ? "—" : String(txt); return c; }
+  function cedisDe(eco, bodega){
+    if(bodega) return bodega;
+    return PREFIJO[(eco||"").slice(0,3).toUpperCase()] || "Sin CEDIS";
+  }
+  function dias(f){
+    if(!f) return null;
+    var p = f.split("-"); var d = new Date(+p[0], +p[1]-1, +p[2]);
+    var hoy = new Date(); hoy = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+    return Math.max(0, Math.round((hoy - d)/86400000));
+  }
+  function color(n){ return n==null ? "var(--none)" : n<=30 ? "var(--good)" : n<=90 ? "var(--warn)" : "var(--bad)"; }
+  function pct(a,b){ return b ? (Math.round((1-a/b)*1000)/10)+"%" : "—"; }
+
+  function kpi(l, v, s){
+    var d = document.createElement("div"); d.className="kpi";
+    [["l",l],["v",v],["s",s]].forEach(function(x){ var e=document.createElement("span"); e.className=x[0]; e.textContent=x[1]; d.appendChild(e); });
+    return d;
+  }
+
+  function pintar(){
+    var cedis = $("fCedis").value, q = $("fTexto").value.trim().toLowerCase();
+    var vis = filas.filter(function(r){
+      if(cedis && r.cedis !== cedis) return false;
+      if(!q) return true;
+      return [r.economico,r.mecanico,r.diagnostico,r.motivo,r.material,r.marca,r.destino].join(" ").toLowerCase().indexOf(q) >= 0;
+    });
+
+    var totAct = 0, totPiso = 0;
+    ORDEN_CEDIS.forEach(function(c){ if(!cedis || cedis===c){ totAct += (act[c]||0); totPiso += filas.filter(function(r){return r.cedis===c;}).length; } });
+    var conDias = vis.filter(function(r){return r.dias!=null;});
+    var prom = conDias.length ? Math.round(conDias.reduce(function(s,r){return s+r.dias;},0)/conDias.length) : null;
+    var largas = vis.filter(function(r){return r.dias!=null && r.dias>90;}).length;
+    var k = $("kpis"); k.textContent = "";
+    k.appendChild(kpi("Unidades en piso", String(vis.length), cedis || "Toda la zona"));
+    k.appendChild(kpi("Disponibilidad", pct(totPiso, totAct), totAct+" unidades activas"));
+    k.appendChild(kpi("Promedio en piso", prom==null ? "—" : prom+" días", conDias.length+" con fecha"));
+    k.appendChild(kpi("Más de 90 días", String(largas), "a revisar"));
+
+    var tc = $("tbCedis"); tc.textContent = "";
+    ORDEN_CEDIS.forEach(function(c){
+      var n = filas.filter(function(r){return r.cedis===c;}).length;
+      var tr = document.createElement("tr");
+      tr.appendChild(td(c)); tr.appendChild(td(act[c]||0)); tr.appendChild(td(n)); tr.appendChild(td(pct(n, act[c]||0)));
+      tc.appendChild(tr);
+    });
+
+    var tb = $("tbDet"); tb.textContent = "";
+    vis.sort(function(a,b){ return (b.dias==null?-1:b.dias) - (a.dias==null?-1:a.dias); });
+    vis.forEach(function(r){
+      var tr = document.createElement("tr");
+      tr.appendChild(td(r.economico,"mono")); tr.appendChild(td(r.cedis));
+      tr.appendChild(td([r.marca, r.modelo].filter(Boolean).join(" ")));
+      tr.appendChild(td(r.mecanico)); tr.appendChild(td(r.diagnostico)); tr.appendChild(td(r.motivo));
+      tr.appendChild(td(r.material ? r.material + (r.destino ? " → "+r.destino : "") : ""));
+      var c = document.createElement("td"); var w = document.createElement("div"); w.className="days";
+      var tk = document.createElement("div"); tk.className="track"; var f = document.createElement("div"); f.className="fill";
+      f.style.width = r.dias==null ? "0%" : Math.min(100, r.dias/180*100)+"%"; f.style.background = color(r.dias); tk.appendChild(f);
+      var b = document.createElement("b"); b.textContent = r.dias==null ? "—" : r.dias;
+      w.appendChild(tk); w.appendChild(b); c.appendChild(w); tr.appendChild(c);
+      tb.appendChild(tr);
+    });
+    $("msg").textContent = vis.length+" de "+filas.length+" unidades en piso.";
+  }
+
+  $("fCedis").addEventListener("change", pintar);
+  $("fTexto").addEventListener("input", pintar);
+  $("bExcel").addEventListener("click", function(){
+    var rows = filas.map(function(r){ return { Economico:r.economico, CEDIS:r.cedis, Marca:r.marca, Modelo:r.modelo, Mecanico:r.mecanico, Diagnostico:r.diagnostico, Motivo:r.motivo, "Material prestado":r.material, "Prestado a":r.destino, "Fecha ingreso a taller":r.fecha, "Dias en piso":r.dias }; });
+    var wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), "Unidades en piso");
+    XLSX.writeFile(wb, "unidades_en_piso_"+new Date().toISOString().slice(0,10)+".xlsx");
+  });
+
+  Promise.all([
+    get("unidades_piso?select=*&limit=1000"),
+    get("catalogo_unidades?select=economico,marca,modelo,bodega,activo&limit=2000")
+  ]).then(function(r){
+    var cat = {}; r[1].forEach(function(u){ cat[u.economico] = u; if(u.activo) act[u.bodega] = (act[u.bodega]||0)+1; });
+    piso = r[0];
+    filas = piso.map(function(p){
+      var u = cat[p.economico] || {};
+      return { economico:p.economico, cedis:cedisDe(p.economico, u.bodega), marca:u.marca, modelo:u.modelo, mecanico:p.mecanico, diagnostico:p.diagnostico, motivo:p.motivo, material:p.material_prestado_desc || p.material_prestado_texto, destino:p.material_prestado_a, fecha:p.fecha_ingreso_taller, dias:dias(p.fecha_ingreso_taller) };
+    });
+    ORDEN_CEDIS.forEach(function(c){ var o=document.createElement("option"); o.value=o.textContent=c; $("fCedis").appendChild(o); });
+    pintar();
+  }).catch(function(e){ $("msg").textContent = "No se pudo cargar: "+e.message; $("msg").className="msg err"; });
+})();
+</script>
+<script src="offline.js"></script>
+</body>
+</html>

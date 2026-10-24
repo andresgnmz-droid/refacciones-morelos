@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Histórico y respaldo</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --ink:#142433; --ink-soft:#48607A; --ink-faint:#7C93A6;
+    --bg:#EEF2F5; --surface:#FFFFFF; --surface-alt:#E4EAEF; --border:#D3DCE3;
+    --accent:#0E7C86; --accent-ink:#FFFFFF; --accent-soft:#DCEEF0;
+    --shadow:0 1px 2px rgba(20,36,51,.06),0 4px 14px rgba(20,36,51,.07);
+    --good:#0b8a0b; --warn:#b07400; --bad:#d63a39;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --ink:#E7EDF2; --ink-soft:#9AB0C2; --ink-faint:#7C93A6;
+      --bg:#0F1620; --surface:#182230; --surface-alt:#1F2C3C; --border:#2B3B4D;
+      --accent:#35B6C2; --accent-ink:#06232A; --accent-soft:#163238;
+      --shadow:0 1px 2px rgba(0,0,0,.3),0 4px 14px rgba(0,0,0,.35);
+      --good:#2fbf2f; --warn:#d99a1a; --bad:#e66767;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ink:#E7EDF2; --ink-soft:#9AB0C2; --ink-faint:#7C93A6;
+    --bg:#0F1620; --surface:#182230; --surface-alt:#1F2C3C; --border:#2B3B4D;
+    --accent:#35B6C2; --accent-ink:#06232A; --accent-soft:#163238;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 4px 14px rgba(0,0,0,.35);
+    --good:#2fbf2f; --warn:#d99a1a; --bad:#e66767;
+  }
+  *{box-sizing:border-box;}
+  body{background:var(--bg);color:var(--ink);font-family:'Inter',system-ui,sans-serif;margin:0;}
+  h1,h2,h3{font-family:'Barlow Semi Condensed',system-ui,sans-serif;font-weight:700;margin:0;}
+  p{margin:0;}
+  button,input,select{font-family:inherit;}
+  button{cursor:pointer;}
+  [hidden]{display:none !important;}
+  .wrap{max-width:1180px;margin:0 auto;padding:20px 16px 48px;display:flex;flex-direction:column;gap:18px;}
+  .hero h1{font-size:26px;}
+  .hero p{font-size:14px;color:var(--ink-soft);line-height:1.5;max-width:80ch;margin-top:4px;}
+  .tabs{display:flex;gap:6px;flex-wrap:wrap;}
+  .tabs button{border:1px solid var(--border);background:var(--surface);color:var(--ink-soft);font-weight:600;font-size:13px;padding:8px 14px;border-radius:10px;}
+  .tabs button.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);}
+  .bar{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:12px 14px;box-shadow:var(--shadow);}
+  .field{display:flex;flex-direction:column;gap:3px;}
+  .field label{font-size:10.5px;font-weight:700;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.5px;}
+  .field select,.field input{padding:8px 10px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--ink);font-size:13px;min-width:150px;}
+  .btn{border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);font-weight:600;font-size:13px;padding:9px 14px;border-radius:10px;}
+  .btn.ghost{background:transparent;color:var(--accent);}
+  .btn:disabled{opacity:.55;cursor:wait;}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px 18px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:10px;}
+  .card h3{font-size:17px;}
+  .card p,.card li{font-size:13.5px;color:var(--ink-soft);line-height:1.55;}
+  .card ul{margin:0;padding-left:18px;}
+  .tbl{overflow:auto;border:1px solid var(--border);border-radius:14px;background:var(--surface);box-shadow:var(--shadow);}
+  table{border-collapse:collapse;width:100%;font-size:13px;}
+  th{position:sticky;top:0;background:var(--surface-alt);text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--ink-faint);padding:9px 12px;white-space:nowrap;}
+  td{padding:8px 12px;border-top:1px solid var(--border);vertical-align:top;}
+  tr.click{cursor:pointer;}
+  tr.click:hover td{background:var(--accent-soft);}
+  .op{font-size:11px;font-weight:700;border-radius:999px;padding:2px 8px;white-space:nowrap;}
+  .op.INSERT{background:rgba(11,138,11,.15);color:var(--good);}
+  .op.UPDATE{background:rgba(176,116,0,.15);color:var(--warn);}
+  .op.DELETE{background:rgba(214,58,57,.15);color:var(--bad);}
+  .mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;}
+  .muted{color:var(--ink-faint);font-size:12px;}
+  .chg{display:block;line-height:1.5;}
+  .chg b{font-weight:600;}
+  .chg s{color:var(--bad);}
+  dialog{border:1px solid var(--border);border-radius:14px;background:var(--surface);color:var(--ink);max-width:720px;width:92vw;padding:18px;}
+  dialog::backdrop{background:rgba(0,0,0,.45);}
+  pre{margin:8px 0 0;white-space:pre-wrap;word-break:break-word;font-size:12px;background:var(--bg);padding:10px;border-radius:10px;max-height:50vh;overflow:auto;}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;}
+  .msg{font-size:13px;color:var(--ink-soft);}
+  .msg.err{color:var(--bad);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hero">
+    <h1>Histórico y respaldo</h1>
+    <p>Cada alta, cambio o baja en las tablas del ERP queda registrada con su valor anterior y nuevo. Además se toma una foto semanal de las tablas que se reemplazan en cada carga. Desde aquí también puedes bajar un respaldo completo.</p>
+  </div>
+
+  <div class="tabs" id="tabs">
+    <button data-t="cambios" class="on">Cambios</button>
+    <button data-t="fotos">Fotos semanales</button>
+    <button data-t="respaldo">Respaldo</button>
+  </div>
+
+  <section id="s-cambios">
+    <div class="bar">
+      <div class="field"><label>Tabla</label><select id="fTabla"><option value="">Todas</option></select></div>
+      <div class="field"><label>Movimiento</label><select id="fOp"><option value="">Todos</option><option>INSERT</option><option>UPDATE</option><option>DELETE</option></select></div>
+      <div class="field"><label>Llave (económico, orden…)</label><input id="fLlave" placeholder="ej. MCV1000"></div>
+      <button class="btn" id="bBuscar">Buscar</button>
+      <span class="msg" id="mCambios"></span>
+    </div>
+    <div class="tbl" style="margin-top:12px;max-height:68vh">
+      <table><thead><tr><th>Fecha</th><th>Tabla</th><th>Movimiento</th><th>Llave</th><th>Detalle</th></tr></thead><tbody id="tbCambios"></tbody></table>
+    </div>
+  </section>
+
+  <section id="s-fotos" hidden>
+    <div class="card">
+      <h3>Fotos semanales</h3>
+      <p>Se toman solas cada domingo. Sirven para ver cómo estaba el catálogo, el cronograma, las unidades en piso, el personal o el programa de preventivos en una semana pasada.</p>
+      <div class="tbl" style="max-height:60vh">
+        <table><thead><tr><th>Semana (lunes)</th><th>Tabla</th><th>Renglones</th><th>Tomada</th><th></th></tr></thead><tbody id="tbFotos"></tbody></table>
+      </div>
+      <span class="msg" id="mFotos"></span>
+    </div>
+  </section>
+
+  <section id="s-respaldo" hidden>
+    <div class="grid">
+      <div class="card">
+        <h3>Respaldo completo en Excel</h3>
+        <p>Descarga todas las tablas del ERP en un solo libro, una pestaña por tabla. Guárdalo en tu nube (OneDrive, Google Drive) como copia fuera de la base.</p>
+        <div><button class="btn" id="bRespaldo">Descargar respaldo (.xlsx)</button></div>
+        <span class="msg" id="mRespaldo"></span>
+      </div>
+      <div class="card">
+        <h3>Qué protege cada capa</h3>
+        <ul>
+          <li><b>Cambios:</b> deshacer un error puntual (un renglón mal editado o borrado).</li>
+          <li><b>Fotos semanales:</b> reconstruir cómo estaba una tabla completa en una fecha.</li>
+          <li><b>Respaldo en tu nube:</b> recuperar todo si se perdiera la base o el proyecto.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+</div>
+
+<dialog id="dlg"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center"><h3 id="dTit">Detalle</h3><button class="btn ghost" id="dCerrar">Cerrar</button></div><pre id="dPre"></pre></dialog>
+
+<script>
+(function(){
+  "use strict";
+  var SB_URL = "https://aoutudbxwawlnbwvypir.supabase.co";
+  var SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFvdXR1ZGJ4d2F3bG5id3Z5cGlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU4NzQzNTMsImV4cCI6MjEwMTQ1MDM1M30.cfdjH9rwQDYyxrrKZIAw7JpcQKYcFWtiEYXEDF8fa_E";
+  var TABLAS = ["catalogo_unidades","hojalateria_cronograma","hojalateria_remo","hojalateria_remomov","unidades_piso","personal","preventivos_programa","preventivos_ordenes","preventivos_ordmov","preventivos_bajas","preventivos_cargas","historial_cambios","snapshots"];
+  var AUDITADAS = ["catalogo_unidades","hojalateria_cronograma","hojalateria_remo","hojalateria_remomov","unidades_piso","personal","preventivos_programa","preventivos_ordenes","preventivos_bajas","preventivos_cargas"];
+
+  function $(id){ return document.getElementById(id); }
+  function td(txt, cls){ var c=document.createElement("td"); if(cls) c.className=cls; c.textContent = txt==null ? "" : String(txt); return c; }
+  function fmt(iso){ try{ return new Date(iso).toLocaleString("es-MX",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"}); }catch(e){ return iso; } }
+
+  function get(path, extra){
+    var h = { apikey:SB_KEY, Authorization:"Bearer "+SB_KEY };
+    if(extra) for(var k in extra) h[k]=extra[k];
+    return fetch(SB_URL+"/rest/v1/"+path, { headers:h }).then(function(r){
+      if(!r.ok) throw new Error(r.status+" "+path);
+      return r.json();
+    });
+  }
+
+  /* pestañas */
+  Array.prototype.forEach.call($("tabs").children, function(b){
+    b.addEventListener("click", function(){
+      Array.prototype.forEach.call($("tabs").children, function(x){ x.classList.toggle("on", x===b); });
+      ["cambios","fotos","respaldo"].forEach(function(t){ $("s-"+t).hidden = (t !== b.dataset.t); });
+      if(b.dataset.t==="fotos" && !fotosCargadas) cargarFotos();
+    });
+  });
+
+  /* cambios */
+  AUDITADAS.forEach(function(t){ var o=document.createElement("option"); o.textContent=t; o.value=t; $("fTabla").appendChild(o); });
+
+  function resumenCambio(r){
+    var box = document.createElement("td");
+    if(r.operacion==="UPDATE" && r.antes && r.despues){
+      var n = 0;
+      Object.keys(r.despues).forEach(function(k){
+        if(k==="updated_at") return;
+        if(JSON.stringify(r.antes[k]) !== JSON.stringify(r.despues[k]) && n<4){
+          n++;
+          var s = document.createElement("span"); s.className="chg";
+          var b = document.createElement("b"); b.textContent = k+": ";
+          var a = document.createElement("s"); a.textContent = r.antes[k]==null ? "(vacío)" : String(r.antes[k]);
+          s.appendChild(b); s.appendChild(a); s.appendChild(document.createTextNode(" → "+(r.despues[k]==null ? "(vacío)" : String(r.despues[k]))));
+          box.appendChild(s);
+        }
+      });
+      if(!n) box.textContent = "—";
+    } else {
+      var d = r.despues || r.antes || {};
+      var keys = Object.keys(d).filter(function(k){return k!=="updated_at";}).slice(0,4);
+      box.className = "muted";
+      box.textContent = keys.map(function(k){ return k+": "+(d[k]==null?"":d[k]); }).join(" · ");
+    }
+    return box;
+  }
+
+  function buscar(){
+    $("mCambios").textContent = "Buscando…"; $("mCambios").className="msg";
+    var q = "historial_cambios?select=*&order=cambiado_at.desc&limit=200";
+    if($("fTabla").value) q += "&tabla=eq."+encodeURIComponent($("fTabla").value);
+    if($("fOp").value) q += "&operacion=eq."+$("fOp").value;
+    if($("fLlave").value.trim()) q += "&llave=ilike."+encodeURIComponent("*"+$("fLlave").value.trim()+"*");
+    get(q).then(function(rows){
+      var tb = $("tbCambios"); tb.textContent = "";
+      rows.forEach(function(r){
+        var tr = document.createElement("tr"); tr.className="click";
+        tr.appendChild(td(fmt(r.cambiado_at)));
+        tr.appendChild(td(r.tabla,"mono"));
+        var c = document.createElement("td"); var sp = document.createElement("span"); sp.className="op "+r.operacion; sp.textContent=r.operacion; c.appendChild(sp); tr.appendChild(c);
+        tr.appendChild(td(r.llave,"mono"));
+        tr.appendChild(resumenCambio(r));
+        tr.addEventListener("click", function(){ $("dTit").textContent = r.tabla+" · "+r.operacion+" · "+(r.llave||""); $("dPre").textContent = JSON.stringify({ antes:r.antes, despues:r.despues }, null, 2); $("dlg").showModal(); });
+        tb.appendChild(tr);
+      });
+      $("mCambios").textContent = rows.length ? rows.length+" movimientos (los más recientes)." : "Aún no hay movimientos con ese filtro. El registro empezó a guardar cambios a partir de hoy.";
+    }).catch(function(e){ $("mCambios").textContent = "No se pudo consultar: "+e.message; $("mCambios").className="msg err"; });
+  }
+  $("bBuscar").addEventListener("click", buscar);
+  $("fLlave").addEventListener("keydown", function(e){ if(e.key==="Enter") buscar(); });
+  $("dCerrar").addEventListener("click", function(){ $("dlg").close(); });
+
+  /* fotos */
+  var fotosCargadas = false;
+  function descargarBlob(blob, nombre){
+    var a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = nombre; document.body.appendChild(a); a.click();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  }
+  function cargarFotos(){
+    fotosCargadas = true;
+    get("snapshots?select=id,tabla,periodo,filas,tomado_at&order=periodo.desc,tabla.asc&limit=500").then(function(rows){
+      var tb = $("tbFotos"); tb.textContent = "";
+      rows.forEach(function(r){
+        var tr = document.createElement("tr");
+        tr.appendChild(td(r.periodo)); tr.appendChild(td(r.tabla,"mono")); tr.appendChild(td(r.filas)); tr.appendChild(td(fmt(r.tomado_at)));
+        var c = document.createElement("td"); var b = document.createElement("button"); b.className="btn ghost"; b.textContent="Descargar .xlsx";
+        b.addEventListener("click", function(){
+          b.disabled = true;
+          get("snapshots?select=datos&id=eq."+r.id).then(function(x){
+            var wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(x[0].datos), r.tabla.slice(0,31));
+            XLSX.writeFile(wb, "foto_"+r.tabla+"_"+r.periodo+".xlsx");
+          }).catch(function(e){ $("mFotos").textContent = "Error: "+e.message; $("mFotos").className="msg err"; }).then(function(){ b.disabled=false; });
+        });
+        c.appendChild(b); tr.appendChild(c); tb.appendChild(tr);
+      });
+      $("mFotos").textContent = rows.length ? "" : "Todavía no hay fotos.";
+    }).catch(function(e){ $("mFotos").textContent = "No se pudo consultar: "+e.message; $("mFotos").className="msg err"; });
+  }
+
+  /* respaldo completo */
+  function traerTodo(tabla){
+    var out = [], paso = 1000;
+    function pag(desde){
+      return get(tabla+"?select=*&limit="+paso+"&offset="+desde).then(function(rows){
+        out = out.concat(rows);
+        return rows.length === paso ? pag(desde+paso) : out;
+      });
+    }
+    return pag(0);
+  }
+  $("bRespaldo").addEventListener("click", function(){
+    var btn = $("bRespaldo"), m = $("mRespaldo");
+    btn.disabled = true; m.className = "msg"; m.textContent = "Preparando…";
+    var wb = XLSX.utils.book_new(), i = 0, resumen = [];
+    (function sig(){
+      if(i >= TABLAS.length){
+        var hoja = XLSX.utils.json_to_sheet(resumen);
+        XLSX.utils.book_append_sheet(wb, hoja, "_resumen");
+        var f = new Date().toISOString().slice(0,10);
+        XLSX.writeFile(wb, "respaldo_ERP_Morelos_"+f+".xlsx");
+        m.textContent = "Listo. Guarda el archivo en tu nube."; btn.disabled = false; return;
+      }
+      var t = TABLAS[i++];
+      m.textContent = "Leyendo "+t+" ("+i+" de "+TABLAS.length+")…";
+      traerTodo(t).then(function(rows){
+        resumen.push({ tabla:t, renglones:rows.length });
+        if(t==="snapshots") rows = rows.map(function(r){ return { id:r.id, tabla:r.tabla, periodo:r.periodo, filas:r.filas, tomado_at:r.tomado_at }; });
+        var ws = rows.length ? XLSX.utils.json_to_sheet(rows.map(function(r){
+          var o = {}; Object.keys(r).forEach(function(k){ var v=r[k]; o[k] = (v!==null && typeof v==="object") ? JSON.stringify(v) : v; }); return o;
+        })) : XLSX.utils.aoa_to_sheet([["(sin renglones)"]]);
+        XLSX.utils.book_append_sheet(wb, ws, t.slice(0,31));
+      }).then(sig, function(e){ m.textContent = "Error en "+t+": "+e.message; m.className="msg err"; btn.disabled=false; });
+    })();
+  });
+
+  buscar();
+})();
+</script>
+<script src="offline.js"></script>
+</body>
+</html>
