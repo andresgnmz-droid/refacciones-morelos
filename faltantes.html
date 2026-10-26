@@ -241,6 +241,7 @@ function fmt(n){ n=+n||0; return Number.isInteger(n) ? n.toLocaleString("es-MX")
 function pct(a,b){ return b ? (Math.round(a/b*1000)/10).toLocaleString("es-MX",{minimumFractionDigits:1,maximumFractionDigits:1})+"%" : "—"; }
 function hoyISO(){ var d=new Date(); return d.getFullYear()+"-"+("0"+(d.getMonth()+1)).slice(-2)+"-"+("0"+d.getDate()).slice(-2); }
 function fechaCorta(iso){ if(!iso) return "—"; var p=iso.split("-"); return p[2]+"/"+p[1]+"/"+p[0].slice(2); }
+function fechaDia(iso){ try{ var d=new Date(iso); if(isNaN(d)) return "—"; return ("0"+d.getDate()).slice(-2)+"/"+("0"+(d.getMonth()+1)).slice(-2)+"/"+String(d.getFullYear()).slice(2); }catch(e){ return "—"; } }
 function fechaHora(iso){ try{ return new Date(iso).toLocaleString("es-MX",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"}); }catch(e){ return iso||"—"; } }
 
 var LINEAS=[], EXIST=null, S={ tipo:"todos", per:"", ced:"", est:"falt", q:"", sem:0, sort:"dias", dir:-1, page:0 }, FILT=[];
@@ -256,7 +257,7 @@ function cargarVista(){
     }
     var r=rows[0];
     LINEAS=calcular(r.datos, hoyISO());
-    $("meta").innerHTML='<span class="pill">Corte de SAP: '+esc(fechaCorta(r.corte))+'</span><span class="pill mute">Actualizado '+esc(fechaHora(r.actualizado_at))+'</span><span class="pill mute">'+fmt(LINEAS.length)+' líneas de pedido</span>';
+    $("meta").innerHTML='<span class="pill">Corte de SAP: '+esc(fechaDia(r.actualizado_at))+' · antes de 09:00 a.m.</span><span class="pill mute">Actualizado '+esc(fechaHora(r.actualizado_at))+'</span><span class="pill mute">'+fmt(LINEAS.length)+' líneas de pedido</span>';
     armarCedis(); armarPeriodo(); aplicar();
     cargarExistencias();
   }).catch(function(e){
@@ -479,7 +480,7 @@ function resumenCarga(R){
 }
 function infoActual(){
   ERP.rest("faltantes_datos?select=corte,archivo,actualizado_at&id=eq.1").then(function(r){
-    $("cActual").textContent = r&&r[0] ? "Vigente hoy: "+(r[0].archivo||"archivo")+" · corte del "+fechaCorta(r[0].corte)+" · cargado "+fechaHora(r[0].actualizado_at)+"." : "Todavía no hay una descarga cargada.";
+    $("cActual").textContent = r&&r[0] ? "Vigente hoy: "+(r[0].archivo||"archivo")+" · corte del "+fechaDia(r[0].actualizado_at)+" antes de 09:00 a.m. · cargado "+fechaHora(r[0].actualizado_at)+"." : "Todavía no hay una descarga cargada.";
   }).catch(function(){});
 }
 if(document.documentElement.classList.contains("modo-carga")){
@@ -506,10 +507,10 @@ if(document.documentElement.classList.contains("modo-carga")){
   $("bGuardar").addEventListener("click",function(){
     if(!PENDIENTE) return;
     var m=$("cMsg"), b=this;
-    if(!confirm("¿Reemplazar la descarga vigente por esta, con corte del "+fechaCorta(PENDIENTE.corte)+"?")) return;
+    if(!confirm("¿Reemplazar la descarga vigente por esta, con corte de hoy, antes de 09:00 a.m.?")) return;
     b.disabled=true; m.className="msg"; m.textContent="Guardando…";
     ERP.rest("faltantes_datos?on_conflict=id",{ method:"POST", body:[{ id:1, corte:PENDIENTE.corte, archivo:PENDIENTE.archivo, datos:PENDIENTE.datos, actualizado_at:new Date().toISOString() }], prefer:"resolution=merge-duplicates,return=minimal" }).then(function(){
-      b.disabled=false; b.hidden=true; m.className="msg ok"; m.textContent="Listo. Control de refacciones ya muestra el corte del "+fechaCorta(PENDIENTE.corte)+"."; PENDIENTE=null; infoActual();
+      b.disabled=false; b.hidden=true; m.className="msg ok"; m.textContent="Listo. Control de refacciones ya muestra el corte de hoy, antes de 09:00 a.m."; PENDIENTE=null; infoActual();
     }).catch(function(e){ b.disabled=false; m.className="msg err"; m.textContent="No se pudo guardar: "+e.message; });
   });
 } else {
