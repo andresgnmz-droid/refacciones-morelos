@@ -2,13 +2,13 @@
    Guarda en el equipo las páginas, las librerías y la última respuesta de Supabase,
    para poder consultar la información ya cargada cuando no hay internet.
    Si cambias este archivo, sube el número de VERSION. */
-var VERSION = "v3";
+var VERSION = "v4";
 var SHELL = "erp-paginas-" + VERSION;
 var LIBS = "erp-librerias-" + VERSION;
 var DATOS = "erp-datos-" + VERSION;
 
 var API_HOSTS = ["aoutudbxwawlnbwvypir.supabase.co"];
-var PAGINAS = ["./", "index.html", "preventivos.html", "catalogo-maestro.html", "hojalateria.html", "carga-mecanicos.html", "rendimientos.html", "erp.html", "historial.html", "unidades-piso.html", "offline.js", "erp-auth.js"];
+var PAGINAS = ["./", "index.html", "preventivos.html", "catalogo-maestro.html", "hojalateria.html", "carga-mecanicos.html", "rendimientos.html", "erp.html", "historial.html", "unidades-piso.html", "faltantes.html", "offline.js", "erp-auth.js"];
 var LIBRERIAS = [
   "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js",
   "https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js",

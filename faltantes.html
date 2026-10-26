@@ -1,0 +1,512 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Control de refacciones</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="erp-auth.js"></script>
+<script>if(/[?&]modo=carga/.test(location.search))document.documentElement.classList.add("modo-carga");</script>
+<style>
+  :root{
+    --ink:#142433; --ink-soft:#48607A; --ink-faint:#6A8296;
+    --bg:#EEF2F5; --surface:#FFFFFF; --surface-alt:#E4EAEF; --border:#D3DCE3;
+    --accent:#0E7C86; --accent-ink:#FFFFFF; --accent-soft:#DCEEF0;
+    --shadow:0 1px 2px rgba(20,36,51,.06),0 4px 14px rgba(20,36,51,.07);
+    --good:#0b8a0b; --warn:#b07400; --bad:#d63a39;
+    --s1:#1f9d3a; --s2:#c9a000; --s3:#e0701a; --s4:#d63a39;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --ink:#E7EDF2; --ink-soft:#9AB0C2; --ink-faint:#8AA2B5;
+      --bg:#0F1620; --surface:#182230; --surface-alt:#1F2C3C; --border:#2B3B4D;
+      --accent:#35B6C2; --accent-ink:#06232A; --accent-soft:#163238;
+      --shadow:0 1px 2px rgba(0,0,0,.3),0 4px 14px rgba(0,0,0,.35);
+      --good:#2fbf2f; --warn:#d99a1a; --bad:#e66767;
+      --s1:#2fbf55; --s2:#e0be2a; --s3:#f0873a; --s4:#e66767;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ink:#E7EDF2; --ink-soft:#9AB0C2; --ink-faint:#8AA2B5;
+    --bg:#0F1620; --surface:#182230; --surface-alt:#1F2C3C; --border:#2B3B4D;
+    --accent:#35B6C2; --accent-ink:#06232A; --accent-soft:#163238;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 4px 14px rgba(0,0,0,.35);
+    --good:#2fbf2f; --warn:#d99a1a; --bad:#e66767;
+    --s1:#2fbf55; --s2:#e0be2a; --s3:#f0873a; --s4:#e66767;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:'Inter',system-ui,-apple-system,sans-serif;}
+  h1,h2,h3{font-family:'Barlow Semi Condensed',system-ui,sans-serif;font-weight:700;margin:0;letter-spacing:.2px;}
+  p{margin:0;} button,input,select{font-family:inherit;} button{cursor:pointer;} [hidden]{display:none !important;}
+  .wrap{max-width:1180px;margin:0 auto;padding:20px 16px 48px;display:flex;flex-direction:column;gap:18px;}
+  .hero h1{font-size:26px;}
+  .hero p{font-size:14px;color:var(--ink-soft);line-height:1.5;margin-top:4px;max-width:80ch;}
+  .meta{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px;}
+  .pill{display:inline-block;font-size:11px;font-weight:700;border-radius:999px;padding:3px 9px;background:var(--accent-soft);color:var(--accent);white-space:nowrap;}
+  .pill.warn{background:rgba(176,116,0,.16);color:var(--warn);}
+  .pill.bad{background:rgba(214,58,57,.16);color:var(--bad);}
+  .pill.mute{background:transparent;border:1px solid var(--border);color:var(--ink-soft);}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px 18px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:12px;}
+  .card h2{font-size:18px;}
+  .card .sub{font-size:12.5px;color:var(--ink-soft);line-height:1.5;}
+  .btn{border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);font-weight:600;font-size:13px;padding:9px 14px;border-radius:10px;}
+  .btn.ghost{background:transparent;color:var(--accent);}
+  .btn.sm{padding:6px 10px;font-size:12.5px;}
+  .btn:disabled{opacity:.5;cursor:default;}
+  .msg{font-size:13px;line-height:1.45;} .msg.err{color:var(--bad);} .msg.ok{color:var(--good);}
+
+  .filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;align-items:end;}
+  .f label{font-size:11px;font-weight:700;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px;}
+  .f select,.f input{width:100%;padding:9px 10px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--ink);font-size:13.5px;}
+  .seg{display:flex;border:1px solid var(--border);border-radius:10px;overflow:hidden;background:var(--bg);}
+  .seg button{flex:1;border:0;background:transparent;color:var(--ink-soft);font-weight:600;font-size:13px;padding:9px 8px;white-space:nowrap;}
+  .seg button.on{background:var(--accent);color:var(--accent-ink);}
+
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;}
+  .kpi{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:3px;}
+  .kpi .l{font-size:11px;font-weight:600;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.5px;}
+  .kpi .v{font-family:'Barlow Semi Condensed',sans-serif;font-size:28px;font-weight:700;line-height:1.1;}
+  .kpi .s{font-size:12px;color:var(--ink-soft);}
+
+  .chips{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+  .chip{display:flex;align-items:center;gap:7px;border:1px solid var(--border);background:var(--surface);color:var(--ink);border-radius:999px;padding:6px 12px;font-size:12.5px;font-weight:600;}
+  .chip i{width:10px;height:10px;border-radius:50%;display:inline-block;}
+  .chip.on{outline:2px solid var(--accent);}
+  .chip b{font-family:'Barlow Semi Condensed',sans-serif;font-size:16px;}
+
+  .bars{display:flex;flex-direction:column;gap:9px;}
+  .bar-row{display:grid;grid-template-columns:150px 1fr 150px;gap:10px;align-items:center;font-size:13px;}
+  .bar-row .nm b{display:block;font-size:13px;} .bar-row .nm span{font-size:11.5px;color:var(--ink-faint);}
+  .track{height:16px;border-radius:8px;background:var(--surface-alt);overflow:hidden;}
+  .fill{height:100%;background:var(--accent);border-radius:8px;min-width:2px;}
+  .bar-row .val{font-size:12.5px;color:var(--ink-soft);text-align:right;} .bar-row .val b{color:var(--ink);font-size:14px;}
+  @media (max-width:640px){ .bar-row{grid-template-columns:1fr;gap:3px;} .bar-row .val{text-align:left;} }
+
+  .tbl{overflow:auto;border:1px solid var(--border);border-radius:12px;background:var(--surface);max-height:70vh;}
+  table{border-collapse:collapse;width:100%;font-size:12.5px;}
+  th{background:var(--surface-alt);text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--ink-faint);padding:8px 10px;white-space:nowrap;position:sticky;top:0;z-index:1;user-select:none;}
+  th.s{cursor:pointer;} th.s:hover{color:var(--ink);} th .ar{color:var(--accent);}
+  td{padding:7px 10px;border-top:1px solid var(--border);vertical-align:top;}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}
+  td.tx{min-width:220px;max-width:340px;}
+  tr.r1 td:first-child{box-shadow:inset 4px 0 0 var(--s1);} tr.r2 td:first-child{box-shadow:inset 4px 0 0 var(--s2);}
+  tr.r3 td:first-child{box-shadow:inset 4px 0 0 var(--s3);} tr.r4 td:first-child{box-shadow:inset 4px 0 0 var(--s4);}
+  tr.r4 td{background:rgba(214,58,57,.06);} tr.r3 td{background:rgba(224,112,26,.06);}
+  .sem{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:700;}
+  .sem i{width:9px;height:9px;border-radius:50%;display:inline-block;}
+  .pager{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;font-size:12.5px;color:var(--ink-soft);}
+  .empty{padding:26px;text-align:center;color:var(--ink-soft);font-size:13.5px;}
+  details summary{cursor:pointer;font-weight:600;font-size:14px;}
+  details ul{margin:8px 0 0;padding-left:18px;} details li{font-size:13px;color:var(--ink-soft);line-height:1.55;margin-bottom:3px;}
+  .drop{border:2px dashed var(--border);border-radius:12px;padding:18px;display:flex;flex-direction:column;gap:10px;align-items:flex-start;}
+
+  #cardActualizar{display:none;}
+  html.modo-carga #cardActualizar{display:flex !important;}
+  html.modo-carga .vista{display:none !important;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hero">
+    <h1>Control de refacciones</h1>
+    <p>Cruce de pedidos de SAP contra los ingresos a almacén: qué refacciones faltan por llegar, cuánto llevan esperando y cómo va el cumplimiento por CEDIS.</p>
+    <div class="meta" id="meta"></div>
+  </div>
+
+  <div class="card" id="cardActualizar">
+    <h2>Actualizar con la descarga de SAP</h2>
+    <p class="sub">Sube el Excel de faltantes tal como sale de SAP, con las pestañas <b>Pedidos</b> e <b>Ingresos</b>. Reemplaza la información vigente. Se guarda tal cual y el cruce se calcula al abrir la pantalla.</p>
+    <div class="drop">
+      <input type="file" id="fArch" accept=".xlsx,.xls,.xlsm" hidden>
+      <button class="btn" id="bElegir" type="button">Elegir archivo de faltantes</button>
+      <div class="msg" id="cMsg"></div>
+      <div id="cResumen"></div>
+      <button class="btn" id="bGuardar" type="button" hidden>Guardar y reemplazar</button>
+    </div>
+    <p class="sub" id="cActual"></p>
+  </div>
+
+  <div class="vista" id="vista" style="display:contents">
+    <div class="card" id="cardFiltros">
+      <div class="filters">
+        <div class="f"><label>Tipo de pedido</label>
+          <div class="seg" id="segTipo">
+            <button data-v="todos" class="on">Todos</button><button data-v="ZMRP">ZMRP</button><button data-v="Correctivo">Correctivo</button>
+          </div></div>
+        <div class="f" id="fPer" hidden><label id="lPer">Periodo</label><select id="sPer"></select></div>
+        <div class="f"><label>CEDIS</label><select id="sCed"></select></div>
+        <div class="f"><label>Estatus</label><select id="sEst">
+          <option value="falt">Con faltante</option><option value="todos">Todos</option><option value="Completo">Completo</option>
+          <option value="Parcial">Parcial</option><option value="Sin surtir">Sin surtir</option><option value="Sin pedido">Sin pedido generado</option></select></div>
+        <div class="f"><label>Buscar</label><input id="qBus" type="search" placeholder="Material, descripción, pedido, solicitante"></div>
+      </div>
+      <p class="sub" id="notaAlcance"></p>
+    </div>
+
+    <div class="kpis" id="kpis"></div>
+    <div class="chips" id="chips" hidden></div>
+
+    <div class="card">
+      <h2 id="tCumpl">Cumplimiento por CEDIS</h2>
+      <p class="sub" id="sCumpl"></p>
+      <div class="bars" id="bars"></div>
+    </div>
+
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center">
+        <h2 id="tDet">Detalle</h2>
+        <button class="btn ghost sm" id="bExcel" type="button">Descargar Excel</button>
+      </div>
+      <div class="tbl"><table id="tabla"></table></div>
+      <div class="pager"><span id="pInfo"></span><span><button class="btn ghost sm" id="pPrev" type="button">Anterior</button> <button class="btn ghost sm" id="pNext" type="button">Siguiente</button></span></div>
+    </div>
+
+    <div class="card">
+      <details>
+        <summary>Cómo se calcula</summary>
+        <ul>
+          <li><b>Una línea por posición de pedido.</b> Cada posición se cruza con sus ingresos por Centro + Pedido + Material, en orden de fecha; cada posición toma una entrada de almacén (no se suman entregas parciales).</li>
+          <li><b>Faltante</b> = cantidad pedida − cantidad recibida (en unidad base). Si la línea ya tiene pedido pero la cantidad pedida es 0 (pedido cancelado y reasignado), se usa la cantidad solicitada.</li>
+          <li><b>Sin pedido generado</b>: la solicitud todavía no tiene número de pedido; el faltante es la cantidad solicitada.</li>
+          <li><b>ZMRP</b> (stock mensual y preventivos) se separa de lo demás (correctivo y emergencia) con la columna Clase documento. Del ZMRP solo cuenta para cada ciclo lo solicitado después del día 20, que es lo que se debe surtir al inicio del mes siguiente.</li>
+          <li><b>Días</b>: de la fecha de solicitud a la fecha de ingreso en las líneas completas, o a hoy en las pendientes.</li>
+          <li><b>Semáforo</b> (solo correctivos pendientes): verde menos de 3 días, amarillo de 3 a 7, naranja de 8 a 10 y rojo 11 o más.</li>
+          <li><b>Existencia</b> viene del catálogo de refacciones (último stock cargado) para el mismo CEDIS.</li>
+        </ul>
+      </details>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+/*CORE-START*/
+var MESES=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+function dd(a,b){ var x=a.split("-"), y=b.split("-"); return Math.round((Date.UTC(+y[0],+y[1]-1,+y[2])-Date.UTC(+x[0],+x[1]-1,+x[2]))/864e5); }
+function cicloDe(iso){ var p=iso.split("-"), y=+p[0], m=+p[1], d=+p[2]; if(d<=20) return null; m=m+1; if(m>12){ m=1; y++; } return { key:y+"-"+("0"+m).slice(-2), label:MESES[m-1]+" "+y }; }
+function mesDe(iso){ var p=iso.split("-"); return { key:p[0]+"-"+p[1], label:MESES[+p[1]-1]+" "+p[0] }; }
+function semaforo(dias){ return dias<3 ? 1 : dias<=7 ? 2 : dias<=10 ? 3 : 4; }
+/* Pedidos: [centro,fsol,fped,solicitante,solicitud,pedido,pos,material,texto,cantSol,cantPed,um,clase,necesidad]
+   Ingresos: [material,texto,centro,fecha,cantidad,pedido,um,clase mov] */
+function calcular(D, hoy){
+  var P=D.ped.rows, I=D.ing.rows, mapa={}, cur={}, out=[];
+  I.forEach(function(r){ var k=r[2]+"|"+r[5]+"|"+r[0]; (mapa[k]=mapa[k]||[]).push(r); });
+  Object.keys(mapa).forEach(function(k){ mapa[k].sort(function(a,b){ return a[3]<b[3]?-1:a[3]>b[3]?1:0; }); });
+  var idx=P.map(function(_,i){ return i; });
+  idx.sort(function(a,b){ var x=P[a], y=P[b]; if(x[1]!==y[1]) return x[1]<y[1]?-1:1; return (x[4]-y[4]) || (x[6]-y[6]) || (a-b); });
+  idx.forEach(function(i){
+    var r=P[i], tipo=r[12]==="ZMRP"?"ZMRP":"Correctivo", pedido=String(r[5]||"").trim();
+    var cs=+r[9]||0, cp=+r[10]||0, basis, rec=0, fent=null, est;
+    if(!pedido){ basis=cs; est="Sin pedido"; }
+    else {
+      basis=cp>0?cp:cs;
+      var k=r[0]+"|"+pedido+"|"+r[7], arr=mapa[k], n=cur[k]||0;
+      if(arr && n<arr.length){ rec=+arr[n][4]||0; fent=arr[n][3]; cur[k]=n+1; }
+      est = Math.max(basis-rec,0)<=1e-4 ? "Completo" : (rec>0 ? "Parcial" : "Sin surtir");
+    }
+    var falt = est==="Completo" ? 0 : Math.max(basis-rec,0);
+    var dias = (est==="Completo" && fent) ? Math.max(dd(r[1],fent),0) : Math.max(dd(r[1],hoy),0);
+    var c = tipo==="ZMRP" ? cicloDe(r[1]) : null, m = mesDe(r[1]);
+    out.push({ centro:r[0], tipo:tipo, clase:r[12], pedido:pedido, solicitud:r[4], pos:r[6], material:String(r[7]), texto:r[8]||"", um:r[11]||"",
+      solicitante:r[3]||"", necesidad:r[13]||"", fsol:r[1], fent:fent, pedida:basis, recibida:rec, faltante:falt, estatus:est, dias:dias,
+      sem:(tipo==="Correctivo" && est!=="Completo") ? semaforo(dias) : 0, ciclo:c?c.key:"", cicloLbl:c?c.label:"", mes:m.key, mesLbl:m.label });
+  });
+  return out;
+}
+/*CORE-END*/
+
+var NOMBRES={ MMCV:"Cuernavaca", MMCU:"Cuautla", MMJO:"Jojutla", MMPU:"Puente de Ixtla", MMAX:"Axochiapan", MMCC:"Cocoyoc" };
+var ORDEN=["MMCV","MMCU","MMJO","MMPU","MMAX","MMCC"];
+var SEMTXT={1:"Verde",2:"Amarillo",3:"Naranja",4:"Rojo"};
+var SEMCOL={1:"var(--s1)",2:"var(--s2)",3:"var(--s3)",4:"var(--s4)"};
+var PAG=100;
+
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
+function fmt(n){ n=+n||0; return Number.isInteger(n) ? n.toLocaleString("es-MX") : n.toLocaleString("es-MX",{maximumFractionDigits:2}); }
+function pct(a,b){ return b ? (Math.round(a/b*1000)/10).toLocaleString("es-MX",{minimumFractionDigits:1,maximumFractionDigits:1})+"%" : "—"; }
+function hoyISO(){ var d=new Date(); return d.getFullYear()+"-"+("0"+(d.getMonth()+1)).slice(-2)+"-"+("0"+d.getDate()).slice(-2); }
+function fechaCorta(iso){ if(!iso) return "—"; var p=iso.split("-"); return p[2]+"/"+p[1]+"/"+p[0].slice(2); }
+function fechaHora(iso){ try{ return new Date(iso).toLocaleString("es-MX",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"}); }catch(e){ return iso||"—"; } }
+
+var LINEAS=[], EXIST=null, S={ tipo:"todos", per:"", ced:"", est:"falt", q:"", sem:0, sort:"dias", dir:-1, page:0 }, FILT=[];
+
+/* ================= vista ================= */
+function cargarVista(){
+  $("meta").innerHTML='<span class="pill warn">Cargando…</span>';
+  ERP.rest("faltantes_datos?select=corte,archivo,actualizado_at,datos&id=eq.1").then(function(rows){
+    if(!rows || !rows.length){
+      $("meta").innerHTML='<span class="pill warn">Sin datos cargados</span>';
+      $("tabla").innerHTML=""; $("bars").innerHTML='<div class="empty">Todavía no hay una descarga de SAP cargada, o tu usuario no tiene acceso a esta sección.</div>';
+      return;
+    }
+    var r=rows[0];
+    LINEAS=calcular(r.datos, hoyISO());
+    $("meta").innerHTML='<span class="pill">Corte de SAP: '+esc(fechaCorta(r.corte))+'</span><span class="pill mute">Actualizado '+esc(fechaHora(r.actualizado_at))+'</span><span class="pill mute">'+fmt(LINEAS.length)+' líneas de pedido</span>';
+    armarCedis(); armarPeriodo(); aplicar();
+    cargarExistencias();
+  }).catch(function(e){
+    $("meta").innerHTML='<span class="pill bad">Sin conexión a datos</span>';
+    $("bars").innerHTML='<div class="empty">No se pudo leer la información: '+esc(e.message)+'. Si abriste esta página sola, entra por el ERP para usar tu sesión.</div>';
+  });
+}
+function cargarExistencias(){
+  ERP.rest("inventario_data?select=items&id=eq.1").then(function(r){
+    var m={}; ((r&&r[0]&&r[0].items)||[]).forEach(function(it){ m[String(it.codigo)]=it.cedis||{}; });
+    EXIST=m; pintarTabla();
+  }).catch(function(){ EXIST={}; pintarTabla(); });
+}
+function armarCedis(){
+  var presentes={}; LINEAS.forEach(function(l){ presentes[l.centro]=1; });
+  var lista=ORDEN.filter(function(c){ return presentes[c]; }).concat(Object.keys(presentes).filter(function(c){ return ORDEN.indexOf(c)<0; }));
+  $("sCed").innerHTML='<option value="">Todos los CEDIS</option>'+lista.map(function(c){ return '<option value="'+c+'">'+c+(NOMBRES[c]?" · "+NOMBRES[c]:"")+'</option>'; }).join("");
+}
+function armarPeriodo(){
+  var f=$("fPer"), s=$("sPer");
+  if(S.tipo==="todos"){ f.hidden=true; S.per=""; return; }
+  f.hidden=false;
+  var map={}, key=S.tipo==="ZMRP"?"ciclo":"mes", lbl=S.tipo==="ZMRP"?"cicloLbl":"mesLbl";
+  LINEAS.forEach(function(l){ if(l.tipo===S.tipo && l[key]) map[l[key]]=l[lbl]; });
+  var keys=Object.keys(map).sort().reverse(), h="";
+  if(S.tipo==="ZMRP"){
+    $("lPer").textContent="Ciclo ZMRP (surtido post-20)";
+    h='<option value="">Todos los ciclos</option>'+keys.map(function(k){ return '<option value="'+k+'">'+esc(map[k])+'</option>'; }).join("")+'<option value="fuera">Solicitados antes del día 20</option>';
+    S.per=keys[0]||"";
+  } else {
+    $("lPer").textContent="Mes de solicitud";
+    h='<option value="">Todos los meses</option>'+keys.map(function(k){ return '<option value="'+k+'">'+esc(map[k])+'</option>'; }).join("");
+    S.per="";
+  }
+  s.innerHTML=h; s.value=S.per;
+}
+function enAlcance(l){
+  if(S.tipo!=="todos" && l.tipo!==S.tipo) return false;
+  if(S.tipo==="ZMRP"){
+    if(S.per==="fuera") return !l.ciclo;
+    if(S.per) return l.ciclo===S.per;
+    return !!l.ciclo;
+  }
+  if(S.tipo==="Correctivo" && S.per) return l.mes===S.per;
+  return true;
+}
+function estOK(l){
+  if(S.est==="todos") return true;
+  if(S.est==="falt") return l.estatus!=="Completo";
+  return l.estatus===S.est;
+}
+function aplicar(){
+  var q=S.q.toLowerCase();
+  var alc=LINEAS.filter(enAlcance);
+  var base=alc.filter(function(l){
+    if(S.ced && l.centro!==S.ced) return false;
+    if(!estOK(l)) return false;
+    if(q){ var t=(l.pedido+" "+l.material+" "+l.texto+" "+l.solicitante+" "+l.necesidad+" "+l.solicitud).toLowerCase(); if(t.indexOf(q)<0) return false; }
+    return true;
+  });
+  FILT=base.filter(function(l){ return !S.sem || l.sem===S.sem; });
+  ordenar(); S.page=0;
+  pintarNota(alc); pintarKpis(alc); pintarChips(base); pintarBarras(alc); pintarTabla();
+}
+function pintarNota(alc){
+  var n="";
+  if(S.tipo==="ZMRP" && S.per!=="fuera"){
+    var fuera=LINEAS.filter(function(l){ return l.tipo==="ZMRP" && !l.ciclo; }).length;
+    n="El ciclo ZMRP toma solo lo solicitado después del día 20 de cada mes. "+fmt(fuera)+" líneas ZMRP solicitadas antes del día 20 no entran aquí (se ven en “Solicitados antes del día 20”).";
+  } else if(S.tipo==="Correctivo"){ n="Correctivo y emergencia: todo lo que no es ZMRP (clases NB, ZMAT y ZURG)."; }
+  $("notaAlcance").textContent=n;
+}
+function pintarKpis(alc){
+  var tot=alc.length, ok=alc.filter(function(l){ return l.estatus==="Completo"; }).length;
+  var sp=alc.filter(function(l){ return l.estatus==="Sin pedido"; }).length;
+  var ss=alc.filter(function(l){ return l.estatus==="Sin surtir"; }).length;
+  var pa=alc.filter(function(l){ return l.estatus==="Parcial"; }).length;
+  var pend=alc.filter(function(l){ return l.estatus!=="Completo"; });
+  var prom=pend.length ? Math.round(pend.reduce(function(a,l){ return a+l.dias; },0)/pend.length) : 0;
+  function k(l,v,s){ return '<div class="kpi"><span class="l">'+l+'</span><span class="v">'+v+'</span><span class="s">'+s+'</span></div>'; }
+  $("kpis").innerHTML=k("Cumplimiento",pct(ok,tot),fmt(ok)+" de "+fmt(tot)+" líneas")+k("Sin surtir",fmt(ss),"Con pedido, sin ingreso")+k("Parciales",fmt(pa),"Ingreso menor al pedido")+k("Sin pedido generado",fmt(sp),"Solicitud sin número de pedido")+k("Espera promedio",prom+" d","De las líneas con faltante");
+}
+function pintarChips(base){
+  var box=$("chips");
+  if(S.tipo!=="Correctivo"){ box.hidden=true; S.sem=0; return; }
+  box.hidden=false;
+  var c={1:0,2:0,3:0,4:0};
+  var sinSem=LINEAS.filter(enAlcance).filter(function(l){ return (!S.ced||l.centro===S.ced) && l.sem; });
+  sinSem.forEach(function(l){ c[l.sem]++; });
+  box.innerHTML='<span class="sub" style="font-size:12.5px;color:var(--ink-soft)">Semáforo de pendientes:</span>'+[1,2,3,4].map(function(s){
+    var txt=["","menos de 3 d","3 a 7 d","8 a 10 d","11 d o más"][s];
+    return '<button class="chip'+(S.sem===s?" on":"")+'" data-s="'+s+'"><i style="background:'+SEMCOL[s]+'"></i>'+SEMTXT[s]+' <b>'+c[s]+'</b><span style="font-weight:500;color:var(--ink-soft)">'+txt+'</span></button>';
+  }).join("");
+}
+function pintarBarras(alc){
+  var titulo = S.tipo==="ZMRP" ? "Cumplimiento del ciclo ZMRP por CEDIS" : S.tipo==="Correctivo" ? "Cumplimiento de correctivos por CEDIS" : "Cumplimiento por CEDIS";
+  $("tCumpl").textContent=titulo;
+  var per = S.per && S.per!=="fuera" ? (S.tipo==="ZMRP" ? " · ciclo "+nombreClave(alc,"ciclo","cicloLbl",S.per) : " · "+nombreClave(alc,"mes","mesLbl",S.per)) : "";
+  $("sCumpl").textContent="Líneas completas entre el total de líneas"+per+". Los CEDIS no se mezclan.";
+  var por={}; alc.forEach(function(l){ var p=por[l.centro]||(por[l.centro]={ t:0, ok:0, f:0 }); p.t++; if(l.estatus==="Completo") p.ok++; else p.f++; });
+  var cs=ORDEN.filter(function(c){ return por[c]; }).concat(Object.keys(por).filter(function(c){ return ORDEN.indexOf(c)<0; }));
+  if(!cs.length){ $("bars").innerHTML='<div class="empty">No hay líneas con esta combinación de filtros.</div>'; return; }
+  var T={ t:0, ok:0, f:0 }; cs.forEach(function(c){ T.t+=por[c].t; T.ok+=por[c].ok; T.f+=por[c].f; });
+  function fila(nm,sb,p){ var w=p.t?Math.round(p.ok/p.t*1000)/10:0; return '<div class="bar-row"><div class="nm"><b>'+esc(nm)+'</b><span>'+esc(sb)+'</span></div><div class="track"><div class="fill" style="width:'+w+'%"></div></div><div class="val"><b>'+pct(p.ok,p.t)+'</b> · '+fmt(p.ok)+' de '+fmt(p.t)+' · faltan '+fmt(p.f)+'</div></div>'; }
+  $("bars").innerHTML=cs.map(function(c){ return fila(c,NOMBRES[c]||"",por[c]); }).join("")+fila("Zona Morelos","Todos los CEDIS",T);
+}
+function nombreClave(alc,k,l,v){ for(var i=0;i<alc.length;i++){ if(alc[i][k]===v) return alc[i][l]; } return v; }
+
+var COLS=[ ["centro","CEDIS"],["tipo","Tipo"],["pedido","Pedido"],["material","Material"],["texto","Descripción"],["um","UM"],["pedida","Pedido",1],["recibida","Recibido",1],["faltante","Falta",1],["exist","Existencia",1],["fsol","Solicitud"],["dias","Días",1],["estatus","Estatus"],["sem","Semáforo"],["solicitante","Solicitante"] ];
+function valor(l,k){ if(k==="exist") return existDe(l); return l[k]; }
+function existDe(l){ if(!EXIST) return null; var c=EXIST[l.material]; if(!c) return null; var v=c[l.centro]; return v==null?null:+v; }
+function ordenar(){
+  var k=S.sort, d=S.dir;
+  FILT.sort(function(a,b){
+    var x=valor(a,k), y=valor(b,k);
+    if(x==null) x=-1e9; if(y==null) y=-1e9;
+    if(typeof x==="string") return d*x.localeCompare(y,"es");
+    return d*(x-y) || (b.dias-a.dias);
+  });
+}
+function pintarTabla(){
+  var t=$("tabla");
+  var tit = S.tipo==="ZMRP"?"Detalle ZMRP":S.tipo==="Correctivo"?"Detalle de correctivos":"Detalle de líneas";
+  $("tDet").textContent=tit;
+  if(!FILT.length){ t.innerHTML=LINEAS.length ? '<tbody><tr><td class="empty">No hay líneas con estos filtros.</td></tr></tbody>' : ""; $("pInfo").textContent="0 líneas"; $("pPrev").disabled=$("pNext").disabled=true; return; }
+  var ini=S.page*PAG, fin=Math.min(ini+PAG,FILT.length);
+  var cols=COLS.filter(function(c){ return !((c[0]==="tipo" && S.tipo!=="todos") || (c[0]==="sem" && S.tipo==="ZMRP")); });
+  var head="<thead><tr>"+cols.map(function(c){ var ar=S.sort===c[0]?'<span class="ar"> '+(S.dir>0?"▲":"▼")+"</span>":""; return '<th class="s'+(c[2]?" num":"")+'" data-k="'+c[0]+'">'+c[1]+ar+"</th>"; }).join("")+"</tr></thead>";
+  var body="<tbody>"+FILT.slice(ini,fin).map(function(l){
+    var ex=existDe(l), est=l.estatus;
+    var pill = est==="Completo" ? '<span class="pill">Completo</span>' : est==="Parcial" ? '<span class="pill warn">Parcial</span>' : est==="Sin surtir" ? '<span class="pill bad">Sin surtir</span>' : '<span class="pill mute">Sin pedido</span>';
+    var sem = l.sem ? '<span class="sem"><i style="background:'+SEMCOL[l.sem]+'"></i>'+SEMTXT[l.sem]+"</span>" : "—";
+    return '<tr class="'+(l.sem?"r"+l.sem:"")+'"><td>'+esc(l.centro)+"</td>"+(S.tipo==="todos"?"<td>"+(l.tipo==="ZMRP"?"ZMRP":"Correctivo")+"</td>":"")+"<td>"+(l.pedido?esc(l.pedido):"—")+"</td><td>"+esc(l.material)+'</td><td class="tx">'+esc(l.texto)+"</td><td>"+esc(l.um)+'</td><td class="num">'+fmt(l.pedida)+'</td><td class="num">'+fmt(l.recibida)+'</td><td class="num"><b>'+fmt(l.faltante)+'</b></td><td class="num">'+(EXIST==null?"…":ex==null?"—":fmt(ex))+"</td><td>"+fechaCorta(l.fsol)+'</td><td class="num">'+l.dias+"</td><td>"+pill+"</td>"+(S.tipo==="ZMRP"?"":"<td>"+sem+"</td>")+"<td>"+esc(l.solicitante)+"</td></tr>";
+  }).join("")+"</tbody>";
+  t.innerHTML=head+body;
+  $("pInfo").textContent=fmt(ini+1)+"–"+fmt(fin)+" de "+fmt(FILT.length)+" líneas";
+  $("pPrev").disabled=S.page===0; $("pNext").disabled=fin>=FILT.length;
+}
+
+/* eventos */
+$("segTipo").addEventListener("click",function(e){
+  var b=e.target.closest("button"); if(!b) return;
+  S.tipo=b.dataset.v; S.sem=0;
+  Array.prototype.forEach.call($("segTipo").children,function(x){ x.classList.toggle("on",x===b); });
+  armarPeriodo(); aplicar();
+});
+$("sPer").addEventListener("change",function(){ S.per=this.value; aplicar(); });
+$("sCed").addEventListener("change",function(){ S.ced=this.value; aplicar(); });
+$("sEst").addEventListener("change",function(){ S.est=this.value; aplicar(); });
+var tq=null; $("qBus").addEventListener("input",function(){ var v=this.value; clearTimeout(tq); tq=setTimeout(function(){ S.q=v.trim(); aplicar(); },180); });
+$("chips").addEventListener("click",function(e){ var b=e.target.closest("button.chip"); if(!b) return; var s=+b.dataset.s; S.sem=(S.sem===s?0:s); aplicar(); });
+$("tabla").addEventListener("click",function(e){
+  var th=e.target.closest("th.s"); if(!th) return; var k=th.dataset.k;
+  if(S.sort===k) S.dir=-S.dir; else { S.sort=k; S.dir=(k==="centro"||k==="tipo"||k==="pedido"||k==="material"||k==="texto"||k==="um"||k==="estatus"||k==="solicitante")?1:-1; }
+  ordenar(); S.page=0; pintarTabla();
+});
+$("pPrev").addEventListener("click",function(){ if(S.page>0){ S.page--; pintarTabla(); } });
+$("pNext").addEventListener("click",function(){ if((S.page+1)*PAG<FILT.length){ S.page++; pintarTabla(); } });
+
+$("bExcel").addEventListener("click",function(){
+  if(!FILT.length) return;
+  var det=FILT.map(function(l){
+    var ex=existDe(l);
+    return { "CEDIS":l.centro, "Tipo":l.tipo, "Clase documento":l.clase, "Ciclo ZMRP":l.cicloLbl, "Mes de solicitud":l.mesLbl, "Solicitud de pedido":l.solicitud, "Pedido":l.pedido, "Posición":l.pos,
+      "Material":Number(l.material), "Descripción":l.texto, "UM":l.um, "Cantidad pedida":l.pedida, "Cantidad recibida":l.recibida, "Faltante":l.faltante,
+      "Existencia en CEDIS":ex==null?"":ex, "Fecha de solicitud":l.fsol, "Fecha de ingreso":l.fent||"", "Días":l.dias, "Estatus":l.estatus==="Sin pedido"?"Sin pedido generado":l.estatus,
+      "Semáforo":l.sem?SEMTXT[l.sem]:"", "Semáforo (1-4)":l.sem||"", "Solicitante":l.solicitante, "Número de necesidad":l.necesidad };
+  });
+  var alc=LINEAS.filter(enAlcance), por={};
+  alc.forEach(function(l){ var p=por[l.centro]||(por[l.centro]={ t:0, ok:0 }); p.t++; if(l.estatus==="Completo") p.ok++; });
+  var cum=Object.keys(por).sort().map(function(c){ return { "CEDIS":c, "Líneas":por[c].t, "Completas":por[c].ok, "Con faltante":por[c].t-por[c].ok, "Cumplimiento":por[c].t?por[c].ok/por[c].t:0 }; });
+  var wb=XLSX.utils.book_new();
+  var w1=XLSX.utils.json_to_sheet(det); XLSX.utils.book_append_sheet(wb,w1,"Detalle");
+  var w2=XLSX.utils.json_to_sheet(cum); Object.keys(w2).forEach(function(a){ if(/^E\d+$/.test(a)&&a!=="E1") w2[a].z="0.0%"; });
+  XLSX.utils.book_append_sheet(wb,w2,"Cumplimiento");
+  XLSX.writeFile(wb,"Control_Refacciones_"+hoyISO()+".xlsx");
+});
+
+/* ================= carga (solo con ?modo=carga) ================= */
+var PENDIENTE=null;
+function serialAISO(v){
+  if(v==null||v==="") return "";
+  if(typeof v==="number"){ var d=new Date(Math.round((v-25569)*86400000)); return d.toISOString().slice(0,10); }
+  if(v instanceof Date) return v.getFullYear()+"-"+("0"+(v.getMonth()+1)).slice(-2)+"-"+("0"+v.getDate()).slice(-2);
+  var s=String(v).trim(), m=s.match(/^(\d{4})-(\d{2})-(\d{2})/); if(m) return m[1]+"-"+m[2]+"-"+m[3];
+  m=s.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})/); return m ? m[3]+"-"+("0"+m[2]).slice(-2)+"-"+("0"+m[1]).slice(-2) : "";
+}
+function hoja(wb,nombre){
+  var k=wb.SheetNames.filter(function(n){ return n.trim().toLowerCase()===nombre; })[0];
+  return k ? XLSX.utils.sheet_to_json(wb.Sheets[k],{defval:null,raw:true}) : null;
+}
+function faltan(filas,cols){ var f=filas[0]||{}; return cols.filter(function(c){ return !(c in f); }); }
+function entero(v){ var n=Number(v); return isFinite(n)?n:0; }
+function procesar(buf,nombre){
+  var wb=XLSX.read(buf,{type:"array"});
+  var P=hoja(wb,"pedidos"), I=hoja(wb,"ingresos");
+  if(!P||!I) throw new Error("El archivo debe traer las pestañas Pedidos e Ingresos. Encontré: "+wb.SheetNames.join(", ")+".");
+  var fp=faltan(P,["Centro","Fecha de solicitud","Pedido","Material","Cantidad solicitada","Cantidad pedida","Clase documento","Solicitud de pedido","Pos.solicitud pedido"]);
+  var fi=faltan(I,["Material","Centro","Cantidad","Pedido","Fe.contabilización"]);
+  if(fp.length) throw new Error("En Pedidos faltan las columnas: "+fp.join(", ")+".");
+  if(fi.length) throw new Error("En Ingresos faltan las columnas: "+fi.join(", ")+".");
+  var pr=[], ir=[], sinFecha=0;
+  P.forEach(function(r){
+    if(r["Material"]==null||r["Material"]==="") return;
+    var f=serialAISO(r["Fecha de solicitud"]); if(!f){ sinFecha++; return; }
+    pr.push([String(r["Centro"]||"").trim(), f, serialAISO(r["Fecha de pedido"]), String(r["Solicitante"]==null?"":r["Solicitante"]).trim(), entero(r["Solicitud de pedido"]), String(r["Pedido"]==null?"":r["Pedido"]).trim(), entero(r["Pos.solicitud pedido"]), String(r["Material"]).trim(), String(r["Texto breve"]||"").trim(), entero(r["Cantidad solicitada"]), entero(r["Cantidad pedida"]), String(r["Unidad de medida"]||"").trim(), String(r["Clase documento"]||"").trim(), String(r["Número de necesidad"]==null?"":r["Número de necesidad"]).trim()]);
+  });
+  I.forEach(function(r){
+    if(r["Material"]==null||r["Material"]===""||!r["Centro"]) return;
+    var f=serialAISO(r["Fe.contabilización"]); if(!f) return;
+    ir.push([String(r["Material"]).trim(), String(r["Texto breve de material"]||"").trim(), String(r["Centro"]).trim(), f, entero(r["Cantidad"]), String(r["Pedido"]==null?"":r["Pedido"]).trim(), String(r["Unidad medida base"]||"").trim(), entero(r["Clase de movimiento"])]);
+  });
+  if(!pr.length) throw new Error("No encontré renglones de pedidos con material y fecha de solicitud.");
+  var maxF=pr.concat(ir.map(function(r){ return [0,r[3]]; })).reduce(function(m,r){ return r[1]>m?r[1]:m; },"");
+  return { archivo:nombre, corte:maxF, sinFecha:sinFecha, datos:{ v:1, ped:{ cols:["centro","fsol","fped","solicitante","solicitud","pedido","pos","material","texto","cantSol","cantPed","um","clase","necesidad"], rows:pr }, ing:{ cols:["material","texto","centro","fecha","cantidad","pedido","um","clase"], rows:ir } } };
+}
+function resumenCarga(R){
+  var L=calcular(R.datos,hoyISO()), c={ Completo:0, Parcial:0, "Sin surtir":0, "Sin pedido":0 };
+  L.forEach(function(l){ c[l.estatus]++; });
+  var cen={}; R.datos.ped.rows.forEach(function(r){ cen[r[0]]=1; });
+  return '<div class="sub"><b>'+esc(R.archivo)+'</b><br>Pedidos: '+fmt(R.datos.ped.rows.length)+' líneas · Ingresos: '+fmt(R.datos.ing.rows.length)+' renglones · CEDIS: '+Object.keys(cen).sort().join(", ")+'<br>Fecha más reciente en el archivo: '+esc(fechaCorta(R.corte))+'<br>Con este archivo: '+fmt(c.Completo)+' completas, '+fmt(c["Sin surtir"])+' sin surtir, '+fmt(c.Parcial)+' parciales y '+fmt(c["Sin pedido"])+' sin pedido generado.'+(R.sinFecha?'<br><b>Aviso:</b> '+R.sinFecha+' renglones de pedidos sin fecha de solicitud se omitieron.':"")+'</div>';
+}
+function infoActual(){
+  ERP.rest("faltantes_datos?select=corte,archivo,actualizado_at&id=eq.1").then(function(r){
+    $("cActual").textContent = r&&r[0] ? "Vigente hoy: "+(r[0].archivo||"archivo")+" · corte del "+fechaCorta(r[0].corte)+" · cargado "+fechaHora(r[0].actualizado_at)+"." : "Todavía no hay una descarga cargada.";
+  }).catch(function(){});
+}
+if(document.documentElement.classList.contains("modo-carga")){
+  infoActual();
+  if(!ERP.puede("control_refacciones")){
+    $("cMsg").className="msg err"; $("cMsg").textContent="Tu usuario no puede actualizar esta sección.";
+    $("bElegir").disabled=true;
+  }
+  $("bElegir").addEventListener("click",function(){ $("fArch").click(); });
+  $("fArch").addEventListener("change",function(){
+    var f=this.files[0]; if(!f) return;
+    var m=$("cMsg"); m.className="msg"; m.textContent="Leyendo "+f.name+"…"; $("bGuardar").hidden=true; $("cResumen").innerHTML=""; PENDIENTE=null;
+    var inp=this;
+    var rd=new FileReader();
+    rd.onload=function(){
+      try{ PENDIENTE=procesar(new Uint8Array(rd.result),f.name); }
+      catch(e){ m.className="msg err"; m.textContent=e.message; inp.value=""; return; }
+      m.className="msg ok"; m.textContent="Archivo leído. Revisa el resumen y guarda.";
+      $("cResumen").innerHTML=resumenCarga(PENDIENTE); $("bGuardar").hidden=false; inp.value="";
+    };
+    rd.onerror=function(){ m.className="msg err"; m.textContent="No se pudo leer el archivo."; };
+    rd.readAsArrayBuffer(f);
+  });
+  $("bGuardar").addEventListener("click",function(){
+    if(!PENDIENTE) return;
+    var m=$("cMsg"), b=this;
+    if(!confirm("¿Reemplazar la descarga vigente por esta, con corte del "+fechaCorta(PENDIENTE.corte)+"?")) return;
+    b.disabled=true; m.className="msg"; m.textContent="Guardando…";
+    ERP.rest("faltantes_datos?on_conflict=id",{ method:"POST", body:[{ id:1, corte:PENDIENTE.corte, archivo:PENDIENTE.archivo, datos:PENDIENTE.datos, actualizado_at:new Date().toISOString() }], prefer:"resolution=merge-duplicates,return=minimal" }).then(function(){
+      b.disabled=false; b.hidden=true; m.className="msg ok"; m.textContent="Listo. Control de refacciones ya muestra el corte del "+fechaCorta(PENDIENTE.corte)+"."; PENDIENTE=null; infoActual();
+    }).catch(function(e){ b.disabled=false; m.className="msg err"; m.textContent="No se pudo guardar: "+e.message; });
+  });
+} else {
+  cargarVista();
+}
+})();
+</script>
+<script src="offline.js"></script>
+</body>
+</html>
