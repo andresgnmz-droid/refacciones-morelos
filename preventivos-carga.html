@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Carga de Preventivos</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="erp-auth.js"></script>
+<style>
+  :root{
+    --ink:#142433; --ink-soft:#48607A; --bg:#EEF2F5; --surface:#FFFFFF; --surface-alt:#E4EAEF; --border:#D3DCE3;
+    --accent:#0E7C86; --accent-ink:#FFFFFF; --good:#1b7443; --warn:#9a5b00; --bad:#bf2a2a;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --ink:#E7EDF2; --ink-soft:#9AB0C2; --bg:#0F1620; --surface:#182230; --surface-alt:#1F2C3C; --border:#2B3B4D;
+      --accent:#35B6C2; --accent-ink:#06232A; --good:#59d08c; --warn:#f2b44d; --bad:#ff7a72;
+    }
+  }
+  :root[data-theme="dark"]{ --ink:#E7EDF2; --ink-soft:#9AB0C2; --bg:#0F1620; --surface:#182230; --surface-alt:#1F2C3C; --border:#2B3B4D; --accent:#35B6C2; --accent-ink:#06232A; --good:#59d08c; --warn:#f2b44d; --bad:#ff7a72; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:16px}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px;max-width:900px;margin:0 auto;display:flex;flex-direction:column;gap:12px}
+  h2{margin:0;font-size:20px}
+  p{margin:0}
+  .sub{color:var(--ink-soft)}
+  .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+  .btn{font:inherit;font-weight:600;background:var(--accent);color:var(--accent-ink);border:0;border-radius:8px;padding:9px 16px;cursor:pointer}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  input[type=month]{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 8px}
+  .msg{min-height:1.2em}
+  .msg.ok{color:var(--good)} .msg.err{color:var(--bad)}
+  table{border-collapse:collapse;width:100%;font-size:13px}
+  th,td{padding:5px 8px;border-bottom:1px solid var(--border);text-align:left}
+  th{color:var(--ink-soft);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+  .wrap{overflow-x:auto;border:1px solid var(--border);border-radius:6px}
+  .aviso{background:var(--surface-alt);border-radius:6px;padding:8px 10px;color:var(--warn)}
+  ul{margin:0;padding-left:18px}
+  .kpis{display:flex;flex-wrap:wrap;gap:8px}
+  .kpi{background:var(--surface-alt);border-radius:8px;padding:8px 12px;min-width:110px}
+  .kpi b{display:block;font-size:20px}
+</style>
+</head>
+<body>
+<div class="card">
+  <h2>Actualizar Preventivos</h2>
+  <p class="sub">Sube el Excel del mes con las pestañas de los 6 CEDIS, <b>Ordenes</b> y <b>Ordmov</b>. Reemplaza lo que ya haya cargado de ese mes; las demás meses no se tocan.</p>
+  <div class="row">
+    <input type="file" id="fArch" accept=".xlsx,.xls,.xlsm" hidden>
+    <button class="btn" id="bElegir" type="button">Elegir archivo de preventivos</button>
+  </div>
+  <div class="msg" id="cMsg"></div>
+  <div id="cResumen"></div>
+  <div class="row" id="filaGuardar" hidden>
+    <label>Mes del programa <input type="month" id="fMes"></label>
+    <button class="btn" id="bGuardar" type="button">Guardar y reemplazar el mes</button>
+  </div>
+  <p class="sub" id="cActual"></p>
+</div>
+
+<script>
+(function(){
+"use strict";
+function $(i){ return document.getElementById(i); }
+function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
+
+var PRE={"cuernavaca":["Cuernavaca","MCV"],"cuautla":["Cuautla","MCU"],"jojutla":["Jojutla","MJO"],"puente de ixtla":["Puente De Ixtla","MPU"],"axochiapan":["Axochiapan","MAX"],"cocoyoc":["Cocoyoc","MCC"]};
+var SERVS=["LUBRICACION","AFINACION","FRENOS"];
+var MESES=["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+
+function norm(s){ return String(s==null?"":s).normalize("NFD").replace(/[̀-ͯ]/g,"").trim(); }
+function str(v){ return v==null?"":String(v).trim(); }
+function num(v){ if(v==null||v==="") return 0; var n=Number(String(v).replace(/,/g,"")); return isFinite(n)?n:0; }
+function r2(x){ return Math.round(x*100)/100; }
+function fechaISO(v){
+  if(v==null||v==="") return null;
+  if(typeof v==="number"){ return new Date(Math.round((v-25569)*86400000)).toISOString().slice(0,10); }
+  if(v instanceof Date) return v.getFullYear()+"-"+("0"+(v.getMonth()+1)).slice(-2)+"-"+("0"+v.getDate()).slice(-2);
+  var s=String(v).trim(), m=s.match(/^(\d{4})-(\d{2})-(\d{2})/); if(m) return m[1]+"-"+m[2]+"-"+m[3];
+  m=s.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})/); return m ? m[3]+"-"+("0"+m[2]).slice(-2)+"-"+("0"+m[1]).slice(-2) : null;
+}
+function servDe(t){ var u=norm(t).toUpperCase(); for(var i=0;i<SERVS.length;i++) if(u.indexOf(SERVS[i])>=0) return SERVS[i]; return null; }
+function hojaNombre(wb,fn){ return wb.SheetNames.filter(fn)[0]; }
+function aoa(ws){ return XLSX.utils.sheet_to_json(ws,{header:1,defval:null,blankrows:false,raw:true}); }
+function filasObj(ws){
+  var rows=aoa(ws); if(!rows.length) return [];
+  var h=rows[0].map(function(x){ return norm(x).toLowerCase(); });
+  return rows.slice(1).map(function(r){ var o={}; h.forEach(function(k,i){ if(k) o[k]=r[i]; }); return o; });
+}
+function col(o,n){ return o[norm(n).toLowerCase()]; }
+
+/* ================= cálculo ================= */
+/* ctx: { bajas:[{economico,baja_desde}] } */
+function calcular(wb, periodo, ctx){
+  var avisos=[];
+  var hO=hojaNombre(wb,function(n){ return norm(n).toLowerCase()==="ordenes"; });
+  var hM=hojaNombre(wb,function(n){ return norm(n).toLowerCase()==="ordmov"; });
+  var hC=wb.SheetNames.filter(function(n){ return PRE[norm(n).toLowerCase()]; });
+  if(!hO||!hM) throw new Error("Al archivo le faltan las pestañas "+(!hO?"Ordenes ":"")+(!hM?"Ordmov":"")+". Encontré: "+wb.SheetNames.join(", ")+".");
+  if(!hC.length) throw new Error("No encontré pestañas de CEDIS (Cuernavaca, Cuautla, Jojutla, Puente de Ixtla, Axochiapan, Cocoyoc).");
+  var perIni=periodo; // yyyy-mm-01
+
+  /* Órdenes OM02 */
+  var Orows=filasObj(wb.Sheets[hO]);
+  var need=["orden","clase de orden","texto breve","equipo","costes tot.reales","suma de costes plan","fecha de referencia","fecha entrada","status del sistema"];
+  if(Orows.length){ var falt=need.filter(function(c){ return !(c in Orows[0]); }); if(falt.length) throw new Error("En Ordenes faltan las columnas: "+falt.join(", ")+"."); }
+  var O={}, ordenes=[];
+  Orows.forEach(function(r){
+    if(str(col(r,"Clase de orden"))!=="OM02") return;
+    var id=Math.round(num(col(r,"Orden"))); if(!id) return;
+    var o={ orden:id, clase_orden:"OM02", texto_breve:str(col(r,"Texto breve")), economico:str(col(r,"Equipo")), servicio:servDe(col(r,"Texto breve")),
+      costo_real:r2(num(col(r,"Costes tot.reales"))), costo_plan:r2(num(col(r,"Suma de costes plan"))), centro:str(col(r,"Centro")), centro_coste:str(col(r,"Centro de coste")),
+      fecha_referencia:fechaISO(col(r,"Fecha de referencia")), fecha_entrada:fechaISO(col(r,"Fecha entrada")), denominacion_objeto:str(col(r,"Denominación de objeto técnico")), status_sistema:str(col(r,"Status del sistema")) };
+    O[id]=o; ordenes.push(o);
+  });
+  if(!ordenes.length) throw new Error("La pestaña Ordenes no trae órdenes OM02 (preventivos).");
+  var fuera=ordenes.filter(function(o){ return o.fecha_referencia&&o.fecha_referencia.slice(0,7)!==perIni.slice(0,7); });
+  if(fuera.length) avisos.push(fuera.length+" órdenes tienen fecha de referencia fuera del mes elegido ("+fuera.slice(0,5).map(function(o){ return o.orden; }).join(", ")+(fuera.length>5?"…":"")+"). Revisa que el mes sea el correcto.");
+
+  var byKey={};
+  ordenes.forEach(function(o){ if(o.servicio){ var k=o.economico+"|"+o.servicio; (byKey[k]=byKey[k]||[]).push(o.orden); } });
+
+  /* Renglones de las pestañas de CEDIS: los de datos traen un número en la columna B (económico) */
+  var rows=[];
+  hC.forEach(function(n){
+    var info=PRE[norm(n).toLowerCase()];
+    aoa(wb.Sheets[n]).forEach(function(r,i){
+      if(typeof r[1]!=="number") return;
+      rows.push({ cedis:info[0], pre:info[1], hoja:n, fila:i+1, eco:info[1]+String(Math.round(r[1])), folio:typeof r[0]==="number"?Math.round(r[0]):null, modelo:str(r[2]), servicio:r[4], mecanico:str(r[5]),
+        ev:r[6], mes:r[7], orden:r[8], fmat:r[9], seg:r[10], insp:r[11] });
+    });
+  });
+  if(!rows.length) throw new Error("No encontré renglones de programa en las pestañas de los CEDIS.");
+
+  var claimed={};
+  rows.forEach(function(r){ var o=typeof r.orden==="number"?Math.round(r.orden):null; if(o&&O[o]&&O[o].economico===r.eco) claimed[o]=(claimed[o]||0)+1; });
+
+  var bajas={}; (ctx.bajas||[]).forEach(function(b){ if(b.baja_desde&&b.baja_desde.slice(0,10)<=perIni) bajas[b.economico]=1; });
+  var omitidos=[], programa=[], vistos={}, duplicados=[];
+  rows.forEach(function(r){
+    var eco=r.eco, alerta=null, o=typeof r.orden==="number"?Math.round(r.orden):null, sSheet=servDe(r.servicio)||null, s;
+    if(o&&O[o]){
+      if(O[o].economico!==eco){
+        s=servDe(O[o].texto_breve)||sSheet;
+        var cand=(byKey[eco+"|"+s]||[]).filter(function(x){ return !claimed[x]; });
+        if(cand.length){ alerta="orden corregida: la hoja traía "+o+" (de "+O[o].economico+"), se tomó la de la pestaña Ordenes"; o=cand[0]; claimed[o]=1; }
+        else { alerta="económico tomado de la orden (la hoja decía "+eco+")"; eco=O[o].economico; }
+      } else if(claimed[o]>1){ alerta="orden compartida"; }
+      s=servDe(O[o].texto_breve)||sSheet;
+    } else {
+      s=sSheet; o=null;
+      var c2=(byKey[eco+"|"+s]||[]).filter(function(x){ return !claimed[x]; });
+      if(c2.length){ o=c2[0]; claimed[o]=1; alerta="orden vinculada por económico+servicio (el renglón no la traía)"; }
+    }
+    if(!s){ avisos.push("Sin tipo de servicio en "+r.hoja+" fila "+r.fila+" ("+eco+"); se omitió."); return; }
+    if(bajas[eco]){ omitidos.push(eco); return; }
+    var od=o?O[o]:null;
+    var evraw=r.ev==null?null:String(r.ev).trim();
+    var est;
+    if(evraw&&/^inhab/i.test(evraw)) est="inhabilitado";
+    else if(od&&od.costo_plan===0){ est="inhabilitado"; if(evraw==="1") alerta="orden sin movimiento (costo plan 0); la hoja traía 1 con la orden marcada INABILITADO"; }
+    else if(evraw==="1") est="realizado";
+    else if(r.seg&&/no se realiz/i.test(String(r.seg))) est="no_realizado";
+    else est="sin_evidencia";
+    var key=eco+"|"+s;
+    if(vistos[key]){ duplicados.push(eco+" "+s); return; }
+    vistos[key]=1;
+    programa.push({ cedis:r.cedis, economico:eco, servicio:s, folio:r.folio, modelo_desc:r.modelo, mecanico:r.mecanico, evidencia:evraw==="1", evidencia_raw:evraw,
+      estatus:est, orden:o, mes_reportado:r.mes==null?null:String(r.mes).trim().toLowerCase(), fecha_material:fechaISO(r.fmat), inspeccion_fisica:r.insp==null?null:String(r.insp).trim(),
+      seguimiento:r.seg==null?null:String(r.seg).trim(), alerta:alerta });
+  });
+  if(omitidos.length) avisos.push("Se omitieron por baja: "+omitidos.join(", ")+".");
+  if(duplicados.length) avisos.push("Renglones repetidos (se tomó el primero): "+duplicados.join(", ")+".");
+  var sinOrden=programa.filter(function(p){ return !p.orden; });
+  if(sinOrden.length) avisos.push("Servicios sin orden en Ordenes (cuentan por su evidencia): "+sinOrden.map(function(p){ return p.economico+" "+p.servicio; }).join(", ")+".");
+  var usadas={}; programa.forEach(function(p){ if(p.orden) usadas[p.orden]=1; });
+  var huer=ordenes.filter(function(o){ return !usadas[o.orden]; });
+  if(huer.length) avisos.push(huer.length+" órdenes OM02 no están en el programa del mes (se cargan, pero no cuentan): "+huer.slice(0,8).map(function(o){ return o.orden+" "+o.economico; }).join(", ")+(huer.length>8?"…":"")+".");
+
+  /* Materiales por orden (solo de las órdenes OM02 cargadas) */
+  var Mrows=filasObj(wb.Sheets[hM]), ordmov=[];
+  if(Mrows.length){ var fm=["orden","fecha de documento","material","texto breve de material","cantidad","un.medida de entrada","importe ml","cuenta de mayor"].filter(function(c){ return !(c in Mrows[0]); }); if(fm.length) throw new Error("En Ordmov faltan las columnas: "+fm.join(", ")+"."); }
+  Mrows.forEach(function(r){
+    var id=Math.round(num(col(r,"Orden"))); if(!O[id]) return;
+    ordmov.push({ orden:id, fecha_documento:fechaISO(col(r,"Fecha de documento")), material:Math.round(num(col(r,"Material")))||null, texto_material:str(col(r,"Texto breve de material")),
+      cantidad:num(col(r,"Cantidad")), unidad_medida:str(col(r,"Un.medida de entrada")), importe:r2(num(col(r,"Importe ML"))), cuenta_mayor:Math.round(num(col(r,"Cuenta de mayor")))||null });
+  });
+  var difs=[];
+  var imp={}; ordmov.forEach(function(m){ imp[m.orden]=(imp[m.orden]||0)+m.importe; });
+  programa.forEach(function(p){ if(p.orden&&Math.abs((imp[p.orden]||0)-O[p.orden].costo_real)>0.05) difs.push(p.orden); });
+  if(difs.length) avisos.push("El costo de "+difs.length+" órdenes no coincide con la suma de sus materiales en Ordmov ("+difs.slice(0,6).join(", ")+(difs.length>6?"…":"")+").");
+
+  return { periodo:periodo, ordenes:ordenes, programa:programa, ordmov:ordmov, avisos:avisos };
+}
+window.PREV_CALCULAR=calcular;
+
+/* ================= pantalla ================= */
+var PENDIENTE=null, ARCHIVO="";
+function mesDeNombre(n){
+  var s=norm(n).toLowerCase(), a=s.match(/(20\d{2})/), m=null;
+  MESES.forEach(function(x,i){ if(s.indexOf(x)>=0) m=i+1; });
+  if(m&&a) return a[1]+"-"+("0"+m).slice(-2);
+  var d=new Date(); return d.getFullYear()+"-"+("0"+(d.getMonth()+1)).slice(-2);
+}
+function mesTxt(p){ var x=String(p).slice(0,7).split("-"); return MESES[+x[1]-1]+" "+x[0]; }
+function money(n){ return "$"+n.toLocaleString("es-MX",{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function resumen(R){
+  var c={realizado:0,sin_evidencia:0,no_realizado:0,inhabilitado:0};
+  R.programa.forEach(function(p){ c[p.estatus]++; });
+  var den=R.programa.length-c.inhabilitado, pct=den?Math.round(c.realizado/den*1000)/10:0;
+  var costo=0; R.ordenes.forEach(function(o){ costo+=o.costo_real; });
+  var por={}; R.programa.forEach(function(p){ var x=por[p.cedis]=por[p.cedis]||{t:0,r:0,i:0}; x.t++; if(p.estatus==="realizado") x.r++; if(p.estatus==="inhabilitado") x.i++; });
+  var h='<div class="kpis"><div class="kpi">Programados<b>'+R.programa.length+'</b></div><div class="kpi">Realizados<b>'+c.realizado+'</b></div><div class="kpi">Sin evidencia<b>'+c.sin_evidencia+'</b></div><div class="kpi">No realizados<b>'+c.no_realizado+'</b></div><div class="kpi">Inhabilitados<b>'+c.inhabilitado+'</b></div><div class="kpi">Cumplimiento<b>'+pct+'%</b></div></div>';
+  h+='<p class="sub">Órdenes OM02: '+R.ordenes.length+' · '+money(costo)+' · materiales: '+R.ordmov.length+' renglones.</p>';
+  h+='<div class="wrap"><table><thead><tr><th>CEDIS</th><th>Programados</th><th>Realizados</th><th>Inhabilitados</th></tr></thead><tbody>'+Object.keys(por).sort().map(function(k){ return "<tr><td>"+esc(k)+"</td><td>"+por[k].t+"</td><td>"+por[k].r+"</td><td>"+por[k].i+"</td></tr>"; }).join("")+"</tbody></table></div>";
+  if(R.avisos.length) h+='<div class="aviso"><ul>'+R.avisos.map(function(a){ return "<li>"+esc(a)+"</li>"; }).join("")+"</ul></div>";
+  return h;
+}
+function infoActual(){
+  ERP.rest("preventivos_cargas?select=periodo,archivo,cargado_at,filas_programa&order=periodo.desc&limit=3").then(function(r){
+    $("cActual").textContent = r&&r.length ? "Ya cargado: "+r.map(function(x){ return mesTxt(x.periodo)+" ("+x.filas_programa+" servicios)"; }).join(" · ")+"." : "Todavía no hay meses cargados.";
+  }).catch(function(){ $("cActual").textContent=""; });
+}
+{
+  infoActual();
+  if(!ERP.puede("preventivos")){ $("cMsg").className="msg err"; $("cMsg").textContent="Tu usuario no puede actualizar esta sección."; $("bElegir").disabled=true; }
+  $("bElegir").addEventListener("click",function(){ $("fArch").click(); });
+  $("fArch").addEventListener("change",function(){
+    var f=this.files[0]; if(!f) return;
+    var m=$("cMsg"), inp=this; ARCHIVO=f.name;
+    m.className="msg"; m.textContent="Leyendo "+f.name+"…"; $("filaGuardar").hidden=true; $("cResumen").innerHTML=""; PENDIENTE=null;
+    var rd=new FileReader();
+    rd.onload=function(){
+      var wb; try{ wb=XLSX.read(new Uint8Array(rd.result),{type:"array"}); }catch(e){ m.className="msg err"; m.textContent="No pude abrir el archivo como Excel."; inp.value=""; return; }
+      ERP.rest("preventivos_bajas?select=economico,baja_desde").catch(function(){ return []; }).then(function(bajas){
+        var mes=mesDeNombre(f.name);
+        try{ PENDIENTE=calcular(wb,mes+"-01",{bajas:bajas||[]}); }
+        catch(e){ m.className="msg err"; m.textContent=e.message; inp.value=""; return; }
+        PENDIENTE._wb=wb;
+        m.className="msg ok"; m.textContent="Archivo leído. Revisa el resumen, confirma el mes y guarda.";
+        $("cResumen").innerHTML=resumen(PENDIENTE); $("fMes").value=mes; $("filaGuardar").hidden=false; inp.value="";
+      });
+    };
+    rd.onerror=function(){ m.className="msg err"; m.textContent="No se pudo leer el archivo."; };
+    rd.readAsArrayBuffer(f);
+  });
+  $("fMes").addEventListener("change",function(){
+    if(!PENDIENTE||!/^\d{4}-\d{2}$/.test(this.value)) return;
+    ERP.rest("preventivos_bajas?select=economico,baja_desde").catch(function(){ return []; }).then(function(bajas){
+      try{ PENDIENTE=calcular(PENDIENTE._wb,$("fMes").value+"-01",{bajas:bajas||[]}); PENDIENTE._wb=PENDIENTE._wb; }catch(e){ $("cMsg").className="msg err"; $("cMsg").textContent=e.message; return; }
+      $("cResumen").innerHTML=resumen(PENDIENTE);
+    });
+  });
+  $("bGuardar").addEventListener("click",function(){
+    if(!PENDIENTE) return;
+    var mes=$("fMes").value; if(!/^\d{4}-\d{2}$/.test(mes)){ $("cMsg").className="msg err"; $("cMsg").textContent="Elige el mes del programa."; return; }
+    var m=$("cMsg"), b=this;
+    if(!confirm("¿Reemplazar lo cargado de "+mesTxt(mes)+" con este archivo ("+PENDIENTE.programa.length+" servicios)?")) return;
+    b.disabled=true; m.className="msg"; m.textContent="Guardando…";
+    ERP.rest("rpc/cargar_preventivos",{ method:"POST", body:{ p_periodo:mes+"-01", p_archivo:ARCHIVO, p_programa:PENDIENTE.programa, p_ordenes:PENDIENTE.ordenes, p_ordmov:PENDIENTE.ordmov, p_nota:"Carga desde el ERP" } }).then(function(r){
+      b.disabled=false; $("filaGuardar").hidden=true; m.className="msg ok"; m.textContent="Listo: "+mesTxt(mes)+" con "+(r&&r.programa!=null?r.programa:PENDIENTE.programa.length)+" servicios, "+(r&&r.ordenes!=null?r.ordenes:PENDIENTE.ordenes.length)+" órdenes y "+(r&&r.ordmov!=null?r.ordmov:PENDIENTE.ordmov.length)+" renglones de materiales."; PENDIENTE=null; infoActual();
+    }).catch(function(e){ b.disabled=false; m.className="msg err"; m.textContent="No se pudo guardar: "+e.message; });
+  });
+}
+})();
+</script>
+<script src="offline.js"></script>
+</body>
+</html>
