@@ -721,27 +721,7 @@
     tarjeta("Hojalatería y Pintura", "Archivo mensual con CRONOGRAMA, Remo y Remomov.", "Subir archivo", function(){ abrirFrame("hojalateria.html?modo=carga", "Hojalatería y Pintura"); });
     tarjeta("Control de refacciones", "Descarga de SAP de faltantes, con las pestañas Pedidos e Ingresos.", "Subir archivo", function(){ abrirFrame("faltantes.html?modo=carga", "Control de refacciones"); });
 
-    var cpiso = tarjeta("Unidades en piso", "Corte ya procesado de unidades en piso (archivo .json). Reemplaza el corte vigente.", null, null, null);
-    var fi = el("input"); fi.type = "file"; fi.accept = ".json,application/json"; fi.hidden = true;
-    var bp = el("button", "btn", "Subir corte (.json)"); bp.style.alignSelf = "flex-start";
-    var mp = el("p", "msg");
-    bp.addEventListener("click", function(){ fi.click(); });
-    fi.addEventListener("change", function(){
-      var f = fi.files[0]; if(!f) return;
-      mp.className = "msg"; mp.textContent = "Leyendo…";
-      var rd = new FileReader();
-      rd.onload = function(){
-        var d; try{ d = JSON.parse(rd.result); }catch(e){ mp.className = "msg err"; mp.textContent = "El archivo no es un JSON válido."; return; }
-        if(!d || !d.corte || !Array.isArray(d.units)){ mp.className = "msg err"; mp.textContent = "No parece un corte de unidades en piso (faltan corte o units)."; return; }
-        if(!confirm("Reemplazar el corte vigente por el del " + d.corte + " con " + d.units.length + " unidades?")) return;
-        mp.textContent = "Subiendo…";
-        ERP.rest("unidades_piso_datos?on_conflict=id", { method:"POST", body:[{ id:1, corte:d.corte, datos:d, actualizado_at:new Date().toISOString() }], prefer:"resolution=merge-duplicates,return=minimal" }).then(function(){
-          mp.className = "msg ok"; mp.textContent = "Listo: corte del " + d.corte + " con " + d.units.length + " unidades.";
-        }).catch(function(e){ mp.className = "msg err"; mp.textContent = "No se pudo subir: " + e.message; });
-      };
-      rd.readAsText(f); fi.value = "";
-    });
-    cpiso.appendChild(bp); cpiso.appendChild(fi); cpiso.appendChild(mp);
+    tarjeta("Unidades en piso", "Excel de unidades en piso con las pestañas UPiso, Cargas, Pedidos, Movimientos, Uso y Usoc. Reemplaza el corte vigente.", "Subir archivo", function(){ abrirFrame("piso-carga.html", "Unidades en piso"); });
 
     tarjeta("Preventivos", "Archivo mensual de avance con Ordenes y Ordmov.", null, null, "Por conectar · hoy se carga con Claude");
     tarjeta("Stock de refacciones", "CSV de existencias de SAP.", "Abrir carga", function(){ abrirFrame("index.html", "Stock de refacciones"); });

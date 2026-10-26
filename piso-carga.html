@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Carga de Unidades en piso</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="erp-auth.js"></script>
+<style>
+  :root{
+    --ink:#142433; --ink-soft:#48607A; --bg:#EEF2F5; --surface:#FFFFFF; --surface-alt:#E4EAEF; --border:#D3DCE3;
+    --accent:#0E7C86; --accent-ink:#FFFFFF; --good:#1b7443; --warn:#9a5b00; --bad:#bf2a2a;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --ink:#E7EDF2; --ink-soft:#9AB0C2; --bg:#0F1620; --surface:#182230; --surface-alt:#1F2C3C; --border:#2B3B4D;
+      --accent:#35B6C2; --accent-ink:#06232A; --good:#59d08c; --warn:#f2b44d; --bad:#ff7a72;
+    }
+  }
+  :root[data-theme="dark"]{ --ink:#E7EDF2; --ink-soft:#9AB0C2; --bg:#0F1620; --surface:#182230; --surface-alt:#1F2C3C; --border:#2B3B4D; --accent:#35B6C2; --accent-ink:#06232A; --good:#59d08c; --warn:#f2b44d; --bad:#ff7a72; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:16px}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px;max-width:880px;margin:0 auto;display:flex;flex-direction:column;gap:12px}
+  h2{margin:0;font-size:20px}
+  p{margin:0}
+  .sub{color:var(--ink-soft)}
+  .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+  .btn{font:inherit;font-weight:600;background:var(--accent);color:var(--accent-ink);border:0;border-radius:8px;padding:9px 16px;cursor:pointer}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  input[type=date]{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 8px}
+  .msg{min-height:1.2em}
+  .msg.ok{color:var(--good)} .msg.err{color:var(--bad)}
+  table{border-collapse:collapse;width:100%;font-size:13px}
+  th,td{padding:5px 8px;border-bottom:1px solid var(--border);text-align:left}
+  th{color:var(--ink-soft);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+  .wrap{overflow-x:auto;border:1px solid var(--border);border-radius:6px}
+  .aviso{background:var(--surface-alt);border-radius:6px;padding:8px 10px;color:var(--warn)}
+  ul{margin:0;padding-left:18px}
+</style>
+</head>
+<body>
+<div class="card">
+  <h2>Actualizar Unidades en piso</h2>
+  <p class="sub">Sube el Excel de unidades en piso tal como lo generas, con las pestañas <b>UPiso</b>, <b>Cargas</b>, <b>Pedidos</b>, <b>Movimientos</b>, <b>Uso</b> y <b>Usoc</b>. El cruce se calcula aquí mismo y reemplaza el corte vigente.</p>
+  <div class="row">
+    <input type="file" id="fArch" accept=".xlsx,.xls,.xlsm" hidden>
+    <button class="btn" id="bElegir" type="button">Elegir archivo de unidades en piso</button>
+  </div>
+  <div class="msg" id="cMsg"></div>
+  <div id="cResumen"></div>
+  <div class="row" id="filaGuardar" hidden>
+    <label>Fecha del corte <input type="date" id="fCorte"></label>
+    <button class="btn" id="bGuardar" type="button">Guardar y reemplazar</button>
+  </div>
+  <p class="sub" id="cActual"></p>
+</div>
+
+<script>
+(function(){
+"use strict";
+function $(i){ return document.getElementById(i); }
+function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
+
+/* ================= utilidades ================= */
+var CEN={MMCV:"MCV",MMCU:"MCU",MMJO:"MJO",MMPU:"MPU",MMAX:"MAX",MMCC:"MCC"};
+var RC={}; Object.keys(CEN).forEach(function(k){ RC[CEN[k]]=k; });
+var CEDIS_ALL=["Cuernavaca","Cuautla","Jojutla","Puente de Ixtla","Axochiapan","Cocoyoc"];
+var CEDIS_PREF={MCV:"Cuernavaca",MCU:"Cuautla",MJO:"Jojutla",MPU:"Puente de Ixtla",MAX:"Axochiapan",MCC:"Cocoyoc"};
+
+function norm(s){ return String(s==null?"":s).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").trim(); }
+function str(v){ return v==null?"":String(v).trim(); }
+function num(v){ if(v==null||v==="") return 0; var n=Number(String(v).replace(/,/g,"")); return isFinite(n)?n:0; }
+function r2(x){ return Math.round(x*100)/100; }
+function fechaISO(v){
+  if(v==null||v==="") return "";
+  if(typeof v==="number"){ return new Date(Math.round((v-25569)*86400000)).toISOString().slice(0,10); }
+  if(v instanceof Date) return v.getFullYear()+"-"+("0"+(v.getMonth()+1)).slice(-2)+"-"+("0"+v.getDate()).slice(-2);
+  var s=String(v).trim(), m=s.match(/^(\d{4})-(\d{2})-(\d{2})/); if(m) return m[1]+"-"+m[2]+"-"+m[3];
+  m=s.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})/); return m ? m[3]+"-"+("0"+m[2]).slice(-2)+"-"+("0"+m[1]).slice(-2) : "";
+}
+function hoja(wb,nombre){
+  var k=wb.SheetNames.filter(function(n){ return norm(n)===nombre; })[0];
+  if(!k) return null;
+  var filas=XLSX.utils.sheet_to_json(wb.Sheets[k],{defval:null,raw:true});
+  if(!filas.length) return filas;
+  var mapa={}; Object.keys(filas[0]).forEach(function(c){ mapa[norm(c)]=c; });
+  filas.__mapa=mapa; return filas;
+}
+function tiene(filas,col){ return !!(filas.__mapa&&filas.__mapa[norm(col)]); }
+function val(fila,filas,col){ var k=filas.__mapa&&filas.__mapa[norm(col)]; return k?fila[k]:null; }
+function faltan(filas,cols){ return cols.filter(function(c){ return !tiene(filas,c); }); }
+function maxStr(a){ return a.reduce(function(m,x){ return x>m?x:m; },""); }
+function minStr(a){ return a.reduce(function(m,x){ return (m===""||x<m)?x:m; },""); }
+function sumar(a){ return a.reduce(function(s,x){ return s+x; },0); }
+
+/* ================= cálculo del cruce ================= */
+/* ctx: { personal:[{nombre,alias_hoja}], catalogo:{eco:{marca,modelo,area}} } */
+function calcular(wb, corte, ctx){
+  var avisos=[];
+  var U=hoja(wb,"upiso"), C=hoja(wb,"cargas"), P=hoja(wb,"pedidos"), M=hoja(wb,"movimientos"), US=hoja(wb,"uso"), UC=hoja(wb,"usoc");
+  var faltaH=[["UPiso",U],["Cargas",C],["Pedidos",P],["Movimientos",M],["Uso",US],["Usoc",UC]].filter(function(x){ return !x[1]; }).map(function(x){ return x[0]; });
+  if(faltaH.length) throw new Error("Al archivo le faltan las pestañas: "+faltaH.join(", ")+". Encontré: "+wb.SheetNames.join(", ")+".");
+  var req=[["UPiso",U,["ECONÓMICO","CEDIS","FALLA","MECÁNICO ASIGNADO"]],
+    ["Cargas",C,["Equipo","Fecha","UnidadCaracterística"]],
+    ["Pedidos",P,["Centro","Fecha de solicitud","Pedido","Material","Texto breve","Cantidad solicitada","Cantidad pedida","Clase documento","Número de necesidad"]],
+    ["Movimientos",M,["Centro","Fe.contabilización","Cantidad","Pedido","Material","Clase de movimiento"]],
+    ["Uso",US,["Orden","Equipo","Clase de orden","Texto breve","Fecha entrada","Status del sistema","Costes tot.reales"]],
+    ["Usoc",UC,["Orden","Material","Texto breve de material","Cantidad","Un.medida de entrada","Importe ML","Fe.contabilización"]]];
+  req.forEach(function(r){
+    if(!r[1].length) { if(r[0]==="UPiso") throw new Error("La pestaña UPiso no tiene unidades."); return; }
+    var f=faltan(r[1],r[2]); if(f.length) throw new Error("En "+r[0]+" faltan las columnas: "+f.join(", ")+".");
+  });
+  var hayFp=P.length?tiene(P,"Fecha de pedido"):false;
+  if(!hayFp) avisos.push("Pedidos no trae la columna “Fecha de pedido”; no se calcularán los tiempos de pedido.");
+
+  /* Pedidos */
+  var p=[];
+  P.forEach(function(r){
+    var centro=str(val(r,P,"Centro")), f=fechaISO(val(r,P,"Fecha de solicitud"));
+    var cs=num(val(r,P,"Cantidad solicitada")), cp=num(val(r,P,"Cantidad pedida"));
+    var nec=val(r,P,"Número de necesidad"), necS=str(nec), ecos=[];
+    if(CEN[centro]&&necS){ var re=/(?<!\d)(\d{4})(?!\d)/g, m; while((m=re.exec(necS))) ecos.push(CEN[centro]+m[1]); }
+    var uniq={}; ecos.forEach(function(e){ uniq[e]=1; });
+    p.push({ centro:centro, f:f, fp:hayFp?fechaISO(val(r,P,"Fecha de pedido")):"", pedido:str(val(r,P,"Pedido")), mat:str(val(r,P,"Material")), txt:str(val(r,P,"Texto breve")),
+      base:cp>0?cp:cs, clase:str(val(r,P,"Clase documento")), nec:necS, ecos:ecos, neco:Math.max(Object.keys(uniq).length,1) });
+  });
+  var gp={};
+  p.forEach(function(l){ if(l.pedido){ var k=l.pedido+"|"+l.mat; gp[k]=(gp[k]||0)+l.base; } });
+
+  /* Movimientos */
+  var mov=M.map(function(r){ return { centro:str(val(r,M,"Centro")), f:fechaISO(val(r,M,"Fe.contabilización")), q:num(val(r,M,"Cantidad")), pedido:str(val(r,M,"Pedido")), mat:str(val(r,M,"Material")), cl:str(val(r,M,"Clase de movimiento")) }; });
+  var ing={};
+  mov.forEach(function(m){
+    if(m.cl!=="101"||!m.pedido||!m.f) return;
+    var k=m.pedido+"|"+m.mat, g=ing[k];
+    if(!g) ing[k]=g={q:0,d1:m.f,d2:m.f};
+    g.q+=m.q; if(m.f<g.d1) g.d1=m.f; if(m.f>g.d2) g.d2=m.f;
+  });
+  var tra=mov.filter(function(m){ return m.cl==="301"&&m.q>0&&m.f; });
+
+  /* Uso y Usoc */
+  var uso=US.map(function(r){ return { o:str(val(r,US,"Orden")), eq:str(val(r,US,"Equipo")), c:str(val(r,US,"Clase de orden")), t:str(val(r,US,"Texto breve")), fe:fechaISO(val(r,US,"Fecha entrada")), st:str(val(r,US,"Status del sistema")), cost:num(val(r,US,"Costes tot.reales")) }; });
+  var ordInfo={}; uso.forEach(function(o){ if(!(o.o in ordInfo)) ordInfo[o.o]=o; });
+  var usoc=UC.map(function(r){
+    var o=str(val(r,UC,"Orden")), inf=ordInfo[o]||{};
+    return { fc:fechaISO(val(r,UC,"Fe.contabilización")), o:o, c:inf.c||"", eq:inf.eq||"", m:str(val(r,UC,"Material")), t:str(val(r,UC,"Texto breve de material")), q:num(val(r,UC,"Cantidad")), u:str(val(r,UC,"Un.medida de entrada")), i:r2(num(val(r,UC,"Importe ML"))) };
+  });
+
+  /* Mecánico: alias de la hoja o nombre de pila contra la tabla de personal */
+  function mecDe(n){
+    var nn=norm(n); if(!nn) return null;
+    var pers=ctx.personal||[];
+    for(var i=0;i<pers.length;i++){
+      var al=norm(pers[i].alias_hoja||""), pila=norm(String(pers[i].nombre||"").split(/\s+/)[0]);
+      if((al&&al===nn)||pila===nn) return pers[i].nombre;
+    }
+    return null;
+  }
+  function cedisDe(txt,eco){
+    var n=norm(txt);
+    for(var i=0;i<CEDIS_ALL.length;i++) if(norm(CEDIS_ALL[i])===n) return CEDIS_ALL[i];
+    return CEDIS_PREF[eco.slice(0,3)] || String(txt).trim().toLowerCase().replace(/(^|\s)\S/g,function(c){ return c.toUpperCase(); });
+  }
+
+  var units=[], sinCruce=[], sinIngreso=[], sinCatalogo=[];
+  U.forEach(function(r){
+    var e=str(val(r,U,"ECONÓMICO")); if(!e) return;
+    var centro=RC[e.slice(0,3)];
+    if(!centro){ avisos.push("El económico "+e+" tiene un prefijo que no reconozco; se omitió."); return; }
+    var fechas=C.filter(function(c){ return str(val(c,C,"Equipo"))===e&&str(val(c,C,"UnidadCaracterística"))==="l"; }).map(function(c){ return fechaISO(val(c,C,"Fecha")); }).filter(Boolean);
+    var ingreso=fechas.length?maxStr(fechas):null;
+    var mats=usoc.filter(function(a){ return a.eq===e; }).sort(function(a,b){ return a.fc<b.fc?-1:a.fc>b.fc?1:0; });
+    var mine=p.filter(function(l){ return l.centro===centro&&l.ecos.indexOf(e)>=0; }).sort(function(a,b){ return a.f<b.f?-1:a.f>b.f?1:0; });
+    var lines=mine.map(function(l){
+      var n=l.neco, share=l.base/n, key=l.pedido+"|"+l.mat;
+      var d={ f:l.f, ped:l.pedido||null, mat:l.mat, txt:l.txt, q:r2(share), qtot:l.base, n:n, nec:l.nec, clase:l.clase };
+      if(l.fp) d.fp=l.fp;
+      var arr=0, sq=0;
+      if(l.pedido){
+        var g=ing[key];
+        if(g){
+          arr=r2(Math.min(1,g.q/gp[key])*share); d.fi=g.d1; d.fl=g.d2;
+          var ss=mats.filter(function(a){ return a.m===l.mat&&a.fc>=g.d1; });
+          if(ss.length){
+            sq=sumar(ss.map(function(a){ return a.q; }));
+            if(sq>0){ d.fsal=minStr(ss.map(function(a){ return a.fc; })); var os={}; ss.forEach(function(a){ os[a.o]=1; }); d.osal=Object.keys(os).sort(); }
+          }
+        }
+      } else {
+        var tt=tra.filter(function(m){ return m.centro===centro&&m.mat===l.mat&&m.f>=l.f; });
+        if(tt.length) d.tras=sumar(tt.map(function(m){ return m.q; }));
+      }
+      d.arr=arr; d.sal=r2(Math.max(sq,0));
+      var st;
+      if(!l.pedido) st="sol"; else if(arr===0) st="ped"; else if(arr<share-1e-9) st="par"; else if(d.sal>0) st="sal"; else st="lleg";
+      d.st=st; return d;
+    });
+    var ms=mats.map(function(a){ return { f:a.fc, o:a.o, c:a.c, m:a.m, t:a.t, q:a.q, u:a.u, i:a.i }; });
+    var ords=uso.filter(function(o){ return o.eq===e; }).sort(function(a,b){ return a.fe<b.fe?-1:a.fe>b.fe?1:0; })
+      .map(function(o){ return { o:o.o, c:o.c, t:o.t, fe:o.fe, st:o.st, ab:o.st.indexOf("CERR")!==0, cost:o.cost }; });
+    var mh=str(val(r,U,"MECÁNICO ASIGNADO")), mec=mecDe(mh);
+    var cat=(ctx.catalogo||{})[e];
+    if(!mec) sinCruce.push(e+" ("+mh+")");
+    if(!ingreso) sinIngreso.push(e);
+    if(!cat) sinCatalogo.push(e);
+    units.push({ eco:e, cedis:cedisDe(str(val(r,U,"CEDIS")),e), falla:str(val(r,U,"FALLA")), mec_hoja:mh, mec:mec, ingreso:ingreso,
+      marca:cat?cat.marca:"", modelo:cat?cat.modelo:"", area:cat?cat.area:"", lines:lines, mats:ms, ords:ords });
+  });
+  if(!units.length) throw new Error("No encontré unidades en la pestaña UPiso.");
+  if(sinCruce.length) avisos.push("Sin cruce de mecánico con la tabla de personal: "+sinCruce.join(", ")+".");
+  if(sinIngreso.length) avisos.push("Sin carga de combustible (no hay fecha de ingreso): "+sinIngreso.join(", ")+".");
+  if(sinCatalogo.length) avisos.push("No están en el catálogo de unidades (sin marca/modelo/área): "+sinCatalogo.join(", ")+".");
+  return { corte:corte, units:units, avisos:avisos };
+}
+window.PISO_CALCULAR=calcular;
+
+/* ================= pantalla ================= */
+var PENDIENTE=null;
+function hoyISO(){ var d=new Date(); return d.getFullYear()+"-"+("0"+(d.getMonth()+1)).slice(-2)+"-"+("0"+d.getDate()).slice(-2); }
+function corteDeNombre(n){
+  var m=String(n).match(/(\d{2})(\d{2})(\d{4})(?!\d)/);
+  if(m&&+m[2]>=1&&+m[2]<=12&&+m[1]>=1&&+m[1]<=31) return m[3]+"-"+m[2]+"-"+m[1];
+  return hoyISO();
+}
+function fCorta(iso){ if(!iso) return "—"; var p=iso.split("-"); return p[2]+"/"+p[1]+"/"+p[0].slice(2); }
+function resumen(R){
+  var por={}; R.units.forEach(function(u){ por[u.cedis]=(por[u.cedis]||0)+1; });
+  var lineas=0, pend=0; R.units.forEach(function(u){ lineas+=u.lines.length; u.lines.forEach(function(l){ if(l.st==="sol"||l.st==="ped"||l.st==="par") pend++; }); });
+  var h='<div class="wrap"><table><thead><tr><th>Económico</th><th>CEDIS</th><th>Mecánico</th><th>Ingreso (última carga)</th><th>Líneas de pedido</th><th>Material surtido</th></tr></thead><tbody>';
+  R.units.forEach(function(u){ h+="<tr><td><b>"+esc(u.eco)+"</b></td><td>"+esc(u.cedis)+"</td><td>"+esc(u.mec||u.mec_hoja+" (sin cruce)")+"</td><td>"+(u.ingreso?esc(fCorta(u.ingreso)):"Sin información")+"</td><td>"+u.lines.length+"</td><td>"+u.mats.length+"</td></tr>"; });
+  h+="</tbody></table></div>";
+  h='<p><b>'+R.units.length+' unidades en piso</b> · '+Object.keys(por).sort().map(function(k){ return esc(k)+": "+por[k]; }).join(" · ")+" · "+lineas+" líneas de pedido ("+pend+" por llegar)</p>"+h;
+  if(R.avisos.length) h+='<div class="aviso"><ul>'+R.avisos.map(function(a){ return "<li>"+esc(a)+"</li>"; }).join("")+"</ul></div>";
+  return h;
+}
+function infoActual(){
+  ERP.rest("unidades_piso_datos?select=corte,actualizado_at,datos&id=eq.1").then(function(r){
+    var n=r&&r[0]&&r[0].datos&&r[0].datos.units?r[0].datos.units.length:0;
+    $("cActual").textContent = r&&r[0] ? "Vigente hoy: corte del "+fCorta(r[0].corte)+" con "+n+" unidades." : "Todavía no hay un corte cargado.";
+  }).catch(function(){ $("cActual").textContent=""; });
+}
+function contexto(){
+  return Promise.all([
+    ERP.rest("personal?select=nombre,alias_hoja&activo=is.true").catch(function(){ return []; }),
+    ERP.rest("catalogo_unidades?select=economico,marca,modelo,area&limit=2000").catch(function(){ return []; })
+  ]).then(function(r){
+    var cat={}; (r[1]||[]).forEach(function(c){ cat[c.economico]={marca:c.marca||"",modelo:c.modelo,area:c.area||""}; });
+    return { personal:r[0]||[], catalogo:cat };
+  });
+}
+{
+  infoActual();
+  if(!ERP.puede("piso")){ $("cMsg").className="msg err"; $("cMsg").textContent="Tu usuario no puede actualizar esta sección."; $("bElegir").disabled=true; }
+  $("bElegir").addEventListener("click",function(){ $("fArch").click(); });
+  $("fArch").addEventListener("change",function(){
+    var f=this.files[0]; if(!f) return;
+    var m=$("cMsg"), inp=this;
+    m.className="msg"; m.textContent="Leyendo "+f.name+"…"; $("filaGuardar").hidden=true; $("cResumen").innerHTML=""; PENDIENTE=null;
+    var rd=new FileReader();
+    rd.onload=function(){
+      var wb; try{ wb=XLSX.read(new Uint8Array(rd.result),{type:"array"}); }catch(e){ m.className="msg err"; m.textContent="No pude abrir el archivo como Excel."; inp.value=""; return; }
+      contexto().then(function(ctx){
+        try{ PENDIENTE=calcular(wb,corteDeNombre(f.name),ctx); }
+        catch(e){ m.className="msg err"; m.textContent=e.message; inp.value=""; return; }
+        m.className="msg ok"; m.textContent="Archivo leído. Revisa el resumen, confirma la fecha del corte y guarda.";
+        $("cResumen").innerHTML=resumen(PENDIENTE); $("fCorte").value=PENDIENTE.corte; $("filaGuardar").hidden=false; inp.value="";
+      });
+    };
+    rd.onerror=function(){ m.className="msg err"; m.textContent="No se pudo leer el archivo."; };
+    rd.readAsArrayBuffer(f);
+  });
+  $("bGuardar").addEventListener("click",function(){
+    if(!PENDIENTE) return;
+    var c=$("fCorte").value; if(!/^\d{4}-\d{2}-\d{2}$/.test(c)){ $("cMsg").className="msg err"; $("cMsg").textContent="Pon la fecha del corte."; return; }
+    var m=$("cMsg"), b=this;
+    if(!confirm("¿Reemplazar el corte vigente por el del "+fCorta(c)+" con "+PENDIENTE.units.length+" unidades?")) return;
+    b.disabled=true; m.className="msg"; m.textContent="Guardando…";
+    var datos={ corte:c, units:PENDIENTE.units };
+    ERP.rest("unidades_piso_datos?on_conflict=id",{ method:"POST", body:[{ id:1, corte:c, datos:datos, actualizado_at:new Date().toISOString() }], prefer:"resolution=merge-duplicates,return=minimal" }).then(function(){
+      b.disabled=false; $("filaGuardar").hidden=true; m.className="msg ok"; m.textContent="Listo: corte del "+fCorta(c)+" con "+datos.units.length+" unidades."; PENDIENTE=null; infoActual();
+    }).catch(function(e){ b.disabled=false; m.className="msg err"; m.textContent="No se pudo guardar: "+e.message; });
+  });
+}
+})();
+</script>
+<script src="offline.js"></script>
+</body>
+</html>
