@@ -2,7 +2,14 @@
 <title>Carga de Mecánicos</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="erp-auth.js"></script>
+<script>if(/[?&]modo=carga/.test(location.search))document.documentElement.classList.add("modo-carga");</script>
 <style>
+  html.modo-carga #content{display:none !important;}
+  html:not(.modo-carga) #uploader{display:none !important;}
+  html.modo-carga .hero p.solover{display:none;}
+  html:not(.modo-carga) .hero p.sologuardar{display:none;}
+  #nubeMeta{font-size:13px; color:var(--ink-soft);}
   :root{
     --ink:#142433; --ink-soft:#48607A; --ink-faint:#7C93A6;
     --bg:#EEF2F5; --surface:#FFFFFF; --surface-alt:#E4EAEF; --border:#D3DCE3;
@@ -136,7 +143,9 @@
 <div class="wrap">
   <div class="hero">
     <h1>Carga de Mecánicos</h1>
-    <p>Avisos (correctivos A4 y auxilios viales A5) por mecánico. El nombre sale de la pestaña Puestos de trabajo, validando el autor del aviso contra el Pto.tbjo.responsable. Carga la exportación mensual de SAP para actualizar.</p>
+    <p class="solover">Avisos (correctivos A4 y auxilios viales A5) por mecánico. El nombre sale de la pestaña Puestos de trabajo, validando el autor del aviso contra el Pto.tbjo.responsable.</p>
+    <p class="sologuardar">Sube la exportación de SAP con la carga de trabajo. Reemplaza la información vigente y la ven todos los usuarios con acceso.</p>
+    <div id="nubeMeta"></div>
   </div>
 
   <div id="uploader" class="uploader">
@@ -1013,62 +1022,94 @@
     if(e.dataTransfer.files && e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
   });
 
-  // ---------- Último archivo guardado en este equipo (para verlo sin internet) ----------
-  var DB_NAME = "erp-carga-mecanicos", STORE = "archivos";
-  function idbOpen(cb){
-    try{
-      var rq = indexedDB.open(DB_NAME, 1);
-      rq.onupgradeneeded = function(){ rq.result.createObjectStore(STORE); };
-      rq.onsuccess = function(){ cb(rq.result); };
-      rq.onerror = function(){ cb(null); };
-    }catch(e){ cb(null); }
-  }
-  function saveLast(name, buffer){
-    idbOpen(function(db){
-      if(!db) return;
-      try{ db.transaction(STORE, "readwrite").objectStore(STORE).put({ name:name, loadedAt:new Date().toISOString(), buffer:buffer }, "ultimo"); }catch(e){}
+  // ---------- Datos compartidos en Supabase ----------
+  var HOJAS = ["Operaciones", "OM01OM02", "OM01OM02mov", "Puestos De trabajo"];
+  var PENDIENTE = null;
+  function quitaCola(r){ var n = r.length; while(n > 0 && r[n-1] == null) n--; return n === r.length ? r : r.slice(0, n); }
+  // Guarda cada pestaña como filas simples (las fechas quedan como número de serie de Excel, igual que en el archivo).
+  function extraerHojas(wb){
+    var o = {};
+    HOJAS.forEach(function(n){
+      var ws = findSheet(wb, n);
+      if(!ws) throw new Error("Falta la pestaña " + n + ". Encontré: " + wb.SheetNames.join(", ") + ".");
+      o[n] = sheetHeaderRows(ws).map(quitaCola);
     });
+    return o;
   }
-  function loadLast(cb){
-    idbOpen(function(db){
-      if(!db) return cb(null);
-      try{
-        var rq = db.transaction(STORE).objectStore(STORE).get("ultimo");
-        rq.onsuccess = function(){ cb(rq.result || null); };
-        rq.onerror = function(){ cb(null); };
-      }catch(e){ cb(null); }
-    });
+  function reconstruir(hojas){
+    var wb = { SheetNames: [], Sheets: {} };
+    HOJAS.forEach(function(n){ if(hojas[n]){ wb.SheetNames.push(n); wb.Sheets[n] = XLSX.utils.aoa_to_sheet(hojas[n]); } });
+    return wb;
+  }
+  function fCorta(iso){ if(!iso) return "—"; var p = String(iso).slice(0,10).split("-"); return p[2] + "/" + p[1] + "/" + p[0].slice(2); }
+  function hoyISO(){ var d = new Date(); return d.getFullYear() + "-" + ("0"+(d.getMonth()+1)).slice(-2) + "-" + ("0"+d.getDate()).slice(-2); }
+  function corteDeNombre(n){
+    var m = String(n).match(/(\d{2})(\d{2})(\d{4})(?!\d)/);
+    return (m && +m[2] >= 1 && +m[2] <= 12 && +m[1] >= 1 && +m[1] <= 31) ? m[3] + "-" + m[2] + "-" + m[1] : hoyISO();
   }
 
-  function processBuffer(buffer, name, loadedAt){
-    var wb = XLSX.read(new Uint8Array(buffer), { type:"array", cellDates:true });
-    var parsed = parseWorkbook(wb);
-    render(parsed);
-    var cuando = loadedAt ? new Date(loadedAt).toLocaleString("es-MX", { day:"2-digit", month:"short", hour:"2-digit", minute:"2-digit" }) : "";
-    $("fileMeta").textContent = (loadedAt ? "Último archivo guardado en este equipo: " : "Archivo cargado: ") + name + (cuando ? " (cargado el " + cuando + ")" : "") + " — " + fmtInt(parsed.meta.totalAvisos) + " avisos" + (loadedAt ? ". Sube otro para actualizar." : "");
+  var MODO_CARGA = document.documentElement.classList.contains("modo-carga");
+
+  function infoActual(){
+    return ERP.rest("correctivos_datos?select=archivo,corte,actualizado_at&id=eq.1").then(function(r){
+      $("nubeMeta").textContent = r && r[0] ? "Vigente hoy: " + (r[0].archivo || "archivo") + " · corte del " + fCorta(r[0].corte) + " · cargado " + new Date(r[0].actualizado_at).toLocaleString("es-MX", { day:"2-digit", month:"short", hour:"2-digit", minute:"2-digit" }) + "." : "Todavía no hay un archivo cargado.";
+    }).catch(function(){});
+  }
+
+  function cargarDeNube(){
+    $("nubeMeta").textContent = "Cargando…";
+    ERP.rest("correctivos_datos?select=archivo,corte,actualizado_at,datos&id=eq.1").then(function(r){
+      if(!r || !r[0]){ $("nubeMeta").textContent = "Todavía no hay un archivo cargado, o tu usuario no tiene acceso a esta sección."; return; }
+      var parsed = parseWorkbook(reconstruir(r[0].datos));
+      render(parsed);
+      var cuando = new Date(r[0].actualizado_at).toLocaleString("es-MX", { day:"2-digit", month:"short", hour:"2-digit", minute:"2-digit" });
+      $("nubeMeta").textContent = (r[0].archivo || "Archivo") + " · corte del " + fCorta(r[0].corte) + " · cargado " + cuando + " — " + fmtInt(parsed.meta.totalAvisos) + " avisos.";
+    }).catch(function(e){ $("nubeMeta").textContent = "No se pudo cargar la información: " + e.message; });
   }
 
   function handleFile(file){
-    $("fileMeta").textContent = "Leyendo " + file.name + "…";
+    var meta = $("fileMeta"); meta.className = "file-meta"; meta.textContent = "Leyendo " + file.name + "…";
+    var gb = document.getElementById("bGuardarNube"); if(gb) gb.remove();
+    PENDIENTE = null;
     var reader = new FileReader();
     reader.onload = function(e){
       try{
-        processBuffer(e.target.result, file.name, null);
-        saveLast(file.name, e.target.result);
+        var wb = XLSX.read(new Uint8Array(e.target.result), { type:"array" });
+        var hojas = extraerHojas(wb);
+        var parsed = parseWorkbook(reconstruir(hojas));
+        PENDIENTE = { archivo:file.name, corte:corteDeNombre(file.name), datos:hojas };
+        meta.textContent = file.name + " leído: " + fmtInt(parsed.meta.totalAvisos) + " avisos, " + fmtInt(hojas["OM01OM02"].length - 1) + " órdenes. Confirma la fecha del corte y guarda.";
+        var fila = document.createElement("div"); fila.id = "bGuardarNube"; fila.style.cssText = "display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:center";
+        fila.innerHTML = '<label>Fecha del corte <input type="date" id="fCorte"></label><button class="btn-primary" id="bGuardar2" type="button">Guardar y reemplazar</button>';
+        $("uploader").appendChild(fila); $("fCorte").value = PENDIENTE.corte;
+        $("bGuardar2").addEventListener("click", guardarNube);
       }catch(err){
-        $("fileMeta").textContent = "No se pudo leer el archivo. Confirma que tiene las pestañas Operaciones, OM01OM02, OM01OM02MOV y Puestos De trabajo.";
+        meta.className = "file-meta"; meta.textContent = err && /pestaña/.test(err.message) ? err.message : "No se pudo leer el archivo. Confirma que tiene las pestañas Operaciones, OM01OM02, OM01OM02MOV y Puestos De trabajo.";
       }
     };
     reader.readAsArrayBuffer(file);
   }
 
-  loadLast(function(rec){
-    if(!rec || !rec.buffer) return;
-    try{ processBuffer(rec.buffer, rec.name, rec.loadedAt); }
-    catch(err){ $("fileMeta").textContent = "Hay un archivo guardado (" + rec.name + ") pero no se pudo abrir. Vuelve a cargarlo."; }
-  });
+  function guardarNube(){
+    if(!PENDIENTE) return;
+    var c = $("fCorte").value, meta = $("fileMeta"), b = $("bGuardar2");
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(c)){ meta.textContent = "Pon la fecha del corte."; return; }
+    if(!confirm("¿Reemplazar la información vigente por este archivo, con corte del " + fCorta(c) + "?")) return;
+    b.disabled = true; meta.textContent = "Guardando…";
+    ERP.rest("correctivos_datos?on_conflict=id", { method:"POST", body:[{ id:1, archivo:PENDIENTE.archivo, corte:c, datos:PENDIENTE.datos, actualizado_at:new Date().toISOString() }], prefer:"resolution=merge-duplicates,return=minimal" }).then(function(){
+      meta.textContent = "Listo. Correctivos ya muestra el corte del " + fCorta(c) + ".";
+      PENDIENTE = null; var g = document.getElementById("bGuardarNube"); if(g) g.remove(); infoActual();
+    }).catch(function(e){ b.disabled = false; meta.textContent = "No se pudo guardar: " + e.message; });
+  }
 
-  if(typeof globalThis !== "undefined" && globalThis.__CM_TEST__){ globalThis.__CM_TEST__.parse = parseWorkbook; }
+  if(MODO_CARGA){
+    infoActual();
+    if(!ERP.puede("correctivos")){ $("fileMeta").textContent = "Tu usuario no puede actualizar esta sección."; $("btnPick").disabled = true; }
+  } else {
+    cargarDeNube();
+  }
+
+  if(typeof globalThis !== "undefined" && globalThis.__CM_TEST__){ globalThis.__CM_TEST__.parse = parseWorkbook; globalThis.__CM_TEST__.extraer = extraerHojas; globalThis.__CM_TEST__.reconstruir = reconstruir; }
 })();
 </script>
 
