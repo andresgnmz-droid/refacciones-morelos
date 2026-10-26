@@ -282,7 +282,7 @@
     { id:"correctivos", t:"Correctivos", src:"carga-mecanicos.html", visible:function(){ return ve("correctivos"); } },
     { id:"hojalateria", t:"Hojalatería y Pintura", src:"hojalateria.html", visible:function(){ return ve("hojalateria"); } },
     { id:"piso", t:"Unidades en piso", src:"unidades-piso.html", visible:function(){ return ve("piso"); } },
-    { id:"varios", t:"Varios", lock:VARIOS_BLOQUEADO, visible:function(){ return ["combustible","llantas","catalogo_refacciones","control_refacciones","catalogo_unidades","horas_extras"].some(ve); } },
+    { id:"varios", t:"Varios", lock:VARIOS_BLOQUEADO, visible:function(){ return ["combustible","llantas","catalogo_refacciones","control_refacciones","carta_peticion","catalogo_unidades","horas_extras"].some(ve); } },
     { id:"historial", t:"Histórico y respaldo", src:"historial.html", visible:function(){ return ve("historial"); } },
     { id:"ajustes", t:"Ajustes", visible:function(){ return nivel("ajustes") === "editar"; } }
   ];
@@ -291,6 +291,7 @@
     { id:"llantas", t:"Control de llantas", m:"llantas", d:"Pendiente de conectar." },
     { id:"catalogo-refacciones", t:"Catálogo de refacciones", src:"index.html", m:"catalogo_refacciones", d:"Existencias por CEDIS según el último stock de SAP." },
     { id:"control-refacciones", t:"Control de refacciones", src:"faltantes.html", m:"control_refacciones", d:"Faltantes: pedidos contra ingresos de SAP, por CEDIS." },
+    { id:"carta-peticion", t:"Carta petición", src:"carta-peticion.html", m:"carta_peticion", d:"Genera la carta petición de dotación de combustible para SAP." },
     { id:"catalogo-unidades", t:"Catálogo de unidades", src:"catalogo-maestro.html", m:"catalogo_unidades", d:"Ficha maestra de las unidades de la zona." },
     { id:"horas-extras", t:"Horas extras", m:"horas_extras", d:"Pendiente de conectar." }
   ];
