@@ -99,6 +99,19 @@
   .sub-items span,.sub-items a{font-size:12.5px;border:1px solid var(--border);border-radius:10px;padding:6px 10px;color:var(--ink-faint);background:var(--bg);text-decoration:none;}
   .sub-items a{color:var(--accent);}
 
+  /* subpestañas de Varios */
+  .subnav{display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:8px 16px;background:var(--surface);border-bottom:1px solid var(--border);}
+  .subnav a,.subnav span{font-size:13px;font-weight:600;border:1px solid var(--border);border-radius:10px;padding:6px 12px;text-decoration:none;white-space:nowrap;}
+  .subnav a{color:var(--ink-soft);background:var(--bg);}
+  .subnav a:hover{color:var(--ink);border-color:var(--accent);}
+  .subnav a.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);}
+  .subnav span{color:var(--ink-faint);border-style:dashed;}
+  .subbody{flex:1;min-height:0;position:relative;overflow:auto;}
+  .subbody iframe{width:100%;height:100%;border:0;display:block;background:var(--bg);}
+  .vcards{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;}
+  a.card.vc{text-decoration:none;color:inherit;}
+  a.card.vc:hover{border-color:var(--accent);}
+
   /* ajustes */
   .stabs{display:flex;gap:6px;flex-wrap:wrap;}
   .stabs button{border:1px solid var(--border);background:var(--surface);color:var(--ink-soft);font-weight:600;font-size:13px;padding:8px 14px;border-radius:10px;}
@@ -269,17 +282,23 @@
     { id:"correctivos", t:"Correctivos", src:"carga-mecanicos.html", visible:function(){ return ve("correctivos"); } },
     { id:"hojalateria", t:"Hojalatería y Pintura", src:"hojalateria.html", visible:function(){ return ve("hojalateria"); } },
     { id:"piso", t:"Unidades en piso", src:"unidades-piso.html", visible:function(){ return ve("piso"); } },
-    { id:"varios", t:"Varios", lock:VARIOS_BLOQUEADO, visible:function(){ return ["combustible","llantas","catalogo_refacciones","catalogo_unidades","horas_extras"].some(ve); } },
+    { id:"varios", t:"Varios", lock:VARIOS_BLOQUEADO, visible:function(){ return ["combustible","llantas","catalogo_refacciones","control_refacciones","catalogo_unidades","horas_extras"].some(ve); } },
     { id:"historial", t:"Histórico y respaldo", src:"historial.html", visible:function(){ return ve("historial"); } },
     { id:"ajustes", t:"Ajustes", visible:function(){ return nivel("ajustes") === "editar"; } }
   ];
   var VARIOS_ITEMS = [
-    { t:"Combustible", src:"rendimientos.html", m:"combustible" },
-    { t:"Control de llantas", m:"llantas" },
-    { t:"Catálogo de refacciones", src:"index.html", m:"catalogo_refacciones" },
-    { t:"Catálogo de unidades", src:"catalogo-maestro.html", m:"catalogo_unidades" },
-    { t:"Horas extras", m:"horas_extras" }
+    { id:"combustible", t:"Combustible", src:"rendimientos.html", m:"combustible", d:"Rendimientos y cargas de combustible de la flota." },
+    { id:"llantas", t:"Control de llantas", m:"llantas", d:"Pendiente de conectar." },
+    { id:"catalogo-refacciones", t:"Catálogo de refacciones", src:"index.html", m:"catalogo_refacciones", d:"Existencias por CEDIS según el último stock de SAP." },
+    { id:"control-refacciones", t:"Control de refacciones", src:"faltantes.html", m:"control_refacciones", d:"Faltantes: pedidos contra ingresos de SAP, por CEDIS." },
+    { id:"catalogo-unidades", t:"Catálogo de unidades", src:"catalogo-maestro.html", m:"catalogo_unidades", d:"Ficha maestra de las unidades de la zona." },
+    { id:"horas-extras", t:"Horas extras", m:"horas_extras", d:"Pendiente de conectar." }
   ];
+  function puedeAbrir(it){ return !!it.src && ve(it.m) && (!VARIOS_BLOQUEADO || esAdmin()); }
+  function temaIframe(f){
+    var t = document.documentElement.dataset.theme; if(!t) return;
+    f.addEventListener("load", function(){ try{ f.contentDocument.documentElement.dataset.theme = t; }catch(e){} });
+  }
 
   var panels = {}, vistas = [], armada = false, obsoleto = false;
 
@@ -307,22 +326,25 @@
     mostrar(location.hash.slice(1) || "inicio");
   }
 
-  function mostrar(id){
-    if(!panels[id] || !panels[id].tab.visible()) id = "inicio";
+  // La dirección es  #pestaña  o  #pestaña/subpestaña  (ej. #varios/control-refacciones).
+  function mostrar(ruta){
+    var partes = String(ruta || "").split("/"), id = partes[0], sub = partes[1] || "";
+    if(!panels[id] || !panels[id].tab.visible()) { id = "inicio"; sub = ""; }
     TABS.forEach(function(t){ panels[t.id].node.hidden = (t.id !== id); });
     TABS.forEach(function(t){ panels[t.id].btn.classList.toggle("on", t.id === id); });
     var P = panels[id];
-    if(P.loaded && P.stale && P.tab.src){ P.node.textContent = ""; P.loaded = false; }
+    if(P.loaded && P.stale && (P.tab.src || id === "varios")){ P.node.textContent = ""; P.loaded = false; P.setSub = null; }
     if(!P.loaded){
       P.loaded = true; P.stale = false;
       if(P.tab.src){
-        var f = document.createElement("iframe"); f.title = P.tab.t; f.src = P.tab.src; P.node.appendChild(f);
+        var f = document.createElement("iframe"); f.title = P.tab.t; f.src = P.tab.src; temaIframe(f); P.node.appendChild(f);
       } else if(id === "inicio") buildInicio(P.node);
       else if(id === "varios") buildVarios(P.node);
       else if(id === "ajustes") buildAjustes(P.node);
     }
+    if(id === "varios" && P.setSub) P.setSub(sub);
   }
-  function marcarObsoletos(){ TABS.forEach(function(t){ if(t.src) panels[t.id].stale = true; }); panels.inicio.stale = false; }
+  function marcarObsoletos(){ TABS.forEach(function(t){ if(t.src || t.id === "varios") panels[t.id].stale = true; }); panels.inicio.stale = false; }
 
   /* ================= Inicio ================= */
   function api(path, extra){
@@ -403,21 +425,57 @@
   }
 
   /* ================= Varios ================= */
+  // Las herramientas de Varios se abren dentro del ERP. Cada una es un enlace real (#varios/…):
+  // con clic normal se queda aquí; con clic derecho › "Abrir en pestaña nueva" (o Ctrl+clic) abre el ERP en esa herramienta.
   function buildVarios(root){
-    var w = el("div", "wrap"); root.appendChild(w);
-    var hero = el("div", "hero");
-    hero.appendChild(el("h2", "", "Varios"));
-    hero.appendChild(el("p", "", VARIOS_BLOQUEADO ? "Esta sección está bloqueada mientras se afinan los detalles. Se libera al concluir la semana." + (esAdmin() ? " Como administrador puedes abrir las herramientas que ya existen." : "") : "Herramientas complementarias."));
-    w.appendChild(hero);
-    var c = el("div", "card" + (VARIOS_BLOQUEADO ? " locked" : "")); c.appendChild(el("h3", "", "Contenido de la sección"));
-    var s = el("div", "sub-items");
-    VARIOS_ITEMS.forEach(function(it){
-      if(!ve(it.m)) return;
-      var abre = it.src && (!VARIOS_BLOQUEADO || esAdmin());
-      if(abre){ var a = el("a", "", it.t); a.href = it.src; a.target = "_blank"; a.rel = "noopener"; s.appendChild(a); }
-      else s.appendChild(el("span", "", it.t + (it.src ? "" : " · pendiente")));
+    root.style.display = "flex"; root.style.flexDirection = "column"; root.style.overflow = "hidden";
+    var nav = el("div", "subnav"), body = el("div", "subbody");
+    root.appendChild(nav); root.appendChild(body);
+    var items = VARIOS_ITEMS.filter(function(it){ return ve(it.m); });
+    var enlaces = {}, actual = null;
+
+    function enlace(txt, ruta){
+      var a = el("a", "", txt); a.href = "#" + ruta;
+      a.addEventListener("click", function(e){
+        if(e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+        e.preventDefault(); location.hash = ruta;
+      });
+      return a;
+    }
+    enlaces[""] = enlace("Resumen", "varios"); nav.appendChild(enlaces[""]);
+    items.forEach(function(it){
+      if(puedeAbrir(it)){ enlaces[it.id] = enlace(it.t, "varios/" + it.id); nav.appendChild(enlaces[it.id]); }
+      else nav.appendChild(el("span", "", it.t + (it.src ? "" : " · pendiente")));
     });
-    c.appendChild(s); w.appendChild(c);
+
+    function resumen(){
+      var w = el("div", "wrap");
+      var hero = el("div", "hero");
+      hero.appendChild(el("h2", "", "Varios"));
+      hero.appendChild(el("p", "", VARIOS_BLOQUEADO ? "Esta sección está bloqueada mientras se afinan los detalles. Se libera al concluir la semana." + (esAdmin() ? " Como administrador puedes abrir las herramientas que ya existen." : "") : "Herramientas complementarias. Se abren aquí mismo; con clic derecho › Abrir en pestaña nueva se abren aparte."));
+      w.appendChild(hero);
+      var g = el("div", "vcards"); w.appendChild(g);
+      items.forEach(function(it){
+        var abre = puedeAbrir(it), c = abre ? enlace("", "varios/" + it.id) : el("div");
+        c.className = "card vc" + (abre ? "" : " locked");
+        c.appendChild(el("h3", "", it.t)); c.appendChild(el("p", "", it.d));
+        if(!abre) c.appendChild(el("span", "pill warn", it.src ? "Bloqueado" : "Pendiente"));
+        g.appendChild(c);
+      });
+      return w;
+    }
+
+    panels.varios.setSub = function(sub){
+      var it = items.filter(function(x){ return x.id === sub; })[0];
+      if(!it || !puedeAbrir(it)){ sub = ""; it = null; }
+      if(actual === sub) return;
+      actual = sub;
+      Object.keys(enlaces).forEach(function(k){ enlaces[k].classList.toggle("on", k === sub); });
+      body.textContent = "";
+      if(it){
+        var f = document.createElement("iframe"); f.title = it.t; f.src = it.src; temaIframe(f); body.appendChild(f);
+      } else body.appendChild(resumen());
+    };
   }
 
   /* ================= Mi cuenta ================= */
@@ -661,6 +719,7 @@
     }
     tarjeta("Catálogo de unidades", "Excel mensual del catálogo (pestaña Morelos): altas, bajas y cambios.", "Subir archivo", function(){ abrirFrame("catalogo-maestro.html?modo=carga", "Catálogo de unidades"); });
     tarjeta("Hojalatería y Pintura", "Archivo mensual con CRONOGRAMA, Remo y Remomov.", "Subir archivo", function(){ abrirFrame("hojalateria.html?modo=carga", "Hojalatería y Pintura"); });
+    tarjeta("Control de refacciones", "Descarga de SAP de faltantes, con las pestañas Pedidos e Ingresos.", "Subir archivo", function(){ abrirFrame("faltantes.html?modo=carga", "Control de refacciones"); });
 
     var cpiso = tarjeta("Unidades en piso", "Corte ya procesado de unidades en piso (archivo .json). Reemplaza el corte vigente.", null, null, null);
     var fi = el("input"); fi.type = "file"; fi.accept = ".json,application/json"; fi.hidden = true;
