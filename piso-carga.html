@@ -162,6 +162,15 @@ function calcular(wb, corte, ctx){
     return CEDIS_PREF[eco.slice(0,3)] || String(txt).trim().toLowerCase().replace(/(^|\s)\S/g,function(c){ return c.toUpperCase(); });
   }
 
+  /* Última carga de litros y último kilometraje de TODOS los equipos de la pestaña Cargas (sin lecturas anuladas) */
+  var ultimas={};
+  C.forEach(function(c){
+    if(str(val(c,C,"Indicador anulación"))) return;
+    var e=str(val(c,C,"Equipo")), t=str(val(c,C,"UnidadCaracterística")), f=fechaISO(val(c,C,"Fecha"));
+    if(!e||!f||(t!=="l"&&t!=="km")) return;
+    var doc=num(val(c,C,"Documento medición")), o=ultimas[e]=ultimas[e]||{};
+    if(!o[t]||f>o[t].f||(f===o[t].f&&doc>o[t].doc)) o[t]={ f:f, doc:doc, v:t==="l"?num(val(c,C,"Diferencia val. cont.")):num(val(c,C,"Valor de contador")) };
+  });
   var units=[], sinCruce=[], sinIngreso=[], sinCatalogo=[];
   U.forEach(function(r){
     var e=str(val(r,U,"ECONÓMICO")); if(!e) return;
@@ -210,7 +219,9 @@ function calcular(wb, corte, ctx){
   if(sinCruce.length) avisos.push("Sin cruce de mecánico con la tabla de personal: "+sinCruce.join(", ")+".");
   if(sinIngreso.length) avisos.push("Sin carga de combustible (no hay fecha de ingreso): "+sinIngreso.join(", ")+".");
   if(sinCatalogo.length) avisos.push("No están en el catálogo de unidades (sin marca/modelo/área): "+sinCatalogo.join(", ")+".");
-  return { corte:corte, units:units, avisos:avisos };
+  var listaUlt=Object.keys(ultimas).map(function(e){ var o=ultimas[e];
+    return { economico:e, litros_fecha:o.l?o.l.f:null, litros:o.l?r2(o.l.v):null, km_fecha:o.km?o.km.f:null, km:o.km?o.km.v:null, corte:corte }; });
+  return { corte:corte, units:units, avisos:avisos, ultimas:listaUlt };
 }
 window.PISO_CALCULAR=calcular;
 
@@ -277,7 +288,11 @@ function contexto(){
     b.disabled=true; m.className="msg"; m.textContent="Guardando…";
     var datos={ corte:c, units:PENDIENTE.units };
     ERP.rest("unidades_piso_datos?on_conflict=id",{ method:"POST", body:[{ id:1, corte:c, datos:datos, actualizado_at:new Date().toISOString() }], prefer:"resolution=merge-duplicates,return=minimal" }).then(function(){
-      b.disabled=false; $("filaGuardar").hidden=true; m.className="msg ok"; m.textContent="Listo: corte del "+fCorta(c)+" con "+datos.units.length+" unidades."; PENDIENTE=null; infoActual();
+      var ult=(PENDIENTE.ultimas||[]).map(function(u){ u.corte=c; u.updated_at=new Date().toISOString(); return u; });
+      if(!ult.length) return null;
+      return ERP.rest("unidades_cargas_ultimas?on_conflict=economico",{ method:"POST", body:ult, prefer:"resolution=merge-duplicates,return=minimal" }).then(function(){ return ult.length; });
+    }).then(function(nUlt){
+      b.disabled=false; $("filaGuardar").hidden=true; m.className="msg ok"; m.textContent="Listo: corte del "+fCorta(c)+" con "+datos.units.length+" unidades"+(nUlt?" y última carga/km de "+nUlt+" equipos.":"."); PENDIENTE=null; infoActual();
     }).catch(function(e){ b.disabled=false; m.className="msg err"; m.textContent="No se pudo guardar: "+e.message; });
   });
 }

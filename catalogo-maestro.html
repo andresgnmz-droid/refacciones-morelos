@@ -107,6 +107,8 @@
   .dot-line{display:flex; gap:12px; align-items:center; flex-wrap:wrap;} .dot-comb{font-weight:600; min-width:130px;} .dot-lt{font-variant-numeric:tabular-nums; min-width:60px;}
   .dias{display:inline-flex; gap:3px;} .dia{width:24px; height:24px; border-radius:6px; display:inline-flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; background:var(--surface-alt); color:var(--ink-faint);} .dia.on{background:var(--accent); color:var(--accent-ink);}
   ul.ref{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px;} ul.ref li{display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; padding:7px 10px; background:var(--surface-alt); border-radius:8px; font-size:13px;} ul.ref li.warn{border-left:4px solid var(--warn);} .ref-st{color:var(--ink-soft);}
+  .sv-t{font-size:12px;} .sv-t th{position:static; text-align:center; padding:5px 6px;} .sv-t tbody th{text-align:left; white-space:nowrap;} td.sv{text-align:center; width:34px; color:var(--ink-faint);}
+  td.sv.hecho{background:#DDF3DD; color:#0a6a0a; font-weight:700;} td.sv.toca{color:var(--accent); font-weight:700;} td.sv.falto{background:#FBDADA; color:#a12727; font-weight:700;} td.sv.inh{color:var(--warn);} td.sv.actual{box-shadow:inset 0 -3px 0 var(--accent);} td.sv-res{white-space:nowrap; font-size:12px;} .sv-wrap{max-height:none;}
   #avisos{font-size:12px; color:var(--ink-soft); background:var(--surface-alt); border-radius:10px; padding:10px 12px; max-height:220px; overflow:auto;} #avisos ul{margin:6px 0 0; padding-left:18px;}
 </style>
 <script src="erp-auth.js"></script>
@@ -188,7 +190,7 @@
   var DAY = 86400000;
 
   var state = { rows: [], dot: {}, dotRows: [], virt: [], virtSet: {}, piso: null, salidas: {}, ajustes: {}, hoja: {}, faltEco: null, pisoOk: false,
-                parsedNew: null, diff: null, libro: null, sel: [] };
+                parsedNew: null, diff: null, libro: null, sel: [], ult: {}, serv: {}, servOk: false, crono: {}, anio: new Date().getFullYear() };
 
   function esc(v){ return v===null||v===undefined ? "" : String(v).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
   function sinInfo(v){ return (v===null||v===undefined||String(v).trim()==="") ? "<span class=\"nd\">sin información</span>" : esc(v); }
@@ -223,6 +225,14 @@
         state.ajustes = {}; (r[2]||[]).forEach(function(x){ state.ajustes[x.eco] = x; });
       }).catch(function(){ state.pisoOk = false; })
     ];
+    tareas.push(rest("unidades_cargas_ultimas?select=*").then(function(u){ state.ult = {}; u.forEach(function(x){ state.ult[x.economico] = x; }); }).catch(function(){}));
+    tareas.push(rest("rpc/catalogo_servicios_anio", { method:"POST", body:{ p_anio: state.anio } }).then(function(l){
+      state.serv = {}; state.servOk = Array.isArray(l) && l.length > 0;
+      (l||[]).forEach(function(x){ (state.serv[x.eco] = state.serv[x.eco] || []).push(x); });
+    }).catch(function(){ state.servOk = false; }));
+    tareas.push(rest("catalogo_cronograma_servicios?select=economico,servicio,mes&anio=eq."+state.anio).then(function(c){
+      state.crono = {}; c.forEach(function(x){ ((state.crono[x.economico] = state.crono[x.economico] || {})[x.servicio] = state.crono[x.economico][x.servicio] || []).push(x.mes); });
+    }).catch(function(){}));
     if(puedeRefacciones()){
       tareas.push(rest("rpc/catalogo_faltantes_necesidad", { method:"POST", body:{} }).then(function(d){ state.faltEco = indexarFaltantes(d); }).catch(function(){ state.faltEco = null; }));
     }
@@ -369,6 +379,61 @@
     return h + "</div>";
   }
 
+  // ---------------- Última carga / km ----------------
+  function fechaCorta(iso){ if(!iso) return ""; var p = String(iso).slice(0,10).split("-"); return p[2]+"/"+p[1]+"/"+p[0]; }
+  function hace(iso){
+    if(!iso) return "";
+    var d = Math.round((Date.now() - Date.parse(String(iso).slice(0,10)+"T00:00:00")) / DAY);
+    return d <= 0 ? "hoy" : d === 1 ? "hace 1 día" : d < 60 ? "hace "+d+" días" : "hace "+Math.round(d/30)+" meses";
+  }
+  function cargasHtml(eco){
+    var u = state.ult[eco];
+    if(!u) return "<div class=\"sec\"><h4>Última carga y kilometraje</h4><p class=\"nd\">Sin información de cargas para este económico.</p></div>";
+    var fm = function(n){ return Number(n).toLocaleString("es-MX", { maximumFractionDigits:1 }); };
+    return "<div class=\"sec\"><h4>Última carga y kilometraje</h4><div class=\"grid\">" +
+      f("Última carga", u.litros_fecha ? fechaCorta(u.litros_fecha)+" · "+hace(u.litros_fecha) : null) +
+      f("Litros cargados", u.litros != null ? Number(u.litros).toLocaleString("es-MX",{maximumFractionDigits:2})+" L" : null) +
+      f("Último kilometraje", u.km != null ? fm(u.km)+" km" : null) +
+      f("Fecha del kilometraje", u.km_fecha ? fechaCorta(u.km_fecha)+" · "+hace(u.km_fecha) : null) +
+      "</div><p class=\"note\">Del archivo de Unidades en piso, corte del "+fechaCorta(u.corte)+".</p></div>";
+  }
+
+  // ---------------- Servicios del año ----------------
+  var MESES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+  var SERVS = [["Lubricación", /LUBRIC/], ["Afinación", /AFINAC|AFINCAC/], ["Frenos", /FRENO/]];
+  function serviciosHtml(eco){
+    if(!state.servOk) return "";
+    var list = state.serv[eco] || [], hoy = new Date(), mesHoy = hoy.getMonth()+1;
+    var cr = state.crono[eco] || {};
+    var hayCrono = Object.keys(cr).length > 0;
+    var filas = SERVS.map(function(sv){
+      var hechos = {}, inh = {};
+      list.forEach(function(x){
+        var t = String(x.texto||"").toUpperCase();
+        if(!sv[1].test(t)) return;
+        var m = +x.fecha.slice(5,7);
+        if(/INA?HABILIT|BAJA|DUPLIC/.test(t)) inh[m] = x;
+        else if(x.costo > 0) hechos[m] = x;
+        else if(!hechos[m]) inh[m] = inh[m] || x;
+      });
+      var prog = {}; (cr[sv[0]]||[]).forEach(function(m){ prog[m] = 1; });
+      var celdas = MESES.map(function(_,i){
+        var m = i+1, h = hechos[m], p = prog[m], cls = "", txt = "";
+        if(h){ cls = "hecho"; txt = "✓"; }
+        else if(inh[m]){ cls = "inh"; txt = "—"; }
+        else if(p && m < mesHoy){ cls = "falto"; txt = "!"; }
+        else if(p){ cls = "toca"; txt = "●"; }
+        var tip = h ? "Hecho "+fechaCorta(h.fecha)+" · orden "+h.orden+" · $"+Math.round(h.costo).toLocaleString("es-MX") : inh[m] ? "Orden "+inh[m].orden+" sin movimiento / inhabilitada" : p ? (m < mesHoy ? "Programado y sin servicio registrado" : "Programado") : "";
+        return "<td class=\"sv "+cls+(m===mesHoy?" actual":"")+"\" title=\""+esc(tip)+"\">"+txt+"</td>";
+      }).join("");
+      var prox = Object.keys(prog).map(Number).filter(function(m){ return m >= mesHoy && !hechos[m] && !inh[m]; }).sort(function(a,b){ return a-b; })[0];
+      var nHechos = Object.keys(hechos).length;
+      return "<tr><th>"+sv[0]+"</th>"+celdas+"<td class=\"sv-res\">"+nHechos+(hayCrono ? " / "+(cr[sv[0]]||[]).length : "")+(prox ? " · toca "+MESES[prox-1] : "")+"</td></tr>";
+    }).join("");
+    return "<div class=\"sec\"><h4>Servicios "+state.anio+"</h4><div class=\"table-wrap sv-wrap\"><table class=\"sv-t\"><thead><tr><th></th>"+MESES.map(function(m){ return "<th>"+m+"</th>"; }).join("")+"<th>Hechos"+(hayCrono?" / programados":"")+"</th></tr></thead><tbody>"+filas+"</tbody></table></div>" +
+      "<p class=\"note\">✓ servicio hecho (mes de la orden OM02 con costo) · — orden inhabilitada o sin movimiento"+(hayCrono ? " · ● programado · ! programado y sin servicio registrado" : "")+"."+(hayCrono ? "" : " El mes que le toca aparecerá cuando se cargue el cronograma "+state.anio+".")+"</p></div>";
+  }
+
   // ---------------- Tarjeta ----------------
   function tarjetaUnidad(r){
     var est = estadoUnidad(r), cob = cobertura(r);
@@ -392,6 +457,7 @@
     if(cob.cubre.length){
       h += "<div class=\"sec\"><h4>Cobertura</h4><p>Cubre a " + cob.cubre.map(function(c){ return "<strong>"+esc(c.eco)+"</strong> (fuera de servicio, "+esc(c.litros)+" L, centro de coste "+esc(c.cc)+")"; }).join(", ") + ".</p></div>";
     }
+    h += cargasHtml(r.economico) + serviciosHtml(r.economico);
     h += refaccionesHtml(r, est);
     return h + "</div>";
   }
