@@ -146,15 +146,33 @@ function calcular(wb, corte, ctx){
     return { fc:fechaISO(val(r,UC,"Fe.contabilización")), o:o, c:inf.c||"", eq:inf.eq||"", m:str(val(r,UC,"Material")), t:str(val(r,UC,"Texto breve de material")), q:num(val(r,UC,"Cantidad")), u:str(val(r,UC,"Un.medida de entrada")), i:r2(num(val(r,UC,"Importe ML"))) };
   });
 
-  /* Mecánico: alias de la hoja o nombre de pila contra la tabla de personal */
-  function mecDe(n){
-    var nn=norm(n); if(!nn) return null;
-    var pers=ctx.personal||[];
-    for(var i=0;i<pers.length;i++){
-      var al=norm(pers[i].alias_hoja||""), pila=norm(String(pers[i].nombre||"").split(/\s+/)[0]);
-      if((al&&al===nn)||pila===nn) return pers[i].nombre;
+  /* Mecánico: la hoja trae solo un nombre corto ("FELIPE", "ANTONIO RANGEL", "NATHANAEL"...).
+     Se busca primero entre el personal del mismo CEDIS y, si no hay uno solo, entre todo el personal.
+     Coincide por alias exacto o porque todas las palabras del nombre corto están en el nombre completo
+     (con tolerancia de una letra en palabras largas, p. ej. Nathanael/Natanael). Si queda ambiguo, no adivina. */
+  var NO_PERSONA=/^(gestoria|no hay personal|sin mecanico|agencia|tramite)\b/;
+  function editDist1(a,b){
+    if(a===b) return true; if(Math.abs(a.length-b.length)>1||a.length<5) return false;
+    var i=0,j=0,d=0; while(i<a.length&&j<b.length){ if(a[i]===b[j]){i++;j++;continue;} if(++d>1) return false;
+      if(a.length>b.length) i++; else if(b.length>a.length) j++; else {i++;j++;} }
+    return d+(a.length-i)+(b.length-j)<=1;
+  }
+  function mecDe(n,cedis){
+    var nn=norm(n).replace(/\s+/g," "); if(!nn||NO_PERSONA.test(nn)) return null;
+    var toks=nn.split(" ").filter(Boolean), pers=ctx.personal||[];
+    function cumple(p){
+      var al=norm(p.alias_hoja||""); if(al&&al===nn) return 2;
+      var pt=norm(p.nombre||"").split(/\s+/);
+      var ok=toks.every(function(t){ return pt.some(function(x){ return x===t||editDist1(x,t); }); });
+      return ok?1:0;
     }
-    return null;
+    function elegir(lista){
+      var ex=lista.filter(function(p){ return cumple(p)===2; }); if(ex.length===1) return ex[0].nombre;
+      var ok=lista.filter(function(p){ return cumple(p)>0; }); return ok.length===1?ok[0].nombre:null;
+    }
+    var cn=norm(cedis||"");
+    var r=cn?elegir(pers.filter(function(p){ return norm(p.cedis||"")===cn; })):null;
+    return r||elegir(pers);
   }
   function cedisDe(txt,eco){
     var n=norm(txt);
@@ -207,9 +225,9 @@ function calcular(wb, corte, ctx){
     var ms=mats.map(function(a){ return { f:a.fc, o:a.o, c:a.c, m:a.m, t:a.t, q:a.q, u:a.u, i:a.i }; });
     var ords=uso.filter(function(o){ return o.eq===e; }).sort(function(a,b){ return a.fe<b.fe?-1:a.fe>b.fe?1:0; })
       .map(function(o){ return { o:o.o, c:o.c, t:o.t, fe:o.fe, st:o.st, ab:o.st.indexOf("CERR")!==0, cost:o.cost }; });
-    var mh=str(val(r,U,"MECÁNICO ASIGNADO")), mec=mecDe(mh);
+    var mh=str(val(r,U,"MECÁNICO ASIGNADO")), mec=mecDe(mh,cedisDe(str(val(r,U,"CEDIS")),e));
     var cat=(ctx.catalogo||{})[e];
-    if(!mec) sinCruce.push(e+" ("+mh+")");
+    if(!mec&&!NO_PERSONA.test(norm(mh))) sinCruce.push(e+" ("+mh+")");
     if(!ingreso) sinIngreso.push(e);
     if(!cat) sinCatalogo.push(e);
     units.push({ eco:e, cedis:cedisDe(str(val(r,U,"CEDIS")),e), falla:str(val(r,U,"FALLA")), mec_hoja:mh, mec:mec, ingreso:ingreso,
@@ -252,7 +270,7 @@ function infoActual(){
 }
 function contexto(){
   return Promise.all([
-    ERP.rest("personal?select=nombre,alias_hoja&activo=is.true").catch(function(){ return []; }),
+    ERP.rest("personal?select=nombre,alias_hoja,cedis&activo=is.true").catch(function(){ return []; }),
     ERP.rest("catalogo_unidades?select=economico,marca,modelo,area&limit=2000").catch(function(){ return []; })
   ]).then(function(r){
     var cat={}; (r[1]||[]).forEach(function(c){ cat[c.economico]={marca:c.marca||"",modelo:c.modelo,area:c.area||""}; });
