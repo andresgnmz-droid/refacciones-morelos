@@ -84,6 +84,30 @@
   .update-form{display:flex; flex-direction:column; gap:12px;}
   .update-form input[type=password]{padding:9px 12px; border-radius:10px; border:1px solid var(--border); background:var(--bg); color:var(--ink); font-size:13px; max-width:220px;}
   .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap;}
+
+  .nd{color:var(--ink-faint); font-style:italic;}
+  tr.click{cursor:pointer;} tr.click:hover td{background:var(--accent-soft);}
+  #cardArea{display:flex; flex-direction:column; gap:14px;}
+  .ucard{background:var(--surface); border:1px solid var(--border); border-left:5px solid var(--accent); border-radius:16px; padding:18px; box-shadow:var(--shadow); display:flex; flex-direction:column; gap:12px;}
+  .ucard.virtual{border-left-color:var(--c1); border-style:dashed; border-left-style:solid;}
+  .ucard-head{display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; align-items:flex-start;}
+  .ucard-head h3{font-size:26px;} .ucard .sub{font-size:13px; color:var(--ink-soft); margin-top:2px;}
+  .chips{display:flex; gap:6px; flex-wrap:wrap;}
+  .chip{display:inline-block; padding:4px 11px; border-radius:99px; font-size:12px; font-weight:700; background:var(--surface-alt); color:var(--ink);}
+  .chip.st-ok{background:#DDF3DD; color:#0a6a0a;} .chip.st-piso{background:#FBE9C8; color:#7a5200;} .chip.st-baja{background:var(--surface-alt); color:var(--bad);}
+  .chip.st-taller{background:#E5E0F7; color:#4b3a9a;} .chip.reserva{background:var(--accent-soft); color:var(--accent);} .chip.fs{background:#FBDADA; color:#a12727;} .chip.virt{background:#D9E8FA; color:#1a5aa8;}
+  @media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .chip.st-ok{background:#12351a;color:#7fdc7f} :root:not([data-theme="light"]) .chip.st-piso{background:#3d2e0b;color:#f0c566} :root:not([data-theme="light"]) .chip.st-taller{background:#2a2450;color:#c0b4f5} :root:not([data-theme="light"]) .chip.fs{background:#3d1717;color:#f19a9a} :root:not([data-theme="light"]) .chip.virt{background:#16314f;color:#8fc0f2}}
+  :root[data-theme="dark"] .chip.st-ok{background:#12351a;color:#7fdc7f} :root[data-theme="dark"] .chip.st-piso{background:#3d2e0b;color:#f0c566} :root[data-theme="dark"] .chip.st-taller{background:#2a2450;color:#c0b4f5} :root[data-theme="dark"] .chip.fs{background:#3d1717;color:#f19a9a} :root[data-theme="dark"] .chip.virt{background:#16314f;color:#8fc0f2}
+  .ucard .det{font-size:13px; color:var(--ink-soft); line-height:1.5;}
+  .ucard .grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:10px 16px;}
+  .f{display:flex; flex-direction:column; gap:2px;} .fl{font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; color:var(--ink-faint);} .fv{font-size:14px; word-break:break-word;}
+  .sec{border-top:1px solid var(--border); padding-top:10px; display:flex; flex-direction:column; gap:8px; font-size:13.5px; line-height:1.5;}
+  .sec h4{font-family:'Barlow Semi Condensed',sans-serif; font-size:14px; letter-spacing:.3px;}
+  .sec.aviso{background:var(--surface-alt); border-radius:10px; border-top:none; padding:10px 12px;}
+  .dot-line{display:flex; gap:12px; align-items:center; flex-wrap:wrap;} .dot-comb{font-weight:600; min-width:130px;} .dot-lt{font-variant-numeric:tabular-nums; min-width:60px;}
+  .dias{display:inline-flex; gap:3px;} .dia{width:24px; height:24px; border-radius:6px; display:inline-flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; background:var(--surface-alt); color:var(--ink-faint);} .dia.on{background:var(--accent); color:var(--accent-ink);}
+  ul.ref{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px;} ul.ref li{display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; padding:7px 10px; background:var(--surface-alt); border-radius:8px; font-size:13px;} ul.ref li.warn{border-left:4px solid var(--warn);} .ref-st{color:var(--ink-soft);}
+  #avisos{font-size:12px; color:var(--ink-soft); background:var(--surface-alt); border-radius:10px; padding:10px 12px; max-height:220px; overflow:auto;} #avisos ul{margin:6px 0 0; padding-left:18px;}
 </style>
 <script src="erp-auth.js"></script>
 <script>if(/[?&]modo=carga/.test(location.search))document.documentElement.classList.add("modo-carga");</script>
@@ -98,13 +122,15 @@
 
   <div class="kpi-row" id="kpiRow"></div>
 
+  <div id="cardArea" hidden></div>
+
   <div class="card">
     <div class="card-head">
       <h2>Unidades</h2>
       <span class="card-sub" id="tableSub"></span>
     </div>
     <div class="filters">
-      <input id="searchBox" type="text" placeholder="Buscar por económico, marca, serie o placas...">
+      <input id="searchBox" type="text" placeholder="Buscar por económico, marca, serie o placas — al buscar una unidad aparece su tarjeta">
       <select id="bodegaFilter"><option value="">Todos los CEDIS</option></select>
       <select id="activoFilter">
         <option value="activo">Solo activas</option>
@@ -120,7 +146,7 @@
   <div class="card" id="cardActualizar">
     <div class="card-head">
       <h2>Actualizar catálogo</h2>
-      <span class="card-sub">Sube el Excel mensual (pestaña "Morelos") para reflejar altas, bajas y cambios en Supabase</span>
+      <span class="card-sub">Sube el Excel mensual (pestañas "Morelos" y "Dotaciones") para reflejar altas, bajas, cambios y dotaciones en Supabase</span>
     </div>
     <div class="update-form">
       <div class="row">
@@ -134,7 +160,11 @@
           <div class="diff-tile"><span class="n" id="diffCambios">0</span><span class="l">Con cambios</span></div>
           <div class="diff-tile"><span class="n" id="diffBajas">0</span><span class="l">Bajas (ya no están en el archivo)</span></div>
           <div class="diff-tile"><span class="n" id="diffSinCambio">0</span><span class="l">Sin cambios</span></div>
+          <div class="diff-tile"><span class="n" id="diffDot">0</span><span class="l">Líneas de dotación</span></div>
+          <div class="diff-tile"><span class="n" id="diffVirt">0</span><span class="l">Económicos virtuales</span></div>
         </div>
+        <p class="note" id="dotNota"></p>
+        <div id="avisos" hidden></div>
         <p class="note">Las bajas no se borran de la base — quedan marcadas como inactivas para no romper otras tablas que ya las referencien por económico. Revisa los números y confirma.</p>
         <button id="btnConfirm" class="btn-primary">Confirmar y actualizar Supabase</button>
       </div>
@@ -142,44 +172,277 @@
     </div>
   </div>
 
-  <p class="note">Fuente: "Catálogo Unidades Morelos" (Excel mensual, pestaña Morelos). Se aplican automáticamente las correcciones ya conocidas de este archivo: MODELO/ÁREA invertidos en algunas filas, espacios extra en MARCA, y CEDIS explícito (nunca se deriva del prefijo del económico salvo que la columna BODEGA venga vacía).</p>
+  <p class="note">Fuente: "Catálogo Unidades" (Excel mensual, pestañas Morelos y Dotaciones). Las columnas se leen por su encabezado, no por posición. Se corrigen solas: MODELO/ÁREA invertidos, espacios extra en MARCA, bodega que no corresponde al prefijo del económico y centros de coste de otro CEDIS cuando el código correcto ya existe. Lo que falte (serie, placas, centro de coste) se muestra como "sin información". Los económicos virtuales (MCV0530, MCV4006, MJO1056, MAX2040, MCC2038, MCC2040) no cuentan en los totales y solo aparecen al buscarlos.</p>
 </div>
 
 <script>
 (function(){
   "use strict";
 
-  var SUPABASE_URL = "https://aoutudbxwawlnbwvypir.supabase.co";
-  var SUPABASE_KEY = ERP.KEY;
   var TABLE = "catalogo_unidades";
-
-  var BODEGA_CANON = {
-    "CUERNAVACA":"Cuernavaca", "CUAUTLA":"Cuautla", "JOJUTLA":"Jojutla",
-    "PUENTE IXTLA":"Puente de Ixtla", "PUENTE DE IXTLA":"Puente de Ixtla",
-    "AXOCHIAPAN":"Axochiapan", "COCOYOC":"Cocoyoc"
-  };
-  var PREFIX_TO_BODEGA = {
-    "MCV":"Cuernavaca","MCU":"Cuautla","MJO":"Jojutla",
-    "MPU":"Puente de Ixtla","MAX":"Axochiapan","MCC":"Cocoyoc"
-  };
   var CEDIS_ORDER = ["Cuernavaca","Cuautla","Jojutla","Puente de Ixtla","Axochiapan","Cocoyoc"];
+  var CEN = { MMCV:"MCV", MMCU:"MCU", MMJO:"MJO", MMPU:"MPU", MMAX:"MAX", MMCC:"MCC" };
+  var DIAS_LBL = ["L","M","X","J","V","S","D"];
+  var DIAS_NOM = ["Lunes","Martes","Miércoles","Jueves","Viernes","Sábado","Domingo"];
+  var ST = { sol:"Solicitada, sin pedido", ped:"Pedida, por llegar", par:"Llegó parcial", lleg:"En almacén, sin surtir a la unidad", sal:"Surtida a la unidad" };
+  var DAY = 86400000;
 
-  function sbHeaders(extra){ return ERP.headers(extra); }
+  var state = { rows: [], dot: {}, dotRows: [], virt: [], virtSet: {}, piso: null, salidas: {}, ajustes: {}, hoja: {}, faltEco: null, pisoOk: false,
+                parsedNew: null, diff: null, libro: null, sel: [] };
 
-  var state = { rows: [], parsedNew: null };
+  function esc(v){ return v===null||v===undefined ? "" : String(v).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+  function sinInfo(v){ return (v===null||v===undefined||String(v).trim()==="") ? "<span class=\"nd\">sin información</span>" : esc(v); }
+  function rest(p,o){ return ERP.rest(p,o); }
+  function esCamion(r){ return /^(FREIGHTLINER|ISUZU)/i.test(r.marca||""); }
+  function puedeRefacciones(){ return ERP.puede("piso_refacciones") || ERP.puede("control_refacciones"); }
+  function T(s){ return Date.parse(s+"T00:00:00Z"); }
 
-  // ---------------- Cargar catálogo actual ----------------
+  // ---------------- Carga de datos ----------------
   function loadCatalog(){
-    return fetch(SUPABASE_URL + "/rest/v1/" + TABLE + "?select=*&order=economico", { headers: sbHeaders() })
-      .then(function(r){ if(!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
-      .then(function(rows){ state.rows = rows; renderAll(); });
+    return rest(TABLE + "?select=*&order=economico").then(function(rows){ state.rows = rows; renderAll(); });
+  }
+  function loadExtras(){
+    var tareas = [
+      rest("catalogo_dotaciones?select=*&order=economico").then(function(d){
+        state.dotRows = d; state.dot = {};
+        d.forEach(function(x){ (state.dot[x.economico] = state.dot[x.economico] || []).push(x); });
+      }).catch(function(){}),
+      rest("catalogo_virtuales?select=*&order=economico").then(function(v){
+        state.virt = v; state.virtSet = {}; v.forEach(function(x){ state.virtSet[x.economico] = x; });
+      }).catch(function(){}),
+      rest("hojalateria_cronograma?select=economico,estatus,observacion").then(function(h){
+        state.hoja = {}; h.forEach(function(x){ state.hoja[x.economico] = x; });
+      }).catch(function(){}),
+      Promise.all([
+        rest("rpc/catalogo_piso_ligero", { method:"POST", body:{} }),
+        rest("unidades_piso_salidas?select=eco,ingreso,fecha"),
+        rest("unidades_piso_ajustes?select=eco,ingreso")
+      ]).then(function(r){
+        state.piso = r[0]; state.pisoOk = !!(r[0] && r[0].units);
+        state.salidas = {}; (r[1]||[]).forEach(function(x){ state.salidas[x.eco] = x; });
+        state.ajustes = {}; (r[2]||[]).forEach(function(x){ state.ajustes[x.eco] = x; });
+      }).catch(function(){ state.pisoOk = false; })
+    ];
+    if(puedeRefacciones()){
+      tareas.push(rest("rpc/catalogo_faltantes_necesidad", { method:"POST", body:{} }).then(function(d){ state.faltEco = indexarFaltantes(d); }).catch(function(){ state.faltEco = null; }));
+    }
+    return Promise.all(tareas).then(function(){ renderTable(); renderSeleccion(); });
   }
 
-  function renderAll(){
-    renderKpis();
-    populateBodegaFilter();
-    renderTable();
+  // ---------------- Cruce con faltantes (mismo cálculo que el módulo de faltantes) ----------------
+  /*FALT-CORE-START*/
+  function ddIso(a,b){ var x=a.split("-"), y=b.split("-"); return Math.round((Date.UTC(+y[0],+y[1]-1,+y[2])-Date.UTC(+x[0],+x[1]-1,+x[2]))/864e5); }
+  function calcularFalt(D){
+    var P=D.ped, I=D.ing, mapa={}, cur={}, out=[];
+    I.forEach(function(r){ var k=r[2]+"|"+r[5]+"|"+r[0]; (mapa[k]=mapa[k]||[]).push(r); });
+    Object.keys(mapa).forEach(function(k){ mapa[k].sort(function(a,b){ return a[3]<b[3]?-1:a[3]>b[3]?1:0; }); });
+    var idx=P.map(function(_,i){ return i; });
+    idx.sort(function(a,b){ var x=P[a], y=P[b]; if(x[1]!==y[1]) return x[1]<y[1]?-1:1; return (x[4]-y[4]) || (x[6]-y[6]) || (a-b); });
+    idx.forEach(function(i){
+      var r=P[i], pedido=String(r[5]||"").trim();
+      var cs=+r[9]||0, cp=+r[10]||0, basis, rec=0, est;
+      if(!pedido){ basis=cs; est="Sin pedido"; }
+      else {
+        basis=cp>0?cp:cs;
+        var k=r[0]+"|"+pedido+"|"+r[7], arr=mapa[k], n=cur[k]||0;
+        if(arr && n<arr.length){ rec=+arr[n][4]||0; cur[k]=n+1; }
+        est = Math.max(basis-rec,0)<=1e-4 ? "Completo" : (rec>0 ? "Parcial" : "Sin surtir");
+      }
+      out.push({ centro:r[0], fsol:r[1], pedido:pedido, material:String(r[7]), texto:r[8]||"", necesidad:r[13]||"",
+        pedida:basis, recibida:rec, faltante: est==="Completo"?0:Math.max(basis-rec,0), estatus:est });
+    });
+    return out;
   }
+  /*FALT-CORE-END*/
+  function indexarFaltantes(d){
+    if(!d || !d.ped) return {};
+    var lineas = calcularFalt({ ped:d.ped, ing:d.ing||[] }), idx = {};
+    lineas.forEach(function(l){
+      if(l.estatus === "Completo" || !l.necesidad) return;
+      var pref = CEN[l.centro]; if(!pref) return;
+      var re = /(?<!\d)(\d{4})(?!\d)/g, m, vistos = {};
+      while((m = re.exec(l.necesidad))){
+        var eco = pref + m[1];
+        if(vistos[eco]) continue; vistos[eco] = 1;
+        (idx[eco] = idx[eco] || []).push(l);
+      }
+    });
+    return idx;
+  }
+
+  // ---------------- Estado de la unidad (cruce con Unidades en piso) ----------------
+  function estadoUnidad(r){
+    if(!r.activo) return { k:"baja", txt:"Baja", det:"La unidad ya no está en el catálogo vigente." };
+    var hoja = state.hoja[r.economico];
+    var enTaller = hoja && /TALLER/i.test(hoja.estatus||"");
+    if(!state.pisoOk){
+      if(enTaller) return { k:"taller", txt:"En taller de hojalatería", det:"Según el cronograma de hojalatería y pintura." };
+      return { k:"nd", txt:"Sin información de piso", det:"No se pudo leer el módulo Unidades en piso." };
+    }
+    var u = (state.piso.units||[]).filter(function(x){ return x.eco === r.economico; })[0];
+    if(u){
+      var ov = state.ajustes[u.eco] || {};
+      var ing = ov.ingreso || u.ingreso || null;
+      var sv = state.salidas[u.eco];
+      var salio = !!(sv && (sv.ingreso||"") === (u.ingreso||""));
+      if(!salio){
+        var dias = ing ? Math.round((T(state.piso.corte) - T(ing)) / DAY) : null;
+        return { k:"piso", txt: "En piso" + (dias!=null ? " ("+dias+" "+(dias===1?"día":"días")+")" : ""), det: (u.falla ? "Falla: "+u.falla : ""), unit:u, ing:ing };
+      }
+    }
+    if(enTaller) return { k:"taller", txt:"En taller de hojalatería", det:"Según el cronograma de hojalatería y pintura." };
+    return { k:"ok", txt:"Operando", det:"" };
+  }
+
+  // ---------------- Dotación ----------------
+  function lineaActiva(l){ return l.litros > 0 && DIAS_LBL.some(function(_,i){ return l[["lunes","martes","miercoles","jueves","viernes","sabado","domingo"][i]]; }); }
+  function diasChips(l){
+    var keys = ["lunes","martes","miercoles","jueves","viernes","sabado","domingo"];
+    return "<span class=\"dias\">" + DIAS_LBL.map(function(d,i){ return "<span class=\"dia"+(l[keys[i]]?" on":"")+"\" title=\""+DIAS_NOM[i]+"\">"+d+"</span>"; }).join("") + "</span>";
+  }
+  function dotacionHtml(eco){
+    var d = state.dot[eco];
+    if(!d || !d.length) return "<p class=\"nd\">Sin dotación registrada en el archivo.</p>";
+    var act = d.filter(lineaActiva);
+    if(!act.length) return "<p><strong>Sin dotación activa</strong></p>";
+    return act.map(function(l){
+      var comb = l.combustible ? l.combustible : "Combustible no indicado";
+      return "<div class=\"dot-line\"><span class=\"dot-comb\">"+esc(comb)+"</span><span class=\"dot-lt\">"+esc(l.litros)+" L</span>"+diasChips(l)+"</div>";
+    }).join("");
+  }
+  /* El catálogo dice un combustible y la dotación activa solo contempla otro */
+  function dotDifiere(r){
+    var act = (state.dot[r.economico]||[]).filter(lineaActiva).filter(function(l){ return l.combustible; });
+    if(!act.length || !r.combustible) return "";
+    var hay = act.some(function(l){ return l.combustible === r.combustible; });
+    if(hay) return "";
+    return "<p class=\"note\">El catálogo indica " + esc(r.combustible) + ", pero la dotación activa solo contempla " + esc(act.map(function(l){ return l.combustible; }).join(" y ")) + ".</p>";
+  }
+  function cobertura(r){
+    var d = state.dot[r.economico] || [];
+    var fs = d.some(function(x){ return x.fuera_servicio; });
+    var out = { fs:fs, cubiertaPor:[], cubre:[] };
+    if(!esCamion(r)) return out;
+    var byEco = {}; state.rows.forEach(function(x){ byEco[x.economico] = x; });
+    function comparten(a,b){ return a.centro_coste && a.centro_coste === b.centro_coste && Number(a.litros) === Number(b.litros) && a.litros > 0; }
+    if(fs){
+      d.filter(function(x){ return x.fuera_servicio; }).forEach(function(mine){
+        state.dotRows.forEach(function(o){
+          var u = byEco[o.economico];
+          if(o.economico !== r.economico && u && u.activo && u.bodega === r.bodega && esCamion(u) && !o.fuera_servicio && comparten(mine,o) && out.cubiertaPor.indexOf(o.economico) < 0)
+            out.cubiertaPor.push({ eco:o.economico, litros:o.litros, cc:o.centro_coste });
+        });
+      });
+    } else {
+      d.forEach(function(mine){
+        state.dotRows.forEach(function(o){
+          var u = byEco[o.economico];
+          if(o.economico !== r.economico && u && u.activo && u.bodega === r.bodega && esCamion(u) && o.fuera_servicio && comparten(mine,o) && !out.cubre.some(function(c){ return c.eco===o.economico; }))
+            out.cubre.push({ eco:o.economico, litros:o.litros, cc:o.centro_coste });
+        });
+      });
+    }
+    return out;
+  }
+
+  // ---------------- Refacciones pendientes (solo Andrés) ----------------
+  function refaccionesHtml(r, est){
+    if(!puedeRefacciones()) return "";
+    var items = [], nota = "";
+    if(est.unit){
+      (est.unit.lines||[]).filter(function(l){ return (!est.ing || l.f >= est.ing) && l.st !== "sal"; }).forEach(function(l){
+        items.push({ txt:l.txt, st:ST[l.st]||l.st, cls:l.st==="lleg"?"warn":"", extra: l.ped ? "Pedido "+l.ped : (l.st==="sol"?"Sin pedido":"") });
+      });
+    } else if(state.faltEco){
+      (state.faltEco[r.economico]||[]).forEach(function(l){
+        items.push({ txt:l.texto || l.material, st: l.estatus==="Sin pedido" ? "Solicitada, sin pedido" : (l.estatus==="Parcial" ? "Llegó parcial" : "Pedida, por llegar"), cls:"",
+          extra: (l.pedido ? "Pedido "+l.pedido+" · " : "") + "faltan " + (Math.round(l.faltante*100)/100) });
+      });
+      nota = "Aquí solo aparece lo que aún no llega. El material que ya llegó al almacén y no se ha sacado se mostrará cuando se cargue el control de movimientos.";
+    } else {
+      return "<div class=\"sec\"><h4>Refacciones</h4><p class=\"nd\">Sin información de faltantes (no se ha cargado el archivo de SAP).</p></div>";
+    }
+    var h = "<div class=\"sec\"><h4>Refacciones pedidas para esta unidad</h4>";
+    if(!items.length) h += "<p>Sin refacciones pendientes de llegar ni en almacén sin sacar.</p>";
+    else h += "<ul class=\"ref\">" + items.map(function(i){ return "<li class=\""+i.cls+"\"><span>"+esc(i.txt)+"</span><span class=\"ref-st\">"+esc(i.st)+(i.extra?" · "+esc(i.extra):"")+"</span></li>"; }).join("") + "</ul>";
+    if(nota) h += "<p class=\"note\">"+esc(nota)+"</p>";
+    return h + "</div>";
+  }
+
+  // ---------------- Tarjeta ----------------
+  function tarjetaUnidad(r){
+    var est = estadoUnidad(r), cob = cobertura(r);
+    var hoja = state.hoja[r.economico];
+    var esReserva = /RESERVA/i.test(r.area||"") || (state.dot[r.economico]||[]).some(function(x){ return x.reserva; });
+    var badges = "<span class=\"chip st-"+est.k+"\">"+esc(est.txt)+"</span>";
+    if(esReserva) badges += "<span class=\"chip reserva\">Reserva</span>";
+    if(cob.fs) badges += "<span class=\"chip fs\">Fuera de servicio</span>";
+    var h = "<div class=\"ucard\"><div class=\"ucard-head\"><div><h3>"+esc(r.economico)+"</h3><p class=\"sub\">"+esc([r.marca, r.modelo].filter(Boolean).join(" · "))+"</p></div><div class=\"chips\">"+badges+"</div></div>";
+    if(est.det) h += "<p class=\"det\">"+esc(est.det)+"</p>";
+    h += "<div class=\"grid\">" +
+      f("Área", r.area) + f("CEDIS", r.bodega) + f("Combustible (catálogo)", r.combustible) + f("Placas", r.placas) +
+      f("Serie", r.serie) + f("Ruta", r.ruta) + f("Centro de coste mtto.", r.centro_coste_mtto) + "</div>";
+    h += "<div class=\"sec\"><h4>Dotación de combustible</h4>" + dotacionHtml(r.economico) + dotDifiere(r) + "</div>";
+    if(cob.cubiertaPor.length){
+      h += "<div class=\"sec aviso\"><h4>Cobertura</h4><p>Fuera de servicio" + (hoja && /TALLER/i.test(hoja.estatus||"") ? " (en taller de hojalatería)" : "") + ". Su dotación la cubre " +
+        cob.cubiertaPor.map(function(c){ return "<strong>"+esc(c.eco)+"</strong> (misma dotación de "+esc(c.litros)+" L y centro de coste "+esc(c.cc)+")"; }).join(", ") + ".</p></div>";
+    } else if(cob.fs && esCamion(r)){
+      h += "<div class=\"sec aviso\"><h4>Cobertura</h4><p>Fuera de servicio. No encontré otro camión de " + esc(r.bodega) + " con la misma dotación y centro de coste que lo cubra.</p></div>";
+    }
+    if(cob.cubre.length){
+      h += "<div class=\"sec\"><h4>Cobertura</h4><p>Cubre a " + cob.cubre.map(function(c){ return "<strong>"+esc(c.eco)+"</strong> (fuera de servicio, "+esc(c.litros)+" L, centro de coste "+esc(c.cc)+")"; }).join(", ") + ".</p></div>";
+    }
+    h += refaccionesHtml(r, est);
+    return h + "</div>";
+  }
+  function f(l,v){ return "<div class=\"f\"><span class=\"fl\">"+l+"</span><span class=\"fv\">"+sinInfo(v)+"</span></div>"; }
+
+  function tarjetaVirtual(v){
+    var h = "<div class=\"ucard virtual\"><div class=\"ucard-head\"><div><h3>"+esc(v.economico)+"</h3><p class=\"sub\">Económico virtual · "+esc(v.bodega||"")+"</p></div><div class=\"chips\"><span class=\"chip virt\">Económico virtual</span></div></div>" +
+      "<p class=\"det\">No es una unidad física: se usa para cargar consumo de combustible cuando un CEDIS presta una unidad a otra bodega. No cuenta en el total general ni por CEDIS.</p>" +
+      "<div class=\"sec\"><h4>Dotación de combustible</h4>" + dotacionHtml(v.economico) + "</div></div>";
+    return h;
+  }
+
+  function renderSeleccion(){
+    var box = document.getElementById("cardArea");
+    var q = document.getElementById("searchBox").value.trim().toUpperCase();
+    var items = [];
+    state.sel.forEach(function(eco){
+      var r = state.rows.filter(function(x){ return x.economico === eco; })[0];
+      if(r) items.push(tarjetaUnidad(r)); else if(state.virtSet[eco]) items.push(tarjetaVirtual(state.virtSet[eco]));
+    });
+    var hint = "";
+    if(!state.sel.length && q.length >= 3){
+      var m = state.rows.filter(function(r){ return coincide(r,q) && r.activo; });
+      var vm = state.virt.filter(function(v){ return v.economico.indexOf(q) >= 0; });
+      if(m.length + vm.length > 0 && m.length + vm.length <= 3){
+        m.forEach(function(r){ items.push(tarjetaUnidad(r)); });
+        vm.forEach(function(v){ items.push(tarjetaVirtual(v)); });
+      } else if(m.length + vm.length > 3){
+        hint = "<p class=\"note\">"+(m.length+vm.length)+" coincidencias. Afina la búsqueda o haz clic en una fila para ver su tarjeta.</p>";
+      }
+    }
+    if(!state.sel.length && q.length >= 3 && !items.length && !hint){
+      var inact = state.rows.filter(function(r){ return coincide(r,q); });
+      if(inact.length && inact.length <= 3) inact.forEach(function(r){ items.push(tarjetaUnidad(r)); });
+    }
+    // chips de virtuales cuando se busca algo parecido
+    var vch = "";
+    if(q.length >= 2){
+      var vv = state.virt.filter(function(v){ return v.economico.indexOf(q) >= 0 && state.sel.indexOf(v.economico) < 0 && !items.some(function(i){ return i.indexOf("<h3>"+v.economico+"</h3>")>=0; }); });
+      if(vv.length) vch = "<p class=\"note\">Económicos virtuales: " + vv.map(function(v){ return "<button class=\"btn-ghost vbtn\" data-eco=\""+esc(v.economico)+"\">"+esc(v.economico)+"</button>"; }).join(" ") + "</p>";
+    }
+    var close = state.sel.length ? "<button id=\"btnCerrarSel\" class=\"btn-ghost\">Cerrar tarjeta</button>" : "";
+    box.innerHTML = (items.length ? close : "") + items.join("") + hint + vch;
+    box.hidden = !box.innerHTML;
+    var cb = document.getElementById("btnCerrarSel"); if(cb) cb.addEventListener("click", function(){ state.sel = []; renderSeleccion(); });
+    Array.prototype.forEach.call(box.querySelectorAll(".vbtn"), function(b){ b.addEventListener("click", function(){ state.sel = [b.getAttribute("data-eco")]; renderSeleccion(); }); });
+  }
+  function coincide(r,q){ return [r.economico, r.marca, r.serie, r.placas].some(function(v){ return v && String(v).toUpperCase().indexOf(q) >= 0; }); }
+
+  // ---------------- Tabla y KPIs (los virtuales no existen en catalogo_unidades: no cuentan) ----------------
+  function renderAll(){ renderKpis(); populateBodegaFilter(); renderTable(); renderSeleccion(); }
 
   function renderKpis(){
     var wrap = document.getElementById("kpiRow");
@@ -187,9 +450,7 @@
     var porBodega = {};
     activas.forEach(function(r){ porBodega[r.bodega] = (porBodega[r.bodega]||0) + 1; });
     var tiles = [{label:"Unidades activas", value: activas.length, sub: state.rows.length - activas.length + " de baja"}];
-    CEDIS_ORDER.forEach(function(c){
-      if(porBodega[c]) tiles.push({label:c, value: porBodega[c], sub:"unidades"});
-    });
+    CEDIS_ORDER.forEach(function(c){ if(porBodega[c]) tiles.push({label:c, value: porBodega[c], sub:"unidades"}); });
     wrap.innerHTML = "";
     tiles.forEach(function(t){
       var el = document.createElement("div");
@@ -198,39 +459,39 @@
       wrap.appendChild(el);
     });
   }
-
   function populateBodegaFilter(){
     var sel = document.getElementById("bodegaFilter");
     if(sel.options.length > 1) return;
-    CEDIS_ORDER.forEach(function(c){
-      var o = document.createElement("option"); o.value = c; o.textContent = c; sel.appendChild(o);
-    });
+    CEDIS_ORDER.forEach(function(c){ var o = document.createElement("option"); o.value = c; o.textContent = c; sel.appendChild(o); });
   }
-
-  function renderTable(){
+  function filtradas(){
     var q = document.getElementById("searchBox").value.trim().toUpperCase();
     var bodega = document.getElementById("bodegaFilter").value;
     var activoMode = document.getElementById("activoFilter").value;
-    var rows = state.rows.filter(function(r){
+    return state.rows.filter(function(r){
       if(activoMode === "activo" && !r.activo) return false;
       if(bodega && r.bodega !== bodega) return false;
-      if(q){
-        var hay = [r.economico, r.marca, r.serie, r.placas].some(function(v){ return v && String(v).toUpperCase().indexOf(q) >= 0; });
-        if(!hay) return false;
-      }
+      if(q && !coincide(r,q)) return false;
       return true;
     });
+  }
+  function renderTable(){
+    var activoMode = document.getElementById("activoFilter").value;
+    var rows = filtradas();
     document.getElementById("tableSub").textContent = rows.length + " unidades" + (activoMode==="activo" ? " activas" : "");
     var html = "<thead><tr><th>Económico</th><th>Marca</th><th>Modelo</th><th>Área</th><th>Combustible</th><th>Placas</th><th>CEDIS</th><th>Estatus</th></tr></thead><tbody>";
     rows.forEach(function(r){
-      html += "<tr><td>"+esc(r.economico)+"</td><td>"+esc(r.marca)+"</td><td>"+esc(r.modelo)+"</td><td>"+esc(r.area)+"</td><td>"+esc(r.combustible)+"</td><td>"+esc(r.placas)+"</td><td>"+esc(r.bodega)+"</td><td>"+(r.activo?"":"<span class=\"badge badge-baja\">BAJA</span>")+"</td></tr>";
+      html += "<tr class=\"click\" data-eco=\""+esc(r.economico)+"\"><td>"+esc(r.economico)+"</td><td>"+esc(r.marca)+"</td><td>"+esc(r.modelo)+"</td><td>"+esc(r.area)+"</td><td>"+esc(r.combustible)+"</td><td>"+esc(r.placas)+"</td><td>"+esc(r.bodega)+"</td><td>"+(r.activo?"":"<span class=\"badge badge-baja\">BAJA</span>")+"</td></tr>";
     });
     html += "</tbody>";
     document.getElementById("unitsTable").innerHTML = html;
   }
-  function esc(v){ return v===null||v===undefined ? "" : String(v).replace(/&/g,"&amp;").replace(/</g,"&lt;"); }
-
-  document.getElementById("searchBox").addEventListener("input", renderTable);
+  document.getElementById("unitsTable").addEventListener("click", function(e){
+    var tr = e.target.closest("tr.click"); if(!tr) return;
+    state.sel = [tr.getAttribute("data-eco")]; renderSeleccion();
+    document.getElementById("cardArea").scrollIntoView({ behavior:"smooth", block:"start" });
+  });
+  document.getElementById("searchBox").addEventListener("input", function(){ state.sel = []; renderTable(); renderSeleccion(); });
   document.getElementById("bodegaFilter").addEventListener("change", renderTable);
   document.getElementById("activoFilter").addEventListener("change", renderTable);
 
@@ -238,83 +499,166 @@
     var activoMode = document.getElementById("activoFilter").value;
     var rows = activoMode === "activo" ? state.rows.filter(function(r){ return r.activo; }) : state.rows;
     var ws = XLSX.utils.json_to_sheet(rows.map(function(r){
-      return { ECONOMICO:r.economico, MARCA:r.marca, MODELO:r.modelo, AREA:r.area, SERIE:r.serie, COMBUSTIBLE:r.combustible, PLACAS:r.placas, RUTA:r.ruta, CENTRO_COSTE_MTTO:r.centro_coste_mtto, BODEGA:r.bodega, ACTIVO:r.activo };
+      return { ECONOMICO:r.economico, MARCA:r.marca, MODELO:r.modelo, AREA:r.area, SERIE:r.serie||"sin información", COMBUSTIBLE:r.combustible, PLACAS:r.placas||"sin información", RUTA:r.ruta, CENTRO_COSTE_MTTO:r.centro_coste_mtto, BODEGA:r.bodega, ACTIVO:r.activo };
     }));
     var wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Catalogo");
     XLSX.writeFile(wb, "catalogo_unidades.xlsx");
   });
 
-  // ---------------- Parseo + limpieza del Excel (misma lógica validada en Python) ----------------
-  function isYear(v){ return typeof v === "number" && v > 1990 && v < 2030; }
-  function cleanMarca(m){
-    if(m === null || m === undefined || m === "") return null;
-    var s = String(m).replace(/ /g," ");
-    s = s.replace(/\s+/g," ").trim();
-    s = s.replace(/\*+\s*$/,"").trim();
-    return s;
+  // ---------------- Lectura del Excel (núcleo probado en Node contra el archivo real) ----------------
+  /*CORE-START*/
+var CEDIS_CANON={"CUERNAVACA":"Cuernavaca","CUAUTLA":"Cuautla","JOJUTLA":"Jojutla","PUENTE IXTLA":"Puente de Ixtla","PUENTE DE IXTLA":"Puente de Ixtla","AXOCHIAPAN":"Axochiapan","COCOYOC":"Cocoyoc"};
+var PREFIX_TO_BODEGA={MCV:"Cuernavaca",MCU:"Cuautla",MJO:"Jojutla",MPU:"Puente de Ixtla",MAX:"Axochiapan",MCC:"Cocoyoc"};
+var COMBUSTIBLE_COD={"260072":"Diésel","260000":"Gas L.P.","260073":"Gasolina Magna"};
+var COD_OMITIR={"260074":true};
+/* Filas de Dotaciones sin código de combustible en SAP, cuyo combustible confirmó Andrés */
+var COD_FORZADO={MCV1282:"260000",MCV1288:"260000",MCU2257:"260000"};
+/* Unidades que solo contemplan un combustible (se descartan las demás líneas) */
+var SOLO_COD={MCV1205:"260073"};
+/* Económicos virtuales: sirven para cargar consumo de combustible cuando un CEDIS presta una unidad a otra bodega */
+var VIRTUALES=["MCV0530","MCV4006","MJO1056","MAX2040","MCC2038","MCC2040"];
+var DIAS_COL=["LUNES","MARTES","MIERCOLES","JUEVES","VIERNES","SABADO","DOMINGO"];
+var DIAS_KEY=["lunes","martes","miercoles","jueves","viernes","sabado","domingo"];
+
+function nrm(s){ return String(s==null?"":s).replace(/ /g," ").normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/\s+/g," ").trim().toUpperCase(); }
+function tx(v){ if(v==null) return null; var s=String(v).replace(/ /g," ").replace(/\s+/g," ").trim(); return s===""?null:s; }
+function esAnio(v){ return typeof v==="number" && v>1990 && v<2030; }
+function limpiaMarca(m){ var s=tx(m); if(s===null) return null; s=s.replace(/\*+\s*$/,"").trim(); return s||null; }
+function hojaPorNombre(wb,nombre){
+  var n=nrm(nombre);
+  for(var i=0;i<wb.SheetNames.length;i++) if(nrm(wb.SheetNames[i])===n) return wb.Sheets[wb.SheetNames[i]];
+  return null;
+}
+/* Encuentra la fila de encabezados por contenido, no por posición fija */
+function leerTabla(ws,requeridas,nombreHoja){
+  var arr=XLSX.utils.sheet_to_json(ws,{header:1,defval:null,raw:true});
+  for(var i=0;i<Math.min(arr.length,20);i++){
+    var row=arr[i]||[], map={};
+    row.forEach(function(c,j){ if(c!=null && map[nrm(c)]===undefined) map[nrm(c)]=j; });
+    if(requeridas.every(function(r){ return map[r]!==undefined; })) return { map:map, rows:arr.slice(i+1) };
   }
-  function parseWorkbook(wb){
-    var sheetName = wb.SheetNames.filter(function(n){ return n.trim().toLowerCase() === "morelos"; })[0];
-    if(!sheetName) throw new Error("No se encontró la pestaña 'Morelos' en el archivo.");
-    var arr = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { header:1, defval:null, raw:true });
-    var out = [];
-    for(var r = 1; r < arr.length; r++){
-      var row = arr[r];
-      if(!row) continue;
-      var eco = row[2]; // C
-      if(eco === null || eco === undefined) continue;
-      var marca = row[3], modelo = row[4], area = row[5], serie = row[6], comb = row[7], placas = row[8], ruta = row[9], centro = row[10], bodegaRaw = row[11];
+  throw new Error("En la pestaña '"+nombreHoja+"' no encontré los encabezados: "+requeridas.join(", ")+".");
+}
+function marcado(v){ if(v==null) return false; var s=String(v).trim(); return s!=="" && s!=="0"; }
+/* "MCUR", "MAXR"...: ruta truncada, no es un dato real */
+function rutaValida(v){ var s=tx(v); if(!s) return null; return /^M[A-Z]{2}R$/.test(s) ? null : s; }
 
-      if(!isYear(modelo) && isYear(area)){ var tmp = modelo; modelo = area; area = tmp; }
-      if(!isYear(modelo)) modelo = null;
-
-      var bodega;
-      if(bodegaRaw){
-        var key = String(bodegaRaw).trim().toUpperCase();
-        bodega = BODEGA_CANON[key] || String(bodegaRaw).trim();
-      } else {
-        var prefix = String(eco).trim().substring(0,3);
-        bodega = PREFIX_TO_BODEGA[prefix] || null;
-      }
-
-      out.push({
-        economico: String(eco).trim(),
-        marca: cleanMarca(marca),
-        modelo: modelo,
-        area: area ? String(area).trim() : null,
-        serie: serie ? String(serie).trim() : null,
-        combustible: comb ? String(comb).trim() : null,
-        placas: placas ? String(placas).trim() : null,
-        ruta: ruta ? String(ruta).trim() : null,
-        centro_coste_mtto: centro ? String(centro).trim() : null,
-        bodega: bodega
-      });
+function parseMorelos(ws,avisos){
+  var T=leerTabla(ws,["ECONOMICO","MARCA","MODELO","AREA","SERIE","COMBUSTIBLE","PLACAS","RUTA","CENTRO COSTE MTTO","BODEGA"],"Morelos");
+  var m=T.map, out=[], vistos={};
+  T.rows.forEach(function(row){
+    if(!row) return;
+    var eco=tx(row[m["ECONOMICO"]]);
+    if(!eco || !/^[A-Z]{3}\d{4}$/.test(eco)) return;
+    if(vistos[eco]){ avisos.push({k:"dup",eco:eco,txt:eco+" aparece más de una vez en la pestaña Morelos; se usa la última fila."}); }
+    vistos[eco]=true;
+    var marca=row[m["MARCA"]], modelo=row[m["MODELO"]], area=row[m["AREA"]];
+    if(!esAnio(modelo) && esAnio(area)){ var t=modelo; modelo=area; area=t; }
+    if(!esAnio(modelo)) modelo=null;
+    var pref=eco.substring(0,3), bodPref=PREFIX_TO_BODEGA[pref]||null;
+    var bRaw=tx(row[m["BODEGA"]]), bodega=null;
+    if(bRaw){ bodega=CEDIS_CANON[nrm(bRaw)]||bRaw; }
+    if(!bodega){ bodega=bodPref; avisos.push({k:"bodega",eco:eco,txt:eco+": la fila no trae bodega; se tomó "+bodPref+" por el prefijo."}); }
+    else if(bodPref && bodega!==bodPref){
+      avisos.push({k:"bodega",eco:eco,txt:eco+": el archivo dice bodega "+bodega+" pero el prefijo es de "+bodPref+"; se corrigió a "+bodPref+"."});
+      bodega=bodPref;
     }
-    return out;
-  }
+    out.push({
+      economico:eco, marca:limpiaMarca(marca), modelo:modelo, area:tx(area),
+      serie:tx(row[m["SERIE"]]), combustible:tx(row[m["COMBUSTIBLE"]]), placas:tx(row[m["PLACAS"]]),
+      ruta:rutaValida(row[m["RUTA"]]), centro_coste_mtto:tx(row[m["CENTRO COSTE MTTO"]]), bodega:bodega
+    });
+  });
+  /* dejar solo la última fila de cada económico */
+  var porEco={}; out.forEach(function(r){ porEco[r.economico]=r; });
+  out=Object.keys(porEco).map(function(k){ return porEco[k]; });
+
+  /* Centros de coste: el prefijo debe ser el del económico. Se corrige solo si el código corregido
+     ya lo usa otra unidad del mismo prefijo en este archivo (así queda verificado). */
+  var validos={};
+  out.forEach(function(r){ var p=r.economico.substring(0,3); if(r.centro_coste_mtto && r.centro_coste_mtto.substring(0,3)===p){ (validos[p]=validos[p]||{})[r.centro_coste_mtto]=true; } });
+  out.forEach(function(r){
+    var p=r.economico.substring(0,3), cc=r.centro_coste_mtto;
+    if(cc && cc.substring(0,3)!==p){
+      var cand=p+cc.substring(3);
+      if(validos[p] && validos[p][cand]){ avisos.push({k:"cc_fix",eco:r.economico,txt:r.economico+": centro de coste "+cc+" → "+cand+" (el prefijo no era el de su CEDIS)."}); r.centro_coste_mtto=cand; }
+      else avisos.push({k:"cc_dudoso",eco:r.economico,txt:r.economico+": centro de coste "+cc+" es de otro CEDIS y no pude verificar "+cand+"; se dejó como viene."});
+    }
+  });
+  /* centro de coste vacío: solo se infiere si todas las unidades de su bodega con la misma marca usan el mismo */
+  out.forEach(function(r){
+    if(r.centro_coste_mtto) return;
+    var vals={}, n=0;
+    out.forEach(function(o){ if(o!==r && o.bodega===r.bodega && nrm(o.marca)===nrm(r.marca) && o.centro_coste_mtto && o.centro_coste_mtto.substring(0,3)===o.economico.substring(0,3)){ vals[o.centro_coste_mtto]=true; n++; } });
+    var ks=Object.keys(vals);
+    if(r.marca && ks.length===1){ r.centro_coste_mtto=ks[0]; avisos.push({k:"cc_inf",eco:r.economico,txt:r.economico+": no traía centro de coste; se tomó "+ks[0]+" (lo usan las "+n+" unidades "+r.marca+" de "+r.bodega+")."}); }
+    else avisos.push({k:"cc_vacio",eco:r.economico,txt:r.economico+": sin centro de coste en el archivo."});
+  });
+  return out;
+}
+
+function parseDotaciones(ws,ecosCatalogo,avisos){
+  var T=leerTabla(ws,["CENTRO","EQUIPO","COMBUSTIBLE","CENTRO DE COSTE","CANTIDAD DE PEDIDO","FUERA DE SERVICIO","RESERVA"].concat(DIAS_COL),"Dotaciones");
+  var m=T.map, out={}, fuera={}, omitidas=0;
+  var virt={}; VIRTUALES.forEach(function(v){ virt[v]=true; });
+  T.rows.forEach(function(row){
+    if(!row) return;
+    var eco=tx(row[m["EQUIPO"]]); if(!eco) return;
+    var cod=tx(row[m["COMBUSTIBLE"]]);
+    if(cod!==null && /^\d+(\.0+)?$/.test(cod)) cod=cod.replace(/\.0+$/,"");
+    if(cod===null && COD_FORZADO[eco]) cod=COD_FORZADO[eco];
+    if(cod!==null && COD_OMITIR[cod]){ omitidas++; return; }
+    if(SOLO_COD[eco] && cod!==SOLO_COD[eco]){ omitidas++; return; }
+    if(!ecosCatalogo[eco] && !virt[eco]){ fuera[eco]=(fuera[eco]||0)+1; return; }
+    var r={
+      economico:eco, centro:tx(row[m["CENTRO"]]), combustible_codigo:cod===null?"":cod,
+      combustible:cod===null?null:(COMBUSTIBLE_COD[cod]||null),
+      centro_coste:rutaValida(row[m["CENTRO DE COSTE"]]),
+      litros:Number(row[m["CANTIDAD DE PEDIDO"]])||0,
+      fuera_servicio:marcado(row[m["FUERA DE SERVICIO"]]), reserva:marcado(row[m["RESERVA"]])
+    };
+    DIAS_COL.forEach(function(c,i){ r[DIAS_KEY[i]]=marcado(row[m[c]]); });
+    var k=eco+"|"+r.combustible_codigo;
+    if(out[k]) avisos.push({k:"dup",eco:eco,txt:eco+": dos líneas con el mismo combustible en Dotaciones; se usa la última."});
+    if(cod!==null && !COMBUSTIBLE_COD[cod]) avisos.push({k:"cod",eco:eco,txt:eco+": código de combustible "+cod+" que no conozco; la tarjeta dirá 'Combustible no indicado'."});
+    out[k]=r;
+  });
+  return { filas:Object.keys(out).map(function(k){ return out[k]; }), fuera:fuera, omitidas:omitidas };
+}
+
+function parseCatalogoLibro(wb){
+  var avisos=[];
+  var wsM=hojaPorNombre(wb,"Morelos");
+  if(!wsM) throw new Error("No se encontró la pestaña 'Morelos' en el archivo.");
+  var unidades=parseMorelos(wsM,avisos);
+  var eco={}; unidades.forEach(function(u){ eco[u.economico]=true; });
+  var wsD=hojaPorNombre(wb,"Dotaciones"), dot=null;
+  if(wsD) dot=parseDotaciones(wsD,eco,avisos);
+  else avisos.push({k:"sin_dot",eco:"",txt:"El archivo no trae la pestaña 'Dotaciones'; no se actualizarán las dotaciones."});
+  var virtuales=VIRTUALES.map(function(v){
+    if(eco[v]) avisos.push({k:"virt_cat",eco:v,txt:v+" está en el catálogo como unidad real; se tomó como unidad real y no como virtual."});
+    return { economico:v, bodega:PREFIX_TO_BODEGA[v.substring(0,3)] };
+  }).filter(function(v){ return !eco[v.economico]; });
+  return { unidades:unidades, dotaciones:dot?dot.filas:null, fueraCatalogo:dot?dot.fuera:{}, omitidas:dot?dot.omitidas:0, virtuales:virtuales, avisos:avisos };
+}
+/*CORE-END*/
 
   function fieldsEqual(a, b){
     var keys = ["marca","modelo","area","serie","combustible","placas","ruta","centro_coste_mtto","bodega"];
     return keys.every(function(k){ return (a[k] ?? null) === (b[k] ?? null); });
   }
-
   function computeDiff(newRows){
-    var currentByEco = {};
-    state.rows.forEach(function(r){ currentByEco[r.economico] = r; });
-    var newByEco = {};
-    newRows.forEach(function(r){ newByEco[r.economico] = r; });
-
+    var currentByEco = {}; state.rows.forEach(function(r){ currentByEco[r.economico] = r; });
+    var newByEco = {}; newRows.forEach(function(r){ newByEco[r.economico] = r; });
     var altas = [], cambios = [], sinCambio = [], bajas = [];
     newRows.forEach(function(r){
-      var existing = currentByEco[r.economico];
-      if(!existing){ altas.push(r); }
-      else if(!existing.activo || !fieldsEqual(existing, r)){ cambios.push(r); }
+      var ex = currentByEco[r.economico];
+      if(!ex){ altas.push(r); }
+      else if(!ex.activo || !fieldsEqual(ex, r)){ cambios.push(r); }
       else { sinCambio.push(r); }
     });
-    state.rows.forEach(function(r){
-      if(r.activo && !newByEco[r.economico]) bajas.push(r);
-    });
+    state.rows.forEach(function(r){ if(r.activo && !newByEco[r.economico]) bajas.push(r); });
     return { altas:altas, cambios:cambios, sinCambio:sinCambio, bajas:bajas };
   }
 
@@ -329,15 +673,26 @@
     reader.onload = function(ev){
       try{
         var wb = XLSX.read(ev.target.result, { type:"array" });
-        var rows = parseWorkbook(wb);
-        state.parsedNew = rows;
-        var diff = computeDiff(rows);
+        var libro = parseCatalogoLibro(wb);
+        state.libro = libro;
+        var diff = computeDiff(libro.unidades);
         state.diff = diff;
-        document.getElementById("fileMeta").textContent = file.name + " — " + rows.length + " filas leídas";
+        document.getElementById("fileMeta").textContent = file.name + " — " + libro.unidades.length + " unidades" + (libro.dotaciones ? ", " + libro.dotaciones.length + " líneas de dotación" : "");
         document.getElementById("diffNuevas").textContent = diff.altas.length;
         document.getElementById("diffCambios").textContent = diff.cambios.length;
         document.getElementById("diffBajas").textContent = diff.bajas.length;
         document.getElementById("diffSinCambio").textContent = diff.sinCambio.length;
+        document.getElementById("diffDot").textContent = libro.dotaciones ? libro.dotaciones.length : "—";
+        document.getElementById("diffVirt").textContent = libro.virtuales.length;
+        var fuera = Object.keys(libro.fueraCatalogo).length;
+        document.getElementById("dotNota").textContent = libro.dotaciones
+          ? fuera + " económicos de Dotaciones no están en el catálogo (bajas) y se ignoran; " + libro.omitidas + " líneas con combustible omitido o descartado."
+          : "";
+        var av = document.getElementById("avisos");
+        if(libro.avisos.length){
+          av.hidden = false;
+          av.innerHTML = "<strong>Avisos (" + libro.avisos.length + ")</strong><ul>" + libro.avisos.map(function(a){ return "<li>"+esc(a.txt)+"</li>"; }).join("") + "</ul>";
+        } else { av.hidden = true; av.innerHTML = ""; }
         document.getElementById("diffPreview").hidden = false;
       }catch(err){
         statusBox.hidden = false;
@@ -347,6 +702,8 @@
     };
     reader.readAsArrayBuffer(file);
   });
+
+  function chequear(p, etiqueta){ return p; }
 
   document.getElementById("btnConfirm").addEventListener("click", function(){
     var statusBox = document.getElementById("statusBox");
@@ -360,6 +717,7 @@
     statusBox.hidden = false; statusBox.className = "status-box";
     statusBox.textContent = "Actualizando Supabase...";
 
+    var libro = state.libro;
     var toUpsert = state.diff.altas.concat(state.diff.cambios).map(function(r){
       var copy = {}; for(var k in r) copy[k] = r[k];
       copy.activo = true;
@@ -367,34 +725,40 @@
     });
     var bajaEcos = state.diff.bajas.map(function(r){ return r.economico; });
 
-    var p1 = toUpsert.length === 0 ? Promise.resolve() : fetch(SUPABASE_URL + "/rest/v1/" + TABLE + "?on_conflict=economico", {
-      method: "POST",
-      headers: sbHeaders({ "Prefer": "resolution=merge-duplicates,return=minimal" }),
-      body: JSON.stringify(toUpsert)
-    }).then(function(r){ if(!r.ok) return r.text().then(function(t){ throw new Error("upsert: HTTP "+r.status+" "+t); }); });
+    var p = Promise.resolve();
+    if(toUpsert.length) p = p.then(function(){ return rest(TABLE + "?on_conflict=economico", { method:"POST", prefer:"resolution=merge-duplicates,return=minimal", body:toUpsert }); });
+    if(bajaEcos.length) p = p.then(function(){ return rest(TABLE + "?economico=in.(" + bajaEcos.map(function(e){ return "\""+e+"\""; }).join(",") + ")", { method:"PATCH", prefer:"return=minimal", body:{ activo:false } }); });
 
-    p1.then(function(){
-      if(bajaEcos.length === 0) return;
-      return fetch(SUPABASE_URL + "/rest/v1/" + TABLE + "?economico=in.(" + bajaEcos.map(function(e){ return "\""+e+"\""; }).join(",") + ")", {
-        method: "PATCH",
-        headers: sbHeaders({ "Prefer": "return=minimal" }),
-        body: JSON.stringify({ activo: false })
-      }).then(function(r){ if(!r.ok) return r.text().then(function(t){ throw new Error("baja: HTTP "+r.status+" "+t); }); });
-    }).then(function(){
+    var dotMsg = "";
+    if(libro.dotaciones){
+      var claveNueva = {}; libro.dotaciones.forEach(function(d){ claveNueva[d.economico+"|"+d.combustible_codigo] = true; });
+      var rowsDot = libro.dotaciones.map(function(d){ var c = {}; for(var k in d) c[k] = d[k]; c.updated_at = new Date().toISOString(); return c; });
+      p = p.then(function(){
+        return rest("catalogo_dotaciones?on_conflict=economico,combustible_codigo", { method:"POST", prefer:"resolution=merge-duplicates,return=minimal", body:rowsDot });
+      }).then(function(){
+        var viejas = state.dotRows.filter(function(d){ return !claveNueva[d.economico+"|"+d.combustible_codigo]; });
+        return viejas.reduce(function(acc,d){
+          return acc.then(function(){ return rest("catalogo_dotaciones?economico=eq."+encodeURIComponent(d.economico)+"&combustible_codigo=eq."+encodeURIComponent(d.combustible_codigo), { method:"DELETE", prefer:"return=minimal" }); });
+        }, Promise.resolve());
+      }).then(function(){
+        dotMsg = " " + rowsDot.length + " líneas de dotación actualizadas.";
+        if(libro.virtuales.length) return rest("catalogo_virtuales?on_conflict=economico", { method:"POST", prefer:"resolution=merge-duplicates,return=minimal", body:libro.virtuales });
+      });
+    }
+
+    p.then(function(){
       statusBox.className = "status-box ok";
-      statusBox.textContent = "Listo — " + toUpsert.length + " unidades creadas/actualizadas, " + bajaEcos.length + " marcadas de baja.";
+      statusBox.textContent = "Listo — " + toUpsert.length + " unidades creadas/actualizadas, " + bajaEcos.length + " marcadas de baja." + dotMsg;
       document.getElementById("diffPreview").hidden = true;
       document.getElementById("fileMeta").textContent = "";
-      return loadCatalog();
+      return loadCatalog().then(loadExtras);
     }).catch(function(err){
       statusBox.className = "status-box err";
       statusBox.textContent = "Error al actualizar: " + err.message;
-    }).finally(function(){
-      btn.disabled = false;
-    });
+    }).finally(function(){ btn.disabled = false; });
   });
 
-  loadCatalog().catch(function(err){
+  loadCatalog().then(loadExtras).catch(function(err){
     document.getElementById("tableSub").textContent = "Error al cargar: " + err.message;
   });
 })();
