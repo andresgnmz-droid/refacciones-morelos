@@ -230,7 +230,14 @@
       state.serv = {}; state.servOk = Array.isArray(l) && l.length > 0;
       (l||[]).forEach(function(x){ (state.serv[x.eco] = state.serv[x.eco] || []).push(x); });
     }).catch(function(){ state.servOk = false; }));
-    tareas.push(rest("catalogo_cronograma_servicios?select=economico,servicio,mes&anio=eq."+state.anio).then(function(c){
+    /* Supabase devuelve máximo 1000 filas por consulta: el cronograma (~2,800) se trae por páginas */
+    function cronoPagina(desde, acum){
+      return rest("catalogo_cronograma_servicios?select=economico,servicio,mes&anio=eq."+state.anio+"&order=economico,servicio,mes&limit=1000&offset="+desde).then(function(c){
+        acum = acum.concat(c||[]);
+        return (c && c.length === 1000) ? cronoPagina(desde+1000, acum) : acum;
+      });
+    }
+    tareas.push(cronoPagina(0, []).then(function(c){
       state.crono = {}; c.forEach(function(x){ ((state.crono[x.economico] = state.crono[x.economico] || {})[x.servicio] = state.crono[x.economico][x.servicio] || []).push(x.mes); });
     }).catch(function(){}));
     if(puedeRefacciones()){
