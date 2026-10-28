@@ -35,6 +35,18 @@
     return (p && p.permisos && p.permisos[modulo]) || "oculto";
   }
   function puede(modulo){ return nivel(modulo) === "editar"; }
+  function esAdmin(){ var p = perfil(); return !!(p && p.rol === "admin"); }
+
+  // Las reglas de cálculo y los textos técnicos son solo para el administrador.
+  // Marca un elemento con class="solo-admin" para que lo vea únicamente él;
+  // con data-publico="texto" los demás ven ese texto (qué informa la pestaña) en lugar del original.
+  document.addEventListener("DOMContentLoaded", function(){
+    if(esAdmin()) return;
+    var i, a = document.querySelectorAll(".solo-admin");
+    for(i = 0; i < a.length; i++) a[i].parentNode.removeChild(a[i]);
+    var b = document.querySelectorAll("[data-publico]");
+    for(i = 0; i < b.length; i++) b[i].textContent = b[i].getAttribute("data-publico");
+  });
 
   // Llamada REST con la sesión. opts: { method, body, prefer, count }
   function rest(path, opts){
@@ -51,7 +63,7 @@
     });
   }
 
-  window.ERP = { URL: URL, KEY: KEY, token: token, headers: headers, perfil: perfil, nivel: nivel, puede: puede, rest: rest, exigir: EXIGIR_SESION };
+  window.ERP = { URL: URL, KEY: KEY, token: token, headers: headers, perfil: perfil, nivel: nivel, puede: puede, esAdmin: esAdmin, rest: rest, exigir: EXIGIR_SESION };
 
   if(EXIGIR_SESION && !/(^|\/)erp\.html$/.test(location.pathname) && !token()){
     document.addEventListener("DOMContentLoaded", function(){

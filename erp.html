@@ -186,7 +186,7 @@
   var FN = SB_URL + "/functions/v1/admin-usuarios";
   var sb = supabase.createClient(SB_URL, SB_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false } });
   // Varios sigue bloqueado hasta cerrar los ajustes de la semana (cambiar a false para liberarlo).
-  var VARIOS_BLOQUEADO = true;
+  var VARIOS_BLOQUEADO = false; // el bloqueo ahora es por herramienta: activo:false en VARIOS_ITEMS
   var CEDIS = ["Cuernavaca","Cuautla","Jojutla","Puente de Ixtla","Axochiapan","Cocoyoc"];
 
   function $(id){ return document.getElementById(id); }
@@ -282,20 +282,20 @@
     { id:"correctivos", t:"Correctivos", src:"carga-mecanicos.html", visible:function(){ return ve("correctivos"); } },
     { id:"hojalateria", t:"Hojalatería y Pintura", src:"hojalateria.html", visible:function(){ return ve("hojalateria"); } },
     { id:"piso", t:"Unidades en piso", src:"unidades-piso.html", visible:function(){ return ve("piso"); } },
-    { id:"varios", t:"Varios", lock:VARIOS_BLOQUEADO, visible:function(){ return ["combustible","llantas","catalogo_refacciones","control_refacciones","carta_peticion","catalogo_unidades","horas_extras"].some(ve); } },
+    { id:"varios", t:"Varios", visible:function(){ return ["combustible","llantas","catalogo_refacciones","control_refacciones","carta_peticion","catalogo_unidades","horas_extras"].some(ve); } },
     { id:"historial", t:"Histórico y respaldo", src:"historial.html", visible:function(){ return ve("historial"); } },
     { id:"ajustes", t:"Ajustes", visible:function(){ return nivel("ajustes") === "editar"; } }
   ];
   var VARIOS_ITEMS = [
-    { id:"combustible", t:"Combustible", src:"rendimientos.html", m:"combustible", d:"Rendimientos y cargas de combustible de la flota." },
-    { id:"llantas", t:"Control de llantas", m:"llantas", d:"Pendiente de conectar." },
+    { id:"combustible", t:"Combustible", src:"rendimientos.html", m:"combustible", activo:false, d:"Rendimientos y cargas de combustible de la flota." },
+    { id:"llantas", t:"Control de llantas", m:"llantas", activo:false, d:"Revisión mensual de profundidad de llantas, cámara y alarma de las unidades de reparto." },
     { id:"catalogo-refacciones", t:"Catálogo de refacciones", src:"catalogo-refacciones.html", m:"catalogo_refacciones", d:"Material por CEDIS (existencia, bloqueo, entradas y salidas) y semáforo de material sin salir." },
-    { id:"control-refacciones", t:"Control de refacciones", src:"faltantes.html", m:"control_refacciones", d:"Faltantes: pedidos contra ingresos de SAP, por CEDIS." },
+    { id:"control-refacciones", t:"Control de refacciones faltantes", src:"faltantes.html", m:"control_refacciones", d:"Faltantes: pedidos contra ingresos de SAP, por CEDIS." },
     { id:"carta-peticion", t:"Carta petición", src:"carta-peticion.html", m:"carta_peticion", d:"Genera la carta petición de dotación de combustible para SAP." },
     { id:"catalogo-unidades", t:"Catálogo de unidades", src:"catalogo-maestro.html", m:"catalogo_unidades", d:"Ficha maestra de las unidades de la zona." },
-    { id:"horas-extras", t:"Horas extras", m:"horas_extras", d:"Pendiente de conectar." }
+    { id:"horas-extras", t:"Horas extras", m:"horas_extras", activo:false, d:"Captura de horas extras por mecánico y semana." }
   ];
-  function puedeAbrir(it){ return !!it.src && ve(it.m) && (!VARIOS_BLOQUEADO || esAdmin()); }
+  function puedeAbrir(it){ return !!it.src && it.activo !== false && ve(it.m); }
   function temaIframe(f){
     var t = document.documentElement.dataset.theme; if(!t) return;
     f.addEventListener("load", function(){ try{ f.contentDocument.documentElement.dataset.theme = t; }catch(e){} });
@@ -420,9 +420,10 @@
         if(estado.textContent === "Conectando…"){ estado.textContent = "En línea"; }
       }).catch(fail);
     }
-    var cV = el("div", "card locked"); cV.appendChild(el("h3", "", "Varios"));
-    cV.appendChild(el("p", "", "En afinación; se libera al concluir los ajustes de la semana."));
-    cV.appendChild(el("span", "pill warn", "Bloqueado")); g.appendChild(cV);
+    var cV = el("div", "card"); cV.appendChild(el("h3", "", "Varios"));
+    cV.appendChild(el("p", "", "Catálogo de unidades, catálogo de refacciones, control de refacciones faltantes y carta petición."));
+    var goV = el("button", "btn ghost", "Abrir Varios"); goV.style.alignSelf = "flex-start";
+    goV.addEventListener("click", function(){ location.hash = "varios"; }); cV.appendChild(goV); g.appendChild(cV);
   }
 
   /* ================= Varios ================= */
@@ -432,7 +433,8 @@
     root.style.display = "flex"; root.style.flexDirection = "column"; root.style.overflow = "hidden";
     var nav = el("div", "subnav"), body = el("div", "subbody");
     root.appendChild(nav); root.appendChild(body);
-    var items = VARIOS_ITEMS.filter(function(it){ return ve(it.m); });
+    // Las herramientas en proceso solo las ve el administrador (bloqueadas); los demás ni las notan.
+    var items = VARIOS_ITEMS.filter(function(it){ return ve(it.m) && (esAdmin() || it.activo !== false); });
     var enlaces = {}, actual = null;
 
     function enlace(txt, ruta){
@@ -446,21 +448,21 @@
     enlaces[""] = enlace("Resumen", "varios"); nav.appendChild(enlaces[""]);
     items.forEach(function(it){
       if(puedeAbrir(it)){ enlaces[it.id] = enlace(it.t, "varios/" + it.id); nav.appendChild(enlaces[it.id]); }
-      else nav.appendChild(el("span", "", it.t + (it.src ? "" : " · pendiente")));
+      else nav.appendChild(el("span", "", it.t + " · en proceso"));
     });
 
     function resumen(){
       var w = el("div", "wrap");
       var hero = el("div", "hero");
       hero.appendChild(el("h2", "", "Varios"));
-      hero.appendChild(el("p", "", VARIOS_BLOQUEADO ? "Esta sección está bloqueada mientras se afinan los detalles. Se libera al concluir la semana." + (esAdmin() ? " Como administrador puedes abrir las herramientas que ya existen." : "") : "Herramientas complementarias. Se abren aquí mismo; con clic derecho › Abrir en pestaña nueva se abren aparte."));
+      hero.appendChild(el("p", "", "Catálogos y controles de apoyo de la zona: unidades, refacciones, faltantes y carta petición."));
       w.appendChild(hero);
       var g = el("div", "vcards"); w.appendChild(g);
       items.forEach(function(it){
         var abre = puedeAbrir(it), c = abre ? enlace("", "varios/" + it.id) : el("div");
         c.className = "card vc" + (abre ? "" : " locked");
         c.appendChild(el("h3", "", it.t)); c.appendChild(el("p", "", it.d));
-        if(!abre) c.appendChild(el("span", "pill warn", it.src ? "Bloqueado" : "Pendiente"));
+        if(!abre) c.appendChild(el("span", "pill warn", "En proceso"));
         g.appendChild(c);
       });
       return w;
@@ -720,7 +722,7 @@
     }
     tarjeta("Catálogo de unidades", "Excel mensual del catálogo (pestaña Morelos): altas, bajas y cambios.", "Subir archivo", function(){ abrirFrame("catalogo-maestro.html?modo=carga", "Catálogo de unidades"); });
     tarjeta("Hojalatería y Pintura", "Archivo mensual con CRONOGRAMA, Remo y Remomov.", "Subir archivo", function(){ abrirFrame("hojalateria.html?modo=carga", "Hojalatería y Pintura"); });
-    tarjeta("Control de refacciones", "Descarga de SAP de faltantes, con las pestañas Pedidos e Ingresos.", "Subir archivo", function(){ abrirFrame("faltantes.html?modo=carga", "Control de refacciones"); });
+    tarjeta("Control de refacciones faltantes", "Descarga de SAP de faltantes, con las pestañas Pedidos e Ingresos.", "Subir archivo", function(){ abrirFrame("faltantes.html?modo=carga", "Control de refacciones faltantes"); });
 
     tarjeta("Correctivos", "Excel de carga de trabajo de SAP con Operaciones, OM01OM02, OM01OM02mov y Puestos De trabajo. Reemplaza la información vigente.", "Subir archivo", function(){ abrirFrame("carga-mecanicos.html?modo=carga", "Correctivos"); });
     tarjeta("Unidades en piso", "Excel de unidades en piso con las pestañas UPiso, Cargas, Pedidos, Movimientos, Uso y Usoc. Reemplaza el corte vigente.", "Subir archivo", function(){ abrirFrame("piso-carga.html", "Unidades en piso"); });
