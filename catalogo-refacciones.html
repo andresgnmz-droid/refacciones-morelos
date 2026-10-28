@@ -1,0 +1,621 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Catálogo de refacciones</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="erp-auth.js"></script>
+<script>if(/[?&]modo=carga/.test(location.search))document.documentElement.classList.add("modo-carga");</script>
+<style>
+  :root{
+    --ink:#142433; --ink-soft:#48607A; --ink-faint:#6A8296;
+    --bg:#EEF2F5; --surface:#FFFFFF; --surface-alt:#E4EAEF; --border:#D3DCE3;
+    --accent:#0E7C86; --accent-ink:#FFFFFF; --accent-soft:#DCEEF0;
+    --shadow:0 1px 2px rgba(20,36,51,.06),0 4px 14px rgba(20,36,51,.07);
+    --good:#0b8a0b; --warn:#b07400; --bad:#d63a39;
+    --s1:#2E7D4F; --s2:#8A6B00; --s3:#A9500F; --s4:#A3241B;
+    --s1b:#DCEEE1; --s2b:#FBF0C4; --s3b:#FBDFC7; --s4b:#F7D6D2;
+    --f2:#E0B400; --f3:#E8782A; --f4:#D63A39;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --ink:#E7EDF2; --ink-soft:#9AB0C2; --ink-faint:#8AA2B5;
+      --bg:#0F1620; --surface:#182230; --surface-alt:#1F2C3C; --border:#2B3B4D;
+      --accent:#35B6C2; --accent-ink:#06232A; --accent-soft:#163238;
+      --shadow:0 1px 2px rgba(0,0,0,.3),0 4px 14px rgba(0,0,0,.35);
+      --good:#2fbf2f; --warn:#d99a1a; --bad:#e66767;
+      --s1:#4fd17a; --s2:#e0be2a; --s3:#f0873a; --s4:#ef7b72;
+      --s1b:rgba(47,191,85,.18); --s2b:rgba(224,190,42,.18); --s3b:rgba(240,135,58,.2); --s4b:rgba(230,103,103,.2);
+      --f2:#e0be2a; --f3:#f0873a; --f4:#ef7b72;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ink:#E7EDF2; --ink-soft:#9AB0C2; --ink-faint:#8AA2B5;
+    --bg:#0F1620; --surface:#182230; --surface-alt:#1F2C3C; --border:#2B3B4D;
+    --accent:#35B6C2; --accent-ink:#06232A; --accent-soft:#163238;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 4px 14px rgba(0,0,0,.35);
+    --good:#2fbf2f; --warn:#d99a1a; --bad:#e66767;
+    --s1:#4fd17a; --s2:#e0be2a; --s3:#f0873a; --s4:#ef7b72;
+    --s1b:rgba(47,191,85,.18); --s2b:rgba(224,190,42,.18); --s3b:rgba(240,135,58,.2); --s4b:rgba(230,103,103,.2);
+    --f2:#e0be2a; --f3:#f0873a; --f4:#ef7b72;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:'Inter',system-ui,-apple-system,sans-serif;}
+  h1,h2,h3{font-family:'Barlow Semi Condensed',system-ui,sans-serif;font-weight:700;margin:0;letter-spacing:.2px;}
+  p{margin:0;} button,input,select{font-family:inherit;} button{cursor:pointer;} [hidden]{display:none !important;}
+  .wrap{max-width:1180px;margin:0 auto;padding:20px 16px 48px;display:flex;flex-direction:column;gap:18px;}
+  .hero h1{font-size:26px;}
+  .hero p{font-size:14px;color:var(--ink-soft);line-height:1.5;margin-top:4px;max-width:80ch;}
+  .meta{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px;}
+  .pill{display:inline-block;font-size:11px;font-weight:700;border-radius:999px;padding:3px 9px;background:var(--accent-soft);color:var(--accent);white-space:nowrap;}
+  .pill.warn{background:rgba(176,116,0,.16);color:var(--warn);}
+  .pill.bad{background:rgba(214,58,57,.16);color:var(--bad);}
+  .pill.mute{background:transparent;border:1px solid var(--border);color:var(--ink-soft);}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px 18px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:12px;}
+  .card h2{font-size:18px;}
+  .card .sub{font-size:12.5px;color:var(--ink-soft);line-height:1.5;}
+  .btn{border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);font-weight:600;font-size:13px;padding:9px 14px;border-radius:10px;}
+  .btn.ghost{background:transparent;color:var(--accent);}
+  .btn.sm{padding:6px 10px;font-size:12.5px;}
+  .btn:disabled{opacity:.5;cursor:default;}
+  .msg{font-size:13px;line-height:1.45;} .msg.err{color:var(--bad);} .msg.ok{color:var(--good);}
+
+  .filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;align-items:end;}
+  .f label{font-size:11px;font-weight:700;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px;}
+  .f select,.f input[type=search],.f input[type=date]{width:100%;padding:9px 10px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--ink);font-size:13.5px;}
+  .f.chk label{display:flex;gap:8px;align-items:center;text-transform:none;letter-spacing:0;font-size:12.5px;font-weight:500;color:var(--ink-soft);margin:0;padding:9px 0;}
+  .seg{display:flex;border:1px solid var(--border);border-radius:10px;overflow:hidden;background:var(--surface);align-self:flex-start;}
+  .seg button{border:0;background:transparent;color:var(--ink-soft);font-weight:600;font-size:13px;padding:9px 16px;white-space:nowrap;}
+  .seg button.on{background:var(--accent);color:var(--accent-ink);}
+
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;}
+  .kpi{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:3px;}
+  .kpi .l{font-size:11px;font-weight:600;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.5px;}
+  .kpi .v{font-family:'Barlow Semi Condensed',sans-serif;font-size:28px;font-weight:700;line-height:1.1;}
+  .kpi .s{font-size:12px;color:var(--ink-soft);}
+
+  .chips{display:flex;gap:8px;flex-wrap:wrap;align-items:stretch;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:12px 14px;}
+  .chips .ttl{font-family:'Barlow Semi Condensed',sans-serif;font-weight:700;font-size:15px;margin-right:4px;align-self:center;}
+  .chip{display:flex;flex-direction:column;gap:2px;border:1px solid transparent;background:var(--surface-alt);color:var(--ink);border-radius:10px;padding:8px 14px;font-size:12px;font-weight:600;text-align:left;min-width:190px;}
+  .chip b{font-family:'Barlow Semi Condensed',sans-serif;font-size:19px;} .chip em{font-style:normal;font-size:11.5px;font-weight:500;opacity:.9;}
+  .chip.c1{background:var(--s1b);color:var(--s1);} .chip.c2{background:var(--s2b);color:var(--s2);} .chip.c3{background:var(--s3b);color:var(--s3);} .chip.c4{background:var(--s4b);color:var(--s4);}
+  .chip.on{border-color:currentColor;box-shadow:0 0 0 2px rgba(0,0,0,.08);}
+
+  .bars{display:flex;flex-direction:column;gap:11px;}
+  .bar-row{display:grid;grid-template-columns:150px 1fr 250px;gap:10px;align-items:center;font-size:13px;}
+  .bar-row .nm b{display:block;font-size:13px;} .bar-row .nm span{font-size:11.5px;color:var(--ink-faint);}
+  .track{height:18px;border-radius:8px;background:var(--surface-alt);overflow:hidden;display:flex;}
+  .seg-ok{background:var(--border);} .seg-n1{background:var(--f2);} .seg-n2{background:var(--f3);} .seg-n3{background:var(--f4);}
+  .bar-row .val{font-size:12.5px;color:var(--ink-soft);text-align:right;} .bar-row .val b{color:var(--ink);font-size:14px;}
+  .leyenda{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--ink-soft);}
+  .leyenda i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px;}
+  @media (max-width:700px){ .bar-row{grid-template-columns:1fr;gap:3px;} .bar-row .val{text-align:left;} }
+
+  .tbl{overflow:auto;border:1px solid var(--border);border-radius:12px;background:var(--surface);max-height:70vh;}
+  table{border-collapse:collapse;width:100%;font-size:12.5px;}
+  th{background:var(--surface-alt);text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--ink-faint);padding:8px 10px;white-space:nowrap;position:sticky;top:0;z-index:1;user-select:none;}
+  th.s{cursor:pointer;} th.s:hover{color:var(--ink);} th .ar{color:var(--accent);}
+  td{padding:7px 10px;border-top:1px solid var(--border);vertical-align:top;}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}
+  td.tx{min-width:220px;max-width:340px;}
+  td.ce{text-align:center;font-variant-numeric:tabular-nums;white-space:nowrap;} th.ce{text-align:center;}
+  tr.r2 td:first-child{box-shadow:inset 4px 0 0 var(--s2);} tr.r3 td:first-child{box-shadow:inset 4px 0 0 var(--s3);} tr.r4 td:first-child{box-shadow:inset 4px 0 0 var(--s4);}
+  tr.r2 td{background:color-mix(in srgb,var(--s2b) 38%,transparent);} tr.r3 td{background:color-mix(in srgb,var(--s3b) 45%,transparent);} tr.r4 td{background:color-mix(in srgb,var(--s4b) 45%,transparent);}
+  tr.clic{cursor:pointer;} tr.clic:hover td{background:var(--accent-soft);}
+  .psem{display:inline-block;font-size:11px;font-weight:700;border-radius:999px;padding:3px 9px;white-space:nowrap;}
+  .psem.p1{background:var(--s1b);color:var(--s1);} .psem.p2{background:var(--s2b);color:var(--s2);} .psem.p3{background:var(--s3b);color:var(--s3);} .psem.p4{background:var(--s4b);color:var(--s4);}
+  .bq{display:inline-block;font-size:9.5px;font-weight:700;border-radius:4px;padding:1px 5px;margin-left:4px;background:rgba(214,58,57,.16);color:var(--bad);}
+  .nulo{color:var(--ink-faint);}
+  .pager{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;font-size:12.5px;color:var(--ink-soft);}
+  .empty{padding:26px;text-align:center;color:var(--ink-soft);font-size:13.5px;}
+  details summary{cursor:pointer;font-weight:600;font-size:14px;}
+  details ul{margin:8px 0 0;padding-left:18px;} details li{font-size:13px;color:var(--ink-soft);line-height:1.55;margin-bottom:3px;}
+  .drop{border:2px dashed var(--border);border-radius:12px;padding:18px;display:flex;flex-direction:column;gap:10px;align-items:flex-start;}
+  .avisos{margin:4px 0 0;padding-left:18px;font-size:12.5px;color:var(--warn);line-height:1.5;}
+  .mini{border-collapse:collapse;font-size:12.5px;margin-top:6px;} .mini th{position:static;} .mini td,.mini th{padding:5px 10px;border-top:1px solid var(--border);}
+
+  #cardActualizar{display:none;}
+  html.modo-carga #cardActualizar{display:flex !important;}
+  html.modo-carga .vista{display:none !important;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hero">
+    <h1>Catálogo de refacciones</h1>
+    <p>Consulta de materiales por CEDIS (existencia, bloqueo, si están ampliados y últimas entradas y salidas) y semáforo de material que no sale del almacén, con su cantidad y costo.</p>
+    <div class="meta" id="meta"></div>
+  </div>
+
+  <div class="card" id="cardActualizar">
+    <h2>Actualizar con el catálogo de SAP</h2>
+    <p class="sub">Sube el Excel tal como lo bajas de SAP, con las pestañas <b>Indice</b>, <b>Stock</b>, <b>Codbloq</b> y las seis de última entrada y salida (<b>UESMCV, UESMCU, UESMJO, UESMPU, UESMAX, UESMCC</b>). El curado se hace aquí al leer el archivo. Reemplaza la información vigente.</p>
+    <div class="drop">
+      <input type="file" id="fArch" accept=".xlsx,.xls,.xlsm" hidden>
+      <button class="btn" id="bElegir" type="button">Elegir archivo del catálogo</button>
+      <div class="msg" id="cMsg"></div>
+      <div id="cResumen"></div>
+      <div class="f" id="fCorte" hidden style="min-width:220px"><label>Fecha de corte del archivo</label><input type="date" id="iCorte"></div>
+      <button class="btn" id="bGuardar" type="button" hidden>Guardar y reemplazar</button>
+    </div>
+    <p class="sub" id="cActual"></p>
+  </div>
+
+  <div class="vista" id="vista" style="display:contents">
+    <div class="seg" id="segVista">
+      <button data-v="sem" class="on">Semáforo de material sin salida</button><button data-v="cat">Consulta de material</button>
+    </div>
+
+    <!-- ===== Semáforo ===== -->
+    <div id="vSem" style="display:contents">
+      <div class="card">
+        <div class="filters">
+          <div class="f"><label>CEDIS</label><select id="sCed"></select></div>
+          <div class="f"><label>Nivel</label><select id="sNiv">
+            <option value="alerta">Los tres niveles</option>
+            <option value="1">Nivel 1 · 180 días a menos de 1 año</option>
+            <option value="2">Nivel 2 · 1 año a menos de 2 años</option>
+            <option value="3">Nivel 3 · 2 años o más</option>
+            <option value="0">Sin alerta (menos de 180 días)</option></select></div>
+          <div class="f"><label>Buscar</label><input id="qSem" type="search" placeholder="Material o descripción"></div>
+          <div class="f chk"><label><input type="checkbox" id="cEnt"> Ocultar material con entrada reciente (menos de 180 días)</label></div>
+        </div>
+        <p class="sub" id="notaSem"></p>
+      </div>
+
+      <div class="kpis" id="kpis"></div>
+      <div class="chips" id="chips"></div>
+
+      <div class="card">
+        <h2>Impacto por CEDIS</h2>
+        <p class="sub">Valor del material con existencia, dividido entre lo que se mueve y lo que lleva tiempo sin salir.</p>
+        <div class="bars" id="bars"></div>
+        <div class="leyenda"><span><i style="background:var(--border)"></i>Con salida en menos de 180 días</span><span><i style="background:var(--f2)"></i>Nivel 1</span><span><i style="background:var(--f3)"></i>Nivel 2</span><span><i style="background:var(--f4)"></i>Nivel 3</span></div>
+      </div>
+
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center">
+          <h2 id="tDet">Detalle</h2>
+          <button class="btn ghost sm" id="bExcel" type="button">Descargar Excel</button>
+        </div>
+        <div class="tbl"><table id="tabla"></table></div>
+        <div class="pager"><span id="pInfo"></span><span><button class="btn ghost sm" id="pPrev" type="button">Anterior</button> <button class="btn ghost sm" id="pNext" type="button">Siguiente</button></span></div>
+      </div>
+    </div>
+
+    <!-- ===== Consulta ===== -->
+    <div id="vCat" style="display:none">
+      <div class="card">
+        <div class="filters">
+          <div class="f" style="grid-column:span 2"><label>Buscar material</label><input id="qCat" type="search" placeholder="Código o palabras de la descripción (ej. 500002, balata M2)"></div>
+          <div class="f"><label>Con existencia en</label><select id="cCed"></select></div>
+        </div>
+        <p class="sub">En cada CEDIS: el número es la existencia libre; <b>—</b> significa que el material no está ampliado ahí; <span class="bq">Bloq.</span> es material bloqueado para ese CEDIS. Toca un renglón para ver su ficha.</p>
+      </div>
+      <div class="card" id="ficha" hidden></div>
+      <div class="card">
+        <div class="tbl"><table id="tCat"></table></div>
+        <div class="pager"><span id="cInfo"></span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <details>
+        <summary>Cómo se calcula</summary>
+        <ul>
+          <li><b>Curado automático:</b> del Excel de SAP se toman Indice (material ampliado por CEDIS, descripción, unidad), Stock (existencia libre), Codbloq (bloqueo, SM = ZB) y las seis pestañas de última entrada y salida, donde el código y el nombre vienen juntos en la columna B y se separan al leer.</li>
+          <li><b>Semáforo:</b> se mide con los <b>días desde la última salida</b> hasta la fecha de corte del archivo, solo en material con existencia. Nivel 1: 180 días o más pero menos de 1 año (365). Nivel 2: de 1 año a menos de 2 años (730). Nivel 3: 2 años o más. Menos de 180 días no genera alerta.</li>
+          <li><b>Material sin ninguna salida registrada:</b> se mide desde su última entrada.</li>
+          <li><b>Entrada reciente:</b> un material puede tener la última salida muy vieja y haber recibido piezas hace poco. Para no contarlo como rezago puedes ocultar el que tuvo entrada hace menos de 180 días.</li>
+          <li><b>Cantidad y costo:</b> la existencia y el valor salen de la columna Stock total y Valor stk. med. de la pestaña UES de cada CEDIS (valor medio de SAP en pesos). Las piezas se suman solo en unidad PZA; litros, kilos y metros no se mezclan.</li>
+          <li><b>Pestañas UES:</b> se aceptan con los nombres UESMCV, UESMCU, UESMJO, UESMPU, UESMAX y UESMCC (también UESCVA, UESCUA, UESJOJ, UESPIX, UESAXO y UESCOC).</li>
+        </ul>
+      </details>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+/*CORE-START*/
+var CENTROS=["MMCV","MMCU","MMJO","MMPU","MMAX","MMCC"];
+var NOMBRES={ MMCV:"Cuernavaca", MMCU:"Cuautla", MMJO:"Jojutla", MMPU:"Puente de Ixtla", MMAX:"Axochiapan", MMCC:"Cocoyoc" };
+var HOJAS_UES={ UESMCV:"MMCV", UESCVA:"MMCV", UESMCU:"MMCU", UESCUA:"MMCU", UESMJO:"MMJO", UESJOJ:"MMJO", UESMPU:"MMPU", UESPIX:"MMPU", UESMAX:"MMAX", UESAXO:"MMAX", UESMCC:"MMCC", UESCOC:"MMCC" };
+var UMBRALES=[180,365,730];   // días sin salida: nivel 1, nivel 2, nivel 3
+
+function nivelDe(d){ return d>=UMBRALES[2] ? 3 : d>=UMBRALES[1] ? 2 : d>=UMBRALES[0] ? 1 : 0; }
+function dd(a,b){ var x=a.split("-"), y=b.split("-"); return Math.round((Date.UTC(+y[0],+y[1]-1,+y[2])-Date.UTC(+x[0],+x[1]-1,+x[2]))/864e5); }
+function sinAcentos(s){ return String(s==null?"":s).normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().trim(); }
+function serialAISO(v){
+  if(v==null||v==="") return "";
+  if(typeof v==="number"){ var d=new Date(Math.round((v-25569)*86400000)); return d.toISOString().slice(0,10); }
+  if(v instanceof Date) return v.getFullYear()+"-"+("0"+(v.getMonth()+1)).slice(-2)+"-"+("0"+v.getDate()).slice(-2);
+  var s=String(v).trim(), m=s.match(/^(\d{4})-(\d{2})-(\d{2})/); if(m) return m[1]+"-"+m[2]+"-"+m[3];
+  m=s.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})/); return m ? m[3]+"-"+("0"+m[2]).slice(-2)+"-"+("0"+m[1]).slice(-2) : "";
+}
+function num(v){ var n=Number(v); return isFinite(n) ? n : 0; }
+function r2(n){ return Math.round(n*100)/100; }
+function codigo(v){ return v==null ? "" : String(v).trim(); }
+function faltan(filas,cols){ var f=filas[0]||{}; return cols.filter(function(c){ return !(c in f); }); }
+
+/* Lee el Excel de SAP y lo deja curado. Devuelve { archivo, corte, datos, avisos, ues }.
+   datos = { v, corte, mats:{codigo:[texto,um]}, cols, rows:[[mat,centro,libre,vlibre,bloq,stk,val,fent,fsal]] }
+   bloq: 1 = bloqueado (ZB), 0 = no, null = sin registro · stk/val/fent/fsal: null si el material no está en la pestaña UES del CEDIS. */
+function procesar(XL, buf, nombre, corteIni){
+  var wb=XL.read(buf,{type:"array"}), avisos=[];
+  function hoja(n){ var k=wb.SheetNames.filter(function(x){ return sinAcentos(x)===n; })[0]; return k ? wb.Sheets[k] : null; }
+  function filas(ws){ return XL.utils.sheet_to_json(ws,{defval:null,raw:true}); }
+  var sI=hoja("indice"), sS=hoja("stock"), sC=hoja("codbloq");
+  if(!sI||!sS) throw new Error("El archivo debe traer las pestañas Indice y Stock. Encontré: "+wb.SheetNames.join(", ")+".");
+  var uesNombres=wb.SheetNames.filter(function(n){ return /^ues/i.test(n.trim()); });
+  if(!uesNombres.length) throw new Error("No encontré las pestañas de última entrada y salida (UESMCV, UESMCU, UESMJO, UESMPU, UESMAX, UESMCC). Encontré: "+wb.SheetNames.join(", ")+".");
+
+  var I=filas(sI), S=filas(sS), C=sC?filas(sC):[];
+  var fi=faltan(I,["Material","Centro","Texto breve de material","Unidad medida base"]);
+  if(fi.length) throw new Error("En Indice faltan las columnas: "+fi.join(", ")+".");
+  var fs=faltan(S,["Material","Centro","Libre utilización"]);
+  if(fs.length) throw new Error("En Stock faltan las columnas: "+fs.join(", ")+".");
+  if(!sC) avisos.push("No vino la pestaña Codbloq: no se sabrá qué material está bloqueado.");
+
+  var mats={}, filaPor={}, orden=[];
+  function fila(mat,ce){
+    var k=mat+"|"+ce, f=filaPor[k];
+    if(!f){ f=filaPor[k]={ mat:mat, ce:ce, libre:null, vlibre:null, bloq:null, stk:null, val:null, fent:null, fsal:null }; orden.push(f); }
+    return f;
+  }
+  function nombreMat(mat,texto,um){ var m=mats[mat]; if(!m){ mats[mat]=[String(texto||"").trim(), String(um||"").trim()]; } else { if(!m[0]&&texto) m[0]=String(texto).trim(); if(!m[1]&&um) m[1]=String(um).trim(); } }
+
+  I.forEach(function(r){
+    var mat=codigo(r["Material"]), ce=codigo(r["Centro"]); if(!mat||!ce) return;
+    nombreMat(mat,r["Texto breve de material"],r["Unidad medida base"]); fila(mat,ce);
+  });
+  var enIndice={}; orden.forEach(function(f){ enIndice[f.mat+"|"+f.ce]=1; });
+
+  var fueraIndice=0;
+  S.forEach(function(r){
+    var mat=codigo(r["Material"]), ce=codigo(r["Centro"]); if(!mat||!ce) return;
+    if(!enIndice[mat+"|"+ce]){ fueraIndice++; enIndice[mat+"|"+ce]=1; }
+    nombreMat(mat,r["Texto breve de material"],r["Unidad medida base"]);
+    var f=fila(mat,ce); f.libre=(f.libre||0)+num(r["Libre utilización"]); f.vlibre=(f.vlibre||0)+num(r["Valor libre util."]);
+  });
+  C.forEach(function(r){
+    var mat=codigo(r["Material"]), ce=codigo(r["Ce."]!=null?r["Ce."]:r["Centro"]); if(!mat||!ce) return;
+    var f=fila(mat,ce), sm=String(r["SM"]==null?"":r["SM"]).trim().toUpperCase();
+    if(sm==="ZB") f.bloq=1; else if(f.bloq==null) f.bloq=0;
+  });
+
+  var ues={}, nombresDistintos=0, stockDifiere=0, uesFuera=0;
+  uesNombres.forEach(function(nom){
+    var ce=HOJAS_UES[nom.trim().toUpperCase()];
+    if(!ce){ avisos.push("La pestaña "+nom+" no corresponde a ningún CEDIS conocido y se ignoró."); return; }
+    var rows=XL.utils.sheet_to_json(wb.Sheets[nom],{header:1,defval:null,raw:true});
+    var esperado=null; var m0=String((rows[0]&&rows[0][0])||"").match(/(\d+)/); if(m0) esperado=+m0[1];
+    var h=-1; for(var i=0;i<Math.min(rows.length,15);i++){ var ns=(rows[i]||[]).map(sinAcentos); if(ns.indexOf("material")>=0 && ns.some(function(x){ return x.indexOf("ult.entr")===0; })){ h=i; break; } }
+    if(h<0) throw new Error("En la pestaña "+nom+" no encontré los encabezados Material, Últ.entr. y Últ.salida.");
+    var ns=rows[h].map(sinAcentos);
+    var cM=ns.indexOf("material"), cS=ns.indexOf("stock total"), cE=-1, cL=-1, cV=-1;
+    ns.forEach(function(x,j){ if(x.indexOf("ult.entr")===0) cE=j; else if(x.indexOf("ult.salida")===0) cL=j; else if(x.indexOf("valor")===0) cV=j; });
+    if(cS<0||cE<0||cL<0) throw new Error("En la pestaña "+nom+" faltan las columnas Stock total, Últ.entr. o Últ.salida.");
+    var leidos=0;
+    for(var k=h+1;k<rows.length;k++){
+      var r=rows[k]; if(!r||r[cM]==null) continue;
+      var m=String(r[cM]).match(/^\s*(\d+)\s+(.*\S)\s*$/); if(!m) continue;   // descarta el renglón Total
+      var mat=m[1], texto=m[2]; leidos++;
+      if(!enIndice[mat+"|"+ce]){ uesFuera++; enIndice[mat+"|"+ce]=1; }
+      nombreMat(mat,texto,r[cS+1]);
+      if(mats[mat][0] && mats[mat][0]!==texto) nombresDistintos++;
+      var f=fila(mat,ce);
+      f.stk=num(r[cS]); f.val=cV>=0?r2(num(r[cV])):0; f.fent=serialAISO(r[cE])||null; f.fsal=serialAISO(r[cL])||null;
+      if(f.libre!=null && Math.abs(f.libre-f.stk)>0.001) stockDifiere++;
+    }
+    ues[ce]={ hoja:nom, leidos:leidos, esperado:esperado };
+    if(esperado!=null && esperado!==leidos) avisos.push("La pestaña "+nom+" dice "+esperado+" materiales y se leyeron "+leidos+".");
+  });
+  CENTROS.forEach(function(c){ if(!ues[c]) avisos.push("Falta la pestaña de última entrada y salida de "+NOMBRES[c]+" ("+c+").") ; });
+  if(fueraIndice) avisos.push(fueraIndice+" material(es) de Stock no estaban en Indice para ese CEDIS; se agregaron.");
+  if(uesFuera) avisos.push(uesFuera+" material(es) de las pestañas UES no estaban en Indice para ese CEDIS; se agregaron.");
+  if(nombresDistintos) avisos.push(nombresDistintos+" material(es) con descripción distinta entre UES e Indice (se usa la de Indice).");
+  if(stockDifiere) avisos.push(stockDifiere+" material(es) con existencia distinta entre UES (stock total) y Stock (libre utilización); es normal si hay stock no libre o los cortes no son del mismo momento.");
+  var sinUES=orden.filter(function(f){ return f.stk==null && f.libre>0; }).length;
+  if(sinUES) avisos.push(sinUES+" material(es) tienen existencia libre pero no aparecen en las pestañas UES; no entran al semáforo.");
+
+  var corte=corteIni;
+  if(!corte){
+    var mm=String(nombre||"").match(/(\d{2})(\d{2})(20\d{2})/);
+    if(mm && +mm[1]>=1 && +mm[1]<=31 && +mm[2]>=1 && +mm[2]<=12) corte=mm[3]+"-"+mm[2]+"-"+mm[1];
+  }
+  orden.sort(function(a,b){ return a.mat<b.mat?-1:a.mat>b.mat?1:(a.ce<b.ce?-1:a.ce>b.ce?1:0); });
+  var datos={ v:1, corte:corte||"", mats:mats, cols:["mat","ce","libre","vlibre","bloq","stk","val","fent","fsal"],
+    rows:orden.map(function(f){ return [f.mat,f.ce,f.libre==null?null:r2(f.libre),f.vlibre==null?null:r2(f.vlibre),f.bloq,f.stk,f.val,f.fent,f.fsal]; }) };
+  return { archivo:nombre, corte:corte||"", datos:datos, avisos:avisos, ues:ues };
+}
+
+/* Convierte los datos guardados en objetos con días y nivel de semáforo al corte indicado. */
+function armar(D, corte){
+  return D.rows.map(function(r){
+    var m=D.mats[r[0]]||["",""];
+    var o={ mat:r[0], ce:r[1], texto:m[0], um:m[1], libre:r[2], vlibre:r[3], bloq:r[4], stk:r[5], val:r[6], fent:r[7], fsal:r[8],
+      enUES:r[5]!=null, conExist:r[5]!=null && r[5]>0, dias:null, nunca:false, nivel:0, entRec:false };
+    if(o.conExist){
+      var base=o.fsal||o.fent; o.nunca=!o.fsal;
+      if(base) o.dias=Math.max(dd(base,corte),0);
+      o.nivel=o.dias==null ? 0 : nivelDe(o.dias);
+      o.entRec=!!o.fent && dd(o.fent,corte)<UMBRALES[0];
+    }
+    return o;
+  });
+}
+
+/* Totales por CEDIS: valor en almacén y, por nivel, materiales, piezas (PZA) y valor. */
+function resumir(L, soloSinEntRec){
+  var res={};
+  CENTROS.concat(["TODOS"]).forEach(function(c){ res[c]={ almV:0, almN:0, niv:{1:{n:0,pz:0,v:0},2:{n:0,pz:0,v:0},3:{n:0,pz:0,v:0}} }; });
+  L.forEach(function(o){
+    if(!o.conExist) return;
+    [o.ce,"TODOS"].forEach(function(c){
+      var t=res[c]; if(!t) return;
+      t.almV+=o.val; t.almN++;
+      if(o.nivel && !(soloSinEntRec && o.entRec)){ var x=t.niv[o.nivel]; x.n++; x.v+=o.val; if(o.um==="PZA") x.pz+=o.stk; }
+    });
+  });
+  return res;
+}
+/*CORE-END*/
+
+var NIVTXT={1:"Nivel 1",2:"Nivel 2",3:"Nivel 3"};
+var NIVRANGO={1:"180 días a menos de 1 año",2:"1 año a menos de 2 años",3:"2 años o más"};
+var PAG=100;
+var DATOS=null, LISTA=[], CORTE="", POR_MAT={}, MATS_ORD=[];
+var S={ ced:"", niv:"alerta", q:"", entRec:false, sort:"val", dir:-1, page:0 }, FILT=[];
+var C={ q:"", ced:"", sel:null };
+
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
+function fmt(n){ n=+n||0; return Number.isInteger(n) ? n.toLocaleString("es-MX") : n.toLocaleString("es-MX",{maximumFractionDigits:2}); }
+function mxn(n){ return "$"+Math.round(+n||0).toLocaleString("es-MX"); }
+function pct(a,b){ return b ? (Math.round(a/b*1000)/10).toLocaleString("es-MX",{minimumFractionDigits:1,maximumFractionDigits:1})+"%" : "—"; }
+function hoyISO(){ var d=new Date(); return d.getFullYear()+"-"+("0"+(d.getMonth()+1)).slice(-2)+"-"+("0"+d.getDate()).slice(-2); }
+function fechaCorta(iso){ if(!iso) return "—"; var p=iso.split("-"); return p[2]+"/"+p[1]+"/"+p[0].slice(2); }
+function fechaHora(iso){ try{ return new Date(iso).toLocaleString("es-MX",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"}); }catch(e){ return iso||"—"; } }
+function nomCe(c){ return NOMBRES[c] ? c+" · "+NOMBRES[c] : c; }
+function psem(n){ return n ? '<span class="psem p'+(n+1)+'" title="'+NIVRANGO[n]+'">'+NIVTXT[n]+"</span>" : '<span class="nulo">—</span>'; }
+
+/* ================= vista ================= */
+function cargarVista(){
+  $("meta").innerHTML='<span class="pill warn">Cargando…</span>';
+  ERP.rest("catalogo_refacciones_datos?select=corte,archivo,actualizado_at,datos&id=eq.1").then(function(rows){
+    if(!rows || !rows.length || !rows[0].datos){
+      $("meta").innerHTML='<span class="pill warn">Sin datos cargados</span>';
+      $("kpis").innerHTML=""; $("chips").hidden=true;
+      $("bars").innerHTML='<div class="empty">Todavía no hay un catálogo cargado, o tu usuario no tiene acceso a esta sección.</div>';
+      return;
+    }
+    var r=rows[0]; DATOS=r.datos; CORTE=DATOS.corte || r.corte || hoyISO();
+    LISTA=armar(DATOS,CORTE); indexar();
+    $("meta").innerHTML='<span class="pill">Corte de SAP: '+esc(fechaCorta(CORTE))+'</span><span class="pill mute">Actualizado '+esc(fechaHora(r.actualizado_at))+'</span><span class="pill mute">'+fmt(Object.keys(DATOS.mats).length)+' materiales · '+fmt(LISTA.length)+' registros por CEDIS</span>';
+    armarSelects(); aplicarSem(); pintarCat();
+  }).catch(function(e){
+    $("meta").innerHTML='<span class="pill bad">Sin conexión a datos</span>';
+    $("bars").innerHTML='<div class="empty">No se pudo leer la información: '+esc(e.message)+'. Si abriste esta página sola, entra por el ERP para usar tu sesión.</div>';
+  });
+}
+function indexar(){
+  POR_MAT={};
+  LISTA.forEach(function(o){ var p=POR_MAT[o.mat]||(POR_MAT[o.mat]={ mat:o.mat, texto:o.texto, um:o.um, ce:{} }); p.ce[o.ce]=o; });
+  MATS_ORD=Object.keys(POR_MAT).sort().map(function(k){ var p=POR_MAT[k]; p.bus=(p.mat+" "+sinAcentos(p.texto)); return p; });
+}
+function armarSelects(){
+  var op='<option value="">Todos los CEDIS</option>'+CENTROS.map(function(c){ return '<option value="'+c+'">'+esc(nomCe(c))+"</option>"; }).join("");
+  $("sCed").innerHTML=op; $("cCed").innerHTML=op.replace("Todos los CEDIS","Cualquier CEDIS");
+}
+
+/* ---- semáforo ---- */
+function aplicarSem(){
+  var q=sinAcentos(S.q).split(/\s+/).filter(Boolean);
+  FILT=LISTA.filter(function(o){
+    if(!o.conExist) return false;
+    if(S.ced && o.ce!==S.ced) return false;
+    if(S.niv==="alerta"){ if(!o.nivel) return false; } else if(o.nivel!==+S.niv) return false;
+    if(S.entRec && o.entRec) return false;
+    if(q.length){ var b=o.mat+" "+sinAcentos(o.texto); for(var i=0;i<q.length;i++){ if(b.indexOf(q[i])<0) return false; } }
+    return true;
+  });
+  S.page=0; ordenar(); pintarSem();
+}
+function ordenar(){
+  var k=S.sort, d=S.dir;
+  FILT.sort(function(a,b){
+    var x=a[k], y=b[k];
+    if(x==null) x=(typeof y==="string")?"":-1; if(y==null) y=(typeof x==="string")?"":-1;
+    return (x<y?-1:x>y?1:0)*d || (b.val-a.val);
+  });
+}
+function pintarSem(){
+  var R=resumir(LISTA,S.entRec), t=S.ced?R[S.ced]:R.TODOS;
+  var inm={ n:0, v:0, pz:0 }; [1,2,3].forEach(function(n){ inm.n+=t.niv[n].n; inm.v+=t.niv[n].v; inm.pz+=t.niv[n].pz; });
+  var nun=LISTA.filter(function(o){ return o.conExist && o.nunca && o.nivel && (!S.ced||o.ce===S.ced) && !(S.entRec&&o.entRec); }).length;
+  $("notaSem").textContent="Días al corte del "+fechaCorta(CORTE)+", contados desde la última salida de cada material con existencia."+(S.entRec?" Se ocultó el material con entrada de menos de 180 días.":"");
+  $("kpis").innerHTML=
+    kpi("Valor del material en almacén", mxn(t.almV), fmt(t.almN)+" materiales con existencia")+
+    kpi("Valor sin salir (180 días o más)", mxn(inm.v), pct(inm.v,t.almV)+" del valor en almacén")+
+    kpi("Materiales sin salir", fmt(inm.n), pct(inm.n,t.almN)+" de los materiales con existencia")+
+    kpi("Piezas sin salir", fmt(inm.pz), "solo unidad PZA"+(nun?" · "+fmt(nun)+" nunca han salido":""));
+  $("chips").innerHTML='<span class="ttl">Semáforo</span>'+[1,2,3].map(function(n){
+    var x=t.niv[n]; return '<button class="chip c'+(n+1)+(S.niv===String(n)?" on":"")+'" data-n="'+n+'" type="button"><span>'+NIVTXT[n]+' · '+NIVRANGO[n]+'</span><b>'+mxn(x.v)+'</b><em>'+fmt(x.n)+' materiales · '+fmt(x.pz)+' piezas · '+pct(x.v,t.almV)+' del valor</em></button>';
+  }).join("");
+  var max=0; CENTROS.forEach(function(c){ if(R[c].almV>max) max=R[c].almV; });
+  $("bars").innerHTML=CENTROS.filter(function(c){ return !S.ced||c===S.ced; }).map(function(c){
+    var x=R[c], i1=x.niv[1].v, i2=x.niv[2].v, i3=x.niv[3].v, inmv=i1+i2+i3, ok=Math.max(x.almV-inmv,0), w=function(v){ return max? (v/max*100) : 0; };
+    return '<div class="bar-row"><div class="nm"><b>'+esc(NOMBRES[c])+'</b><span>'+c+' · '+fmt(x.almN)+' materiales con existencia</span></div>'+
+      '<div class="track" title="Valor en almacén '+mxn(x.almV)+'"><div class="seg-ok" style="width:'+w(ok)+'%"></div><div class="seg-n1" style="width:'+w(i1)+'%"></div><div class="seg-n2" style="width:'+w(i2)+'%"></div><div class="seg-n3" style="width:'+w(i3)+'%"></div></div>'+
+      '<div class="val"><b>'+mxn(inmv)+'</b> sin salir · '+pct(inmv,x.almV)+' de '+mxn(x.almV)+'</div></div>';
+  }).join("");
+  pintarTabla();
+}
+function kpi(l,v,s){ return '<div class="kpi"><span class="l">'+l+'</span><span class="v">'+v+'</span><span class="s">'+s+'</span></div>'; }
+
+var COLS=[["nivel","Nivel"],["ce","CEDIS"],["mat","Material"],["texto","Descripción"],["um","UM"],["stk","Existencia",1],["val","Valor (MXN)",1],["fent","Últ. entrada"],["fsal","Últ. salida"],["dias","Días sin salida",1]];
+function pintarTabla(){
+  var t=$("tabla"), tit=S.niv==="alerta"?"Material sin salir":S.niv==="0"?"Material con salida reciente":NIVTXT[S.niv]+" · "+NIVRANGO[S.niv];
+  $("tDet").textContent=tit+(S.ced?" · "+NOMBRES[S.ced]:"");
+  if(!FILT.length){ t.innerHTML='<tbody><tr><td class="empty">No hay material con estos filtros.</td></tr></tbody>'; $("pInfo").textContent="0 materiales"; $("pPrev").disabled=$("pNext").disabled=true; return; }
+  var ini=S.page*PAG, fin=Math.min(ini+PAG,FILT.length);
+  var head="<thead><tr>"+COLS.map(function(c){ var ar=S.sort===c[0]?'<span class="ar"> '+(S.dir>0?"▲":"▼")+"</span>":""; return '<th class="s'+(c[2]?" num":"")+'" data-k="'+c[0]+'">'+c[1]+ar+"</th>"; }).join("")+"</tr></thead>";
+  var body="<tbody>"+FILT.slice(ini,fin).map(function(o){
+    var d=o.dias==null?"—":fmt(o.dias)+(o.nunca?' <span class="nulo" title="Nunca ha tenido salida; se cuenta desde la última entrada">*</span>':"");
+    return '<tr class="'+(o.nivel>0?"r"+(o.nivel+1):"")+'"><td>'+psem(o.nivel)+"</td><td>"+esc(o.ce)+"</td><td>"+esc(o.mat)+'</td><td class="tx">'+esc(o.texto)+(o.bloq===1?' <span class="bq">Bloq.</span>':"")+"</td><td>"+esc(o.um)+'</td><td class="num">'+fmt(o.stk)+'</td><td class="num">'+mxn(o.val)+'</td><td class="num">'+fechaCorta(o.fent)+'</td><td class="num">'+(o.fsal?fechaCorta(o.fsal):'<span class="nulo">sin salida</span>')+'</td><td class="num">'+d+"</td></tr>";
+  }).join("")+"</tbody>";
+  t.innerHTML=head+body;
+  $("pInfo").textContent=fmt(ini+1)+"–"+fmt(fin)+" de "+fmt(FILT.length)+" materiales · valor "+mxn(FILT.reduce(function(s,o){ return s+o.val; },0))+(FILT.some(function(o){ return o.nunca; })?" · * sin salida registrada, contado desde su última entrada":"");
+  $("pPrev").disabled=S.page===0; $("pNext").disabled=fin>=FILT.length;
+}
+
+/* ---- consulta ---- */
+function pintarCat(){
+  var q=sinAcentos(C.q).split(/\s+/).filter(Boolean), t=$("tCat");
+  if(!DATOS){ t.innerHTML=""; return; }
+  if(!q.length && !C.ced){ t.innerHTML='<tbody><tr><td class="empty">Escribe un código o parte de la descripción para buscar material.</td></tr></tbody>'; $("cInfo").textContent=""; return; }
+  var res=MATS_ORD.filter(function(p){
+    for(var i=0;i<q.length;i++){ if(p.bus.indexOf(q[i])<0) return false; }
+    if(C.ced){ var o=p.ce[C.ced]; if(!o || !(o.libre>0)) return false; }
+    return true;
+  });
+  var tot=res.length; res=res.slice(0,150);
+  if(!res.length){ t.innerHTML='<tbody><tr><td class="empty">No encontré material con esa búsqueda.</td></tr></tbody>'; $("cInfo").textContent="0 materiales"; return; }
+  var head="<thead><tr><th>Material</th><th>Descripción</th><th>UM</th>"+CENTROS.map(function(c){ return '<th class="ce" title="'+esc(NOMBRES[c])+'">'+c+"</th>"; }).join("")+"</tr></thead>";
+  var body="<tbody>"+res.map(function(p){
+    return '<tr class="clic" data-m="'+esc(p.mat)+'"><td>'+esc(p.mat)+'</td><td class="tx">'+esc(p.texto)+"</td><td>"+esc(p.um)+"</td>"+CENTROS.map(function(c){
+      var o=p.ce[c]; if(!o) return '<td class="ce nulo">—</td>';
+      return '<td class="ce">'+fmt(o.libre||0)+(o.bloq===1?'<span class="bq">Bloq.</span>':"")+"</td>";
+    }).join("")+"</tr>";
+  }).join("")+"</tbody>";
+  t.innerHTML=head+body;
+  $("cInfo").textContent=tot>150 ? "Mostrando 150 de "+fmt(tot)+" materiales; afina la búsqueda para ver el resto." : fmt(tot)+" material"+(tot===1?"":"es");
+}
+function pintarFicha(){
+  var f=$("ficha"), p=C.sel&&POR_MAT[C.sel];
+  if(!p){ f.hidden=true; return; }
+  f.hidden=false;
+  var rows=CENTROS.map(function(c){
+    var o=p.ce[c];
+    if(!o) return "<tr><td>"+esc(nomCe(c))+'</td><td colspan="8" class="nulo">No ampliado en este CEDIS</td></tr>';
+    return "<tr><td>"+esc(nomCe(c))+"</td><td>Ampliado</td>"+
+      '<td class="num">'+fmt(o.libre||0)+"</td><td>"+(o.bloq===1?'<span class="bq" style="margin:0">Bloqueado</span>':o.bloq===0?"No":'<span class="nulo">—</span>')+"</td>"+
+      '<td class="num">'+(o.enUES?fmt(o.stk):'<span class="nulo">—</span>')+'</td><td class="num">'+(o.enUES?mxn(o.val):'<span class="nulo">—</span>')+"</td>"+
+      '<td class="num">'+(o.fent?fechaCorta(o.fent):'<span class="nulo">—</span>')+'</td><td class="num">'+(o.fsal?fechaCorta(o.fsal):'<span class="nulo">'+(o.enUES?"sin salida":"—")+"</span>")+"</td>"+
+      "<td>"+(o.conExist?psem(o.nivel)+(o.dias!=null?' <span class="nulo">'+fmt(o.dias)+" d</span>":""):'<span class="nulo">sin existencia</span>')+"</td></tr>";
+  }).join("");
+  f.innerHTML='<div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start"><div><h2>'+esc(p.mat)+" · "+esc(p.texto)+'</h2><p class="sub">Unidad: '+esc(p.um)+' · Días al corte del '+fechaCorta(CORTE)+'</p></div><button class="btn ghost sm" id="bCerrar" type="button">Cerrar</button></div>'+
+    '<div class="tbl"><table><thead><tr><th>CEDIS</th><th>Estado</th><th class="num">Existencia libre</th><th>Bloqueo</th><th class="num">Stock total</th><th class="num">Valor</th><th class="num">Últ. entrada</th><th class="num">Últ. salida</th><th>Semáforo</th></tr></thead><tbody>'+rows+"</tbody></table></div>";
+  $("bCerrar").addEventListener("click",function(){ C.sel=null; pintarFicha(); });
+  f.scrollIntoView({ behavior:"smooth", block:"nearest" });
+}
+
+/* ---- eventos ---- */
+$("segVista").addEventListener("click",function(e){
+  var b=e.target.closest("button"); if(!b) return;
+  Array.prototype.forEach.call($("segVista").children,function(x){ x.classList.toggle("on",x===b); });
+  $("vSem").style.display = b.dataset.v==="sem" ? "contents" : "none";
+  $("vCat").style.display = b.dataset.v==="cat" ? "flex" : "none";
+  $("vCat").style.flexDirection="column"; $("vCat").style.gap="18px";
+});
+$("sCed").addEventListener("change",function(){ S.ced=this.value; aplicarSem(); });
+$("sNiv").addEventListener("change",function(){ S.niv=this.value; aplicarSem(); });
+$("cEnt").addEventListener("change",function(){ S.entRec=this.checked; aplicarSem(); });
+var tq=null; $("qSem").addEventListener("input",function(){ var v=this.value; clearTimeout(tq); tq=setTimeout(function(){ S.q=v.trim(); aplicarSem(); },180); });
+$("chips").addEventListener("click",function(e){ var b=e.target.closest("button.chip"); if(!b) return; var n=b.dataset.n; S.niv=(S.niv===n)?"alerta":n; $("sNiv").value=S.niv; aplicarSem(); });
+$("tabla").addEventListener("click",function(e){
+  var th=e.target.closest("th.s"); if(!th) return; var k=th.dataset.k;
+  if(S.sort===k) S.dir=-S.dir; else { S.sort=k; S.dir=(k==="ce"||k==="mat"||k==="texto"||k==="um")?1:-1; }
+  ordenar(); S.page=0; pintarTabla();
+});
+$("pPrev").addEventListener("click",function(){ if(S.page>0){ S.page--; pintarTabla(); } });
+$("pNext").addEventListener("click",function(){ if((S.page+1)*PAG<FILT.length){ S.page++; pintarTabla(); } });
+var tc=null; $("qCat").addEventListener("input",function(){ var v=this.value; clearTimeout(tc); tc=setTimeout(function(){ C.q=v.trim(); pintarCat(); },180); });
+$("cCed").addEventListener("change",function(){ C.ced=this.value; pintarCat(); });
+$("tCat").addEventListener("click",function(e){ var tr=e.target.closest("tr.clic"); if(!tr) return; C.sel=tr.dataset.m; pintarFicha(); });
+
+$("bExcel").addEventListener("click",function(){
+  if(!FILT.length) return;
+  var det=FILT.map(function(o){ return { "Nivel":o.nivel?NIVTXT[o.nivel]:"Sin alerta", "Rango":o.nivel?NIVRANGO[o.nivel]:"", "CEDIS":o.ce, "Material":Number(o.mat), "Descripción":o.texto, "UM":o.um,
+    "Existencia":o.stk, "Valor (MXN)":o.val, "Últ. entrada":o.fent||"", "Últ. salida":o.fsal||"", "Días sin salida":o.dias==null?"":o.dias, "Nunca ha salido":o.nunca?"Sí":"", "Bloqueado":o.bloq===1?"Sí":"" }; });
+  var R=resumir(LISTA,S.entRec), res=CENTROS.concat(["TODOS"]).map(function(c){
+    var x=R[c], ro={ "CEDIS":c==="TODOS"?"Zona Morelos":NOMBRES[c], "Valor en almacén (MXN)":r2(x.almV), "Materiales con existencia":x.almN };
+    [1,2,3].forEach(function(n){ ro[NIVTXT[n]+" materiales"]=x.niv[n].n; ro[NIVTXT[n]+" piezas"]=x.niv[n].pz; ro[NIVTXT[n]+" valor (MXN)"]=r2(x.niv[n].v); });
+    var tv=x.niv[1].v+x.niv[2].v+x.niv[3].v; ro["Valor sin salir (MXN)"]=r2(tv); ro["% del valor"]=x.almV?tv/x.almV:0; return ro; });
+  var wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(det),"Detalle");
+  var w2=XLSX.utils.json_to_sheet(res); Object.keys(w2).forEach(function(a){ if(/^N\d+$/.test(a)&&a!=="N1") w2[a].z="0.0%"; });
+  XLSX.utils.book_append_sheet(wb,w2,"Resumen por CEDIS");
+  XLSX.writeFile(wb,"Material_sin_salida_"+CORTE+".xlsx");
+});
+
+/* ================= carga (solo con ?modo=carga) ================= */
+var PENDIENTE=null;
+function resumenCarga(R){
+  var L=armar(R.datos, R.datos.corte||hoyISO()), T=resumir(L,false), h="";
+  h+='<div class="sub"><b>'+esc(R.archivo)+"</b></div>";
+  h+='<table class="mini"><thead><tr><th>CEDIS</th><th class="num">Ampliados</th><th class="num">Con existencia libre</th><th class="num">Bloqueados</th><th class="num">En pestaña UES</th><th class="num">Sin salir (niveles 1 a 3)</th></tr></thead><tbody>';
+  CENTROS.forEach(function(c){
+    var a=L.filter(function(o){ return o.ce===c; }), x=T[c], inm=x.niv[1].n+x.niv[2].n+x.niv[3].n;
+    h+="<tr><td>"+esc(nomCe(c))+'</td><td class="num">'+fmt(a.length)+'</td><td class="num">'+fmt(a.filter(function(o){ return o.libre>0; }).length)+'</td><td class="num">'+fmt(a.filter(function(o){ return o.bloq===1; }).length)+'</td><td class="num">'+fmt(R.ues[c]?R.ues[c].leidos:0)+'</td><td class="num">'+fmt(inm)+"</td></tr>";
+  });
+  h+="</tbody></table>";
+  var t=T.TODOS, iv=t.niv[1].v+t.niv[2].v+t.niv[3].v;
+  h+='<div class="sub" style="margin-top:6px">Valor del material con existencia: <b>'+mxn(t.almV)+"</b> · sin salir 180 días o más: <b>"+mxn(iv)+"</b> ("+pct(iv,t.almV)+")</div>";
+  if(R.avisos.length) h+='<ul class="avisos">'+R.avisos.map(function(a){ return "<li>"+esc(a)+"</li>"; }).join("")+"</ul>";
+  return h;
+}
+function infoActual(){
+  ERP.rest("catalogo_refacciones_datos?select=corte,archivo,actualizado_at&id=eq.1").then(function(r){
+    $("cActual").textContent = r&&r[0] ? "Vigente hoy: "+(r[0].archivo||"archivo")+" · corte del "+fechaCorta(r[0].corte)+" · cargado "+fechaHora(r[0].actualizado_at)+"." : "Todavía no hay un catálogo cargado.";
+  }).catch(function(){});
+}
+if(document.documentElement.classList.contains("modo-carga")){
+  infoActual();
+  if(!ERP.puede("catalogo_refacciones")){
+    $("cMsg").className="msg err"; $("cMsg").textContent="Tu usuario no puede actualizar esta sección.";
+    $("bElegir").disabled=true;
+  }
+  $("bElegir").addEventListener("click",function(){ $("fArch").click(); });
+  $("fArch").addEventListener("change",function(){
+    var f=this.files[0]; if(!f) return;
+    var m=$("cMsg"); m.className="msg"; m.textContent="Leyendo y curando "+f.name+"…"; $("bGuardar").hidden=true; $("fCorte").hidden=true; $("cResumen").innerHTML=""; PENDIENTE=null;
+    var inp=this, rd=new FileReader();
+    rd.onload=function(){
+      setTimeout(function(){
+        try{ PENDIENTE=procesar(XLSX,new Uint8Array(rd.result),f.name,null); }
+        catch(e){ m.className="msg err"; m.textContent=e.message; inp.value=""; return; }
+        $("iCorte").value=PENDIENTE.corte||hoyISO(); $("fCorte").hidden=false;
+        m.className="msg ok"; m.textContent="Archivo curado. Revisa el resumen, confirma la fecha de corte y guarda.";
+        $("cResumen").innerHTML=resumenCarga(PENDIENTE); $("bGuardar").hidden=false; inp.value="";
+      },30);
+    };
+    rd.onerror=function(){ m.className="msg err"; m.textContent="No se pudo leer el archivo."; };
+    rd.readAsArrayBuffer(f);
+  });
+  $("iCorte").addEventListener("change",function(){
+    if(!PENDIENTE||!this.value) return; PENDIENTE.corte=this.value; PENDIENTE.datos.corte=this.value; $("cResumen").innerHTML=resumenCarga(PENDIENTE);
+  });
+  $("bGuardar").addEventListener("click",function(){
+    if(!PENDIENTE) return;
+    var m=$("cMsg"), b=this, corte=$("iCorte").value;
+    if(!corte){ m.className="msg err"; m.textContent="Indica la fecha de corte."; return; }
+    PENDIENTE.datos.corte=corte;
+    if(!confirm("¿Reemplazar el catálogo vigente por este archivo, con corte del "+fechaCorta(corte)+"?")) return;
+    b.disabled=true; m.className="msg"; m.textContent="Guardando…";
+    ERP.rest("catalogo_refacciones_datos?on_conflict=id",{ method:"POST", body:[{ id:1, corte:corte, archivo:PENDIENTE.archivo, datos:PENDIENTE.datos, actualizado_at:new Date().toISOString() }], prefer:"resolution=merge-duplicates,return=minimal" }).then(function(){
+      b.disabled=false; b.hidden=true; m.className="msg ok"; m.textContent="Listo. El catálogo de refacciones ya muestra el corte del "+fechaCorta(corte)+"."; PENDIENTE=null; infoActual();
+    }).catch(function(e){ b.disabled=false; m.className="msg err"; m.textContent="No se pudo guardar: "+e.message; });
+  });
+} else {
+  cargarVista();
+}
+})();
+</script>
+<script src="offline.js"></script>
+</body>
+</html>

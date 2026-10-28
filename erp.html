@@ -289,7 +289,7 @@
   var VARIOS_ITEMS = [
     { id:"combustible", t:"Combustible", src:"rendimientos.html", m:"combustible", d:"Rendimientos y cargas de combustible de la flota." },
     { id:"llantas", t:"Control de llantas", m:"llantas", d:"Pendiente de conectar." },
-    { id:"catalogo-refacciones", t:"Catálogo de refacciones", src:"index.html", m:"catalogo_refacciones", d:"Existencias por CEDIS según el último stock de SAP." },
+    { id:"catalogo-refacciones", t:"Catálogo de refacciones", src:"catalogo-refacciones.html", m:"catalogo_refacciones", d:"Material por CEDIS (existencia, bloqueo, entradas y salidas) y semáforo de material sin salir." },
     { id:"control-refacciones", t:"Control de refacciones", src:"faltantes.html", m:"control_refacciones", d:"Faltantes: pedidos contra ingresos de SAP, por CEDIS." },
     { id:"carta-peticion", t:"Carta petición", src:"carta-peticion.html", m:"carta_peticion", d:"Genera la carta petición de dotación de combustible para SAP." },
     { id:"catalogo-unidades", t:"Catálogo de unidades", src:"catalogo-maestro.html", m:"catalogo_unidades", d:"Ficha maestra de las unidades de la zona." },
@@ -726,6 +726,7 @@
     tarjeta("Unidades en piso", "Excel de unidades en piso con las pestañas UPiso, Cargas, Pedidos, Movimientos, Uso y Usoc. Reemplaza el corte vigente.", "Subir archivo", function(){ abrirFrame("piso-carga.html", "Unidades en piso"); });
 
     tarjeta("Preventivos", "Archivo mensual con las pestañas de los 6 CEDIS, Ordenes y Ordmov. Reemplaza lo cargado de ese mes.", "Subir archivo", function(){ abrirFrame("preventivos-carga.html", "Preventivos"); });
+    tarjeta("Catálogo de refacciones", "Excel del catálogo tal como sale de SAP, con Indice, Stock, Codbloq y las pestañas UESMCV, UESMCU, UESMJO, UESMPU, UESMAX y UESMCC. Se cura al subirlo y reemplaza el corte vigente.", "Subir archivo", function(){ abrirFrame("catalogo-refacciones.html?modo=carga", "Catálogo de refacciones"); });
     tarjeta("Stock de refacciones", "CSV de existencias de SAP.", "Abrir carga", function(){ abrirFrame("index.html", "Stock de refacciones"); });
   }
 
