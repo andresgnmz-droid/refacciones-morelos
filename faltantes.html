@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Control de refacciones</title>
+<title>Control de refacciones faltantes</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="erp-auth.js"></script>
@@ -118,7 +118,7 @@
 <body>
 <div class="wrap">
   <div class="hero">
-    <h1>Control de refacciones</h1>
+    <h1>Control de refacciones faltantes</h1>
     <p>Cruce de pedidos de SAP contra los ingresos a almacén: qué refacciones faltan por llegar, cuánto llevan esperando y cómo va el cumplimiento por CEDIS.</p>
     <div class="meta" id="meta"></div>
   </div>
@@ -174,7 +174,7 @@
       <div class="pager"><span id="pInfo"></span><span><button class="btn ghost sm" id="pPrev" type="button">Anterior</button> <button class="btn ghost sm" id="pNext" type="button">Siguiente</button></span></div>
     </div>
 
-    <div class="card">
+    <div class="card solo-admin">
       <details>
         <summary>Cómo se calcula</summary>
         <ul>

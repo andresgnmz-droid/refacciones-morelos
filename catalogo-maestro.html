@@ -119,7 +119,7 @@
 <div class="wrap">
   <div class="hero">
     <h1>Catálogo Maestro de Unidades</h1>
-    <p>Ficha maestra por económico — marca, modelo, uso, CEDIS y más. Es la tabla central de cruce del ERP: el resto de los módulos (correctivo, preventivo, llantas, combustible, refacciones) se ligan aquí por económico. Los datos viven en Supabase, así que se ven igual sin importar desde dónde se consulten.</p>
+    <p data-publico="Ficha de cada unidad de la zona: marca, modelo, uso, CEDIS, combustible, placas, estado y dotación. Busca por económico para ver su tarjeta.">Ficha maestra por económico — marca, modelo, uso, CEDIS y más. Es la tabla central de cruce del ERP: el resto de los módulos (correctivo, preventivo, llantas, combustible, refacciones) se ligan aquí por económico. Los datos viven en Supabase, así que se ven igual sin importar desde dónde se consulten.</p>
   </div>
 
   <div class="kpi-row" id="kpiRow"></div>
@@ -174,7 +174,7 @@
     </div>
   </div>
 
-  <p class="note">Fuente: "Catálogo Unidades" (Excel mensual, pestañas Morelos y Dotaciones). Las columnas se leen por su encabezado, no por posición. Se corrigen solas: MODELO/ÁREA invertidos, espacios extra en MARCA, bodega que no corresponde al prefijo del económico y centros de coste de otro CEDIS cuando el código correcto ya existe. Lo que falte (serie, placas, centro de coste) se muestra como "sin información". Los económicos virtuales (MCV0530, MCV4006, MJO1056, MAX2040, MCC2038, MCC2040) no cuentan en los totales y solo aparecen al buscarlos.</p>
+  <p class="note solo-admin">Fuente: "Catálogo Unidades" (Excel mensual, pestañas Morelos y Dotaciones). Las columnas se leen por su encabezado, no por posición. Se corrigen solas: MODELO/ÁREA invertidos, espacios extra en MARCA, bodega que no corresponde al prefijo del económico y centros de coste de otro CEDIS cuando el código correcto ya existe. Lo que falte (serie, placas, centro de coste) se muestra como "sin información". Los económicos virtuales (MCV0530, MCV4006, MJO1056, MAX2040, MCC2038, MCC2040) no cuentan en los totales y solo aparecen al buscarlos.</p>
 </div>
 
 <script>

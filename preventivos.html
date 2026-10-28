@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Preventivos</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap">
+<script src="erp-auth.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root{
@@ -128,7 +129,7 @@
 <div class="wrap">
   <div class="hero">
     <h1>Preventivos</h1>
-    <p>Cumplimiento de los mantenimientos preventivos programados (Lubricación, Afinación y Frenos). Un servicio se da por realizado cuando cuenta con evidencia fotográfica; el costo y la fecha salen de la orden de SAP (OM02). Los datos viven en Supabase.</p>
+    <p data-publico="Avance de los mantenimientos preventivos programados (Lubricación, Afinación y Frenos): cuántos se han realizado y cuántos faltan, por zona, CEDIS, mecánico y unidad.">Cumplimiento de los mantenimientos preventivos programados (Lubricación, Afinación y Frenos). Un servicio se da por realizado cuando cuenta con evidencia fotográfica; el costo y la fecha salen de la orden de SAP (OM02). Los datos viven en Supabase.</p>
   </div>
 
   <div class="filterbar">
@@ -171,7 +172,7 @@
         </select>
       </div>
       <div class="table-wrap"><table id="mecTable"></table></div>
-      <p class="note">Asignados = servicios aplicables del mecánico (sin unidades inhabilitadas). Con material = servicios con orden y costo (se sacó material de almacén). Evidencia/material = de los servicios con material, cuántos tienen evidencia fotográfica; un número bajo significa material sacado sin servicio comprobado.</p>
+      <p class="note solo-admin">Asignados = servicios aplicables del mecánico (sin unidades inhabilitadas). Con material = servicios con orden y costo (se sacó material de almacén). Evidencia/material = de los servicios con material, cuántos tienen evidencia fotográfica; un número bajo significa material sacado sin servicio comprobado.</p>
     </div>
 
     <div class="card" style="margin-top:20px;">
@@ -217,7 +218,7 @@
       <div class="table-wrap tall"><table id="detTable"></table></div>
     </div>
 
-    <div class="card" style="margin-top:20px;">
+    <div class="card solo-admin" style="margin-top:20px;">
       <details>
         <summary>Cómo se calcula (reglas de este módulo)</summary>
         <ul>
