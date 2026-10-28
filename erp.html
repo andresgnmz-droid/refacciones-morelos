@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="erp-auth.js"></script>
+<script src="correctivos-lib.js"></script>
 <style>
   :root{
     --ink:#142433; --ink-soft:#48607A; --ink-faint:#7C93A6;
@@ -278,13 +279,18 @@
 
   var TABS = [
     { id:"inicio", t:"Inicio", visible:function(){ return true; } },
-    { id:"preventivos", t:"Preventivos", src:"preventivos.html", visible:function(){ return ve("preventivos") || ve("cronograma_preventivos"); } },
-    { id:"correctivos", t:"Correctivos", src:"carga-mecanicos.html", visible:function(){ return ve("correctivos"); } },
-    { id:"hojalateria", t:"Hojalatería y Pintura", src:"hojalateria.html", visible:function(){ return ve("hojalateria"); } },
+    { id:"mantenimiento", t:"Mantenimiento", visible:function(){ return MANT_ITEMS.some(function(it){ return ve(it.m); }); } },
+    { id:"carga-trabajo", t:"Carga de trabajo", src:"carga-mecanicos.html", visible:function(){ return ve("carga_trabajo"); } },
     { id:"piso", t:"Unidades en piso", src:"unidades-piso.html", visible:function(){ return ve("piso"); } },
     { id:"varios", t:"Varios", visible:function(){ return ["combustible","llantas","catalogo_refacciones","control_refacciones","carta_peticion","catalogo_unidades","horas_extras"].some(ve); } },
     { id:"historial", t:"Histórico y respaldo", src:"historial.html", visible:function(){ return ve("historial"); } },
     { id:"ajustes", t:"Ajustes", visible:function(){ return nivel("ajustes") === "editar"; } }
+  ];
+  // Subpestañas de Mantenimiento (la portada es la primera).
+  var MANT_ITEMS = [
+    { id:"preventivos", t:"Preventivos", src:"preventivos.html", m:"preventivos" },
+    { id:"correctivos", t:"Correctivos", src:"correctivos.html", m:"correctivos" },
+    { id:"hojalateria", t:"Hojalatería y Pintura", src:"hojalateria.html", m:"hojalateria" }
   ];
   var VARIOS_ITEMS = [
     { id:"combustible", t:"Combustible", src:"rendimientos.html", m:"combustible", activo:false, d:"Rendimientos y cargas de combustible de la flota." },
@@ -330,22 +336,26 @@
   // La dirección es  #pestaña  o  #pestaña/subpestaña  (ej. #varios/control-refacciones).
   function mostrar(ruta){
     var partes = String(ruta || "").split("/"), id = partes[0], sub = partes[1] || "";
+    // Direcciones de antes: #preventivos, #correctivos y #hojalateria ahora viven dentro de Mantenimiento.
+    if(id === "preventivos" || id === "hojalateria"){ sub = id; id = "mantenimiento"; }
+    else if(id === "correctivos"){ sub = "correctivos"; id = "mantenimiento"; }
     if(!panels[id] || !panels[id].tab.visible()) { id = "inicio"; sub = ""; }
     TABS.forEach(function(t){ panels[t.id].node.hidden = (t.id !== id); });
     TABS.forEach(function(t){ panels[t.id].btn.classList.toggle("on", t.id === id); });
     var P = panels[id];
-    if(P.loaded && P.stale && (P.tab.src || id === "varios")){ P.node.textContent = ""; P.loaded = false; P.setSub = null; }
+    if(P.loaded && P.stale && (P.tab.src || id === "varios" || id === "mantenimiento")){ P.node.textContent = ""; P.loaded = false; P.setSub = null; }
     if(!P.loaded){
       P.loaded = true; P.stale = false;
       if(P.tab.src){
         var f = document.createElement("iframe"); f.title = P.tab.t; f.src = P.tab.src; temaIframe(f); P.node.appendChild(f);
       } else if(id === "inicio") buildInicio(P.node);
       else if(id === "varios") buildVarios(P.node);
+      else if(id === "mantenimiento") buildMantenimiento(P.node);
       else if(id === "ajustes") buildAjustes(P.node);
     }
-    if(id === "varios" && P.setSub) P.setSub(sub);
+    if((id === "varios" || id === "mantenimiento") && P.setSub) P.setSub(sub);
   }
-  function marcarObsoletos(){ TABS.forEach(function(t){ if(t.src || t.id === "varios") panels[t.id].stale = true; }); panels.inicio.stale = false; }
+  function marcarObsoletos(){ TABS.forEach(function(t){ if(t.src || t.id === "varios" || t.id === "mantenimiento") panels[t.id].stale = true; }); panels.inicio.stale = false; }
 
   /* ================= Inicio ================= */
   function api(path, extra){
@@ -366,7 +376,8 @@
     var v = el("span", "v", value); b.appendChild(v);
     var s = el("span", "s", sub); b.appendChild(s);
     b.addEventListener("click", function(){ location.hash = goto; });
-    b.hidden = !panels[goto] || !panels[goto].tab.visible();
+    var gt = goto.split("/")[0]; if(gt === "preventivos" || gt === "hojalateria" || gt === "correctivos") gt = "mantenimiento";
+    b.hidden = !panels[gt] || !panels[gt].tab.visible();
     return { node:b, set:function(val, sub2){ v.textContent = val; if(sub2 != null) s.textContent = sub2; } };
   }
 
@@ -377,8 +388,8 @@
     hero.appendChild(el("p", "", "Resumen de la zona con datos en vivo. Toca un indicador para abrir su módulo."));
     w.appendChild(hero);
     var row = el("div", "kpi-row"); w.appendChild(row);
-    var kP = kpi("Cumplimiento preventivos", "…", "Último mes cargado", "preventivos");
-    var kH = kpi("Avance hojalatería", "…", "Cronograma vigente", "hojalateria");
+    var kP = kpi("Cumplimiento preventivos", "…", "Último mes cargado", "mantenimiento/preventivos");
+    var kH = kpi("Avance hojalatería", "…", "Cronograma vigente", "mantenimiento/hojalateria");
     var kS = kpi("Unidades en piso", "…", "Corte vigente", "piso");
     var kU = kpi("Unidades activas", "…", "Catálogo maestro", "varios");
     [kP, kH, kS, kU].forEach(function(k){ row.appendChild(k.node); });
@@ -424,6 +435,127 @@
     cV.appendChild(el("p", "", "Catálogo de unidades, catálogo de refacciones, control de refacciones faltantes y carta petición."));
     var goV = el("button", "btn ghost", "Abrir Varios"); goV.style.alignSelf = "flex-start";
     goV.addEventListener("click", function(){ location.hash = "varios"; }); cV.appendChild(goV); g.appendChild(cV);
+  }
+
+  /* ================= Mantenimiento ================= */
+  // Una sola pestaña con portada (cumplimiento y gasto) y las subpestañas Preventivos, Correctivos y Hojalatería y Pintura.
+  function mantVe(it){ return it.id === "preventivos" ? (ve("preventivos") || ve("cronograma_preventivos")) : ve(it.m); }
+  var NOMBRE_MES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+  function etMes(m){ var p = String(m).split("-"); return NOMBRE_MES[+p[1] - 1] + " " + p[0]; }
+  function pesos(n){ return "$" + Math.round(n || 0).toLocaleString("es-MX"); }
+  function pct(a, b){ return b ? (Math.round(a / b * 1000) / 10) + "%" : "—"; }
+
+  function buildMantenimiento(root){
+    root.style.display = "flex"; root.style.flexDirection = "column"; root.style.overflow = "hidden";
+    var nav = el("div", "subnav"), body = el("div", "subbody");
+    root.appendChild(nav); root.appendChild(body);
+    var items = MANT_ITEMS.filter(mantVe), enlaces = {}, actual = null;
+
+    function enlace(txt, ruta){
+      var a = el("a", "", txt); a.href = "#" + ruta;
+      a.addEventListener("click", function(e){
+        if(e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+        e.preventDefault(); location.hash = ruta;
+      });
+      return a;
+    }
+    enlaces[""] = enlace("Portada", "mantenimiento"); nav.appendChild(enlaces[""]);
+    items.forEach(function(it){ enlaces[it.id] = enlace(it.t, "mantenimiento/" + it.id); nav.appendChild(enlaces[it.id]); });
+
+    function portada(){
+      var w = el("div", "wrap");
+      var hero = el("div", "hero");
+      hero.appendChild(el("h2", "", "Mantenimiento"));
+      hero.appendChild(el("p", "", "Cumplimiento y gasto de Preventivos, Correctivos y Hojalatería y Pintura. Toca una tarjeta para abrir su detalle."));
+      w.appendChild(hero);
+      var fb = el("div", "subnav"); fb.style.cssText = "padding:0;border:0;background:transparent";
+      var lbl = el("span", "", "Mes:"); lbl.style.border = "0";
+      var sel = el("select"); sel.style.cssText = "padding:7px 10px;border-radius:10px;border:1px solid var(--border);background:var(--surface);color:var(--ink);font-size:13px";
+      fb.appendChild(lbl); fb.appendChild(sel); w.appendChild(fb);
+      var cuerpo = el("div", "vcards"); w.appendChild(cuerpo);
+      var nota = el("p", "msg"); nota.style.color = "var(--ink-faint)"; w.appendChild(nota);
+      var D = {};
+
+      function tarjeta(titulo, sub, dest, filas){
+        var c = el("a", "card vc"); c.href = "#" + dest;
+        c.addEventListener("click", function(e){ if(e.button !== 0 || e.ctrlKey || e.metaKey) return; e.preventDefault(); location.hash = dest; });
+        c.appendChild(el("h3", "", titulo)); if(sub) c.appendChild(el("p", "", sub));
+        filas.forEach(function(f){
+          var k = el("div"); k.style.cssText = "display:flex;flex-direction:column;gap:2px;margin-top:4px";
+          k.appendChild(el("span", "", f[0])); k.firstChild.style.cssText = "font-size:11px;font-weight:600;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.5px";
+          var v = el("span", "", f[1]); v.style.cssText = "font-family:'Barlow Semi Condensed',sans-serif;font-size:30px;font-weight:700;line-height:1.1";
+          k.appendChild(v); if(f[2]){ var sp = el("span", "", f[2]); sp.style.fontSize = "12px"; k.appendChild(sp); }
+          c.appendChild(k);
+        });
+        return c;
+      }
+
+      function pintar(mes){
+        cuerpo.textContent = ""; nota.textContent = "";
+        var verP = items.some(function(i){ return i.id === "preventivos"; }), verC = items.some(function(i){ return i.id === "correctivos"; }), verH = items.some(function(i){ return i.id === "hojalateria"; });
+        var gP = 0, gC = 0, gH = 0, gH2 = 0, corrOrd = {};
+        if(verP){
+          var rows = (D.prev && D.prev[mes]) || null;
+          if(rows){
+            var ins = rows.filter(function(x){ return x.estatus === "inhabilitado"; }).length, rea = rows.filter(function(x){ return x.estatus === "realizado"; }).length;
+            gP = rows.reduce(function(s, x){ return s + Number(x.costo_real || 0); }, 0);
+            cuerpo.appendChild(tarjeta("Preventivos", etMes(mes), "mantenimiento/preventivos", [["Cumplimiento", pct(rea, rows.length - ins), rea + " de " + (rows.length - ins) + " servicios"], ["Gasto", pesos(gP), "refacciones y servicios de las órdenes OM02"]]));
+          } else cuerpo.appendChild(tarjeta("Preventivos", etMes(mes), "mantenimiento/preventivos", [["Cumplimiento", "—", "Aún no hay carga de este mes"]]));
+        }
+        if(verC){
+          var os = D.corr ? D.corr.ordenes.filter(function(o){ return o.mes === mes; }) : [];
+          os.forEach(function(o){ corrOrd[o.orden] = 1; gC += o.costo; });
+          cuerpo.appendChild(tarjeta("Correctivos", etMes(mes) + " · solo órdenes OM01", "mantenimiento/correctivos", [["Órdenes", String(os.length), os.length ? "promedio " + pesos(gC / os.length) + " por orden" : "Sin órdenes en este mes"], ["Gasto", pesos(gC), "costes totales reales"]]));
+        }
+        if(verH){
+          var cr = D.crono || [], reaH = cr.filter(function(x){ return String(x.estatus || "").toUpperCase() === "REALIZADO"; }).length;
+          var rm = (D.remo || []).filter(function(r){ return String(r.fecha_referencia || "").slice(0, 7) === mes; });
+          rm.forEach(function(r){ var c = Number(r.costo_real || 0); gH += c; if(!(r.clase_orden === "OM01" && corrOrd[String(r.orden)])) gH2 += c; });
+          cuerpo.appendChild(tarjeta("Hojalatería y Pintura", "Cronograma vigente · gasto de " + etMes(mes), "mantenimiento/hojalateria", [["Cumplimiento", pct(reaH, cr.length), reaH + " de " + cr.length + " unidades"], ["Gasto en remosamiento", pesos(gH), rm.length + " órdenes (OM01 y OM12)"]]));
+        }
+        if(verP && verC && verH){
+          var total = gP + gC + gH2;
+          var t = tarjeta("Gasto total de mantenimiento", etMes(mes), "mantenimiento", [["Gasto total", pesos(total), "preventivo + correctivo + hojalatería"]]);
+          t.removeAttribute("href"); t.style.cursor = "default"; t.addEventListener("click", function(e){ e.preventDefault(); e.stopImmediatePropagation(); });
+          cuerpo.appendChild(t);
+          nota.textContent = "Los remosamientos OM01 ya están dentro de Correctivos, por eso no se suman otra vez; de Hojalatería solo se agregan las órdenes que Correctivos no tiene (por ejemplo OM12).";
+        }
+      }
+
+      // Datos en vivo
+      var tareas = [];
+      if(items.some(function(i){ return i.id === "preventivos"; })) tareas.push(json("preventivos_cargas?select=periodo&order=periodo.desc").then(function(cs){
+        D.prev = {}; D.prevMeses = cs.map(function(c){ return c.periodo.slice(0, 7); });
+        return Promise.all(cs.map(function(c){ return json("v_preventivos?select=estatus,costo_real&periodo=eq." + c.periodo + "&limit=3000").then(function(r){ D.prev[c.periodo.slice(0, 7)] = r; }); }));
+      }));
+      if(items.some(function(i){ return i.id === "correctivos"; })) tareas.push(json("correctivos_datos?select=datos&id=eq.1").then(function(r){ if(r[0]) D.corr = window.CORR.leer(r[0].datos); }));
+      if(items.some(function(i){ return i.id === "hojalateria"; })) tareas.push(Promise.all([ json("hojalateria_cronograma?select=estatus&limit=1000"), json("hojalateria_remo?select=orden,clase_orden,costo_real,fecha_referencia&limit=3000") ]).then(function(r){ D.crono = r[0]; D.remo = r[1]; }));
+      Promise.all(tareas).then(function(){
+        var ms = {};
+        (D.prevMeses || []).forEach(function(m){ ms[m] = 1; });
+        ((D.corr && D.corr.meses) || []).forEach(function(m){ ms[m] = 1; });
+        (D.remo || []).forEach(function(r){ if(r.fecha_referencia) ms[String(r.fecha_referencia).slice(0, 7)] = 1; });
+        var lista = Object.keys(ms).sort().reverse();
+        if(!lista.length){ nota.textContent = "Todavía no hay información cargada."; return; }
+        lista.forEach(function(m){ var o = el("option", "", etMes(m)); o.value = m; sel.appendChild(o); });
+        sel.value = (D.prevMeses && D.prevMeses[0]) || lista[0];
+        sel.addEventListener("change", function(){ pintar(sel.value); });
+        pintar(sel.value);
+      }).catch(function(e){ nota.className = "msg err"; nota.textContent = "No se pudo leer la información: " + e.message; });
+      return w;
+    }
+
+    panels.mantenimiento.setSub = function(sub){
+      var it = items.filter(function(x){ return x.id === sub; })[0];
+      if(!it){ sub = ""; }
+      if(actual === sub) return;
+      actual = sub;
+      Object.keys(enlaces).forEach(function(k){ enlaces[k].classList.toggle("on", k === sub); });
+      body.textContent = "";
+      if(it){
+        var f = document.createElement("iframe"); f.title = it.t; f.src = it.src; temaIframe(f); body.appendChild(f);
+      } else body.appendChild(portada());
+    };
   }
 
   /* ================= Varios ================= */
@@ -724,7 +856,7 @@
     tarjeta("Hojalatería y Pintura", "Archivo mensual con CRONOGRAMA, Remo y Remomov.", "Subir archivo", function(){ abrirFrame("hojalateria.html?modo=carga", "Hojalatería y Pintura"); });
     tarjeta("Control de refacciones faltantes", "Descarga de SAP de faltantes, con las pestañas Pedidos e Ingresos.", "Subir archivo", function(){ abrirFrame("faltantes.html?modo=carga", "Control de refacciones faltantes"); });
 
-    tarjeta("Correctivos", "Excel de carga de trabajo de SAP con Operaciones, OM01OM02, OM01OM02mov y Puestos De trabajo. Reemplaza la información vigente.", "Subir archivo", function(){ abrirFrame("carga-mecanicos.html?modo=carga", "Correctivos"); });
+    tarjeta("Carga de trabajo y Correctivos", "Excel de carga de trabajo de SAP con Operaciones, OM01OM02, OM01OM02mov y Puestos De trabajo. Es el mismo archivo para las dos pestañas: Carga de trabajo y Correctivos (solo OM01). Reemplaza la información vigente.", "Subir archivo", function(){ abrirFrame("carga-mecanicos.html?modo=carga", "Carga de trabajo y Correctivos"); });
     tarjeta("Unidades en piso", "Excel de unidades en piso con las pestañas UPiso, Cargas, Pedidos, Movimientos, Uso y Usoc. Reemplaza el corte vigente.", "Subir archivo", function(){ abrirFrame("piso-carga.html", "Unidades en piso"); });
 
     tarjeta("Preventivos", "Archivo mensual con las pestañas de los 6 CEDIS, Ordenes y Ordmov. Reemplaza lo cargado de ese mes.", "Subir archivo", function(){ abrirFrame("preventivos-carga.html", "Preventivos"); });

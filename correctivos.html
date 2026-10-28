@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Correctivos</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap">
+<script src="erp-auth.js"></script>
+<script src="correctivos-lib.js"></script>
+<style>
+  :root{--ink:#142433;--ink-soft:#48607A;--ink-faint:#7C93A6;--bg:#EEF2F5;--surface:#FFFFFF;--surface-alt:#E4EAEF;--border:#D3DCE3;--accent:#0E7C86;--accent-ink:#FFFFFF;--accent-soft:#DCEEF0;--shadow:0 1px 2px rgba(20,36,51,.06),0 4px 14px rgba(20,36,51,.07);}
+  @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--ink:#E7EDF2;--ink-soft:#9AB0C2;--ink-faint:#7C93A6;--bg:#0F1620;--surface:#182230;--surface-alt:#1F2C3C;--border:#2B3B4D;--accent:#35B6C2;--accent-ink:#06232A;--accent-soft:#163238;--shadow:0 1px 2px rgba(0,0,0,.3),0 4px 14px rgba(0,0,0,.35);color-scheme:dark;}}
+  :root[data-theme="dark"]{--ink:#E7EDF2;--ink-soft:#9AB0C2;--ink-faint:#7C93A6;--bg:#0F1620;--surface:#182230;--surface-alt:#1F2C3C;--border:#2B3B4D;--accent:#35B6C2;--accent-ink:#06232A;--accent-soft:#163238;--shadow:0 1px 2px rgba(0,0,0,.3),0 4px 14px rgba(0,0,0,.35);color-scheme:dark;}
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px 'Inter',system-ui,sans-serif;}
+  h1,h2{font-family:'Barlow Semi Condensed',system-ui,sans-serif;font-weight:700;margin:0;}
+  p{margin:0;} [hidden]{display:none !important;}
+  .wrap{max-width:1000px;margin:0 auto;padding:20px 16px 48px;display:flex;flex-direction:column;gap:18px;}
+  .hero h1{font-size:26px;} .hero p{font-size:14px;color:var(--ink-soft);line-height:1.5;margin-top:4px;max-width:70ch;}
+  .meta{font-size:12.5px;color:var(--ink-faint);}
+  .fbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+  select,input[type=search]{font:inherit;padding:8px 10px;border-radius:10px;border:1px solid var(--border);background:var(--surface);color:var(--ink);}
+  input[type=search]{min-width:220px;}
+  .kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;}
+  .kpi{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:4px;}
+  .kpi .l{font-size:11px;font-weight:600;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.5px;}
+  .kpi .v{font-family:'Barlow Semi Condensed',sans-serif;font-size:28px;font-weight:700;line-height:1.1;}
+  .kpi .s{font-size:12px;color:var(--ink-soft);}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:18px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:12px;min-width:0;}
+  .card h2{font-size:18px;} .card .sub{font-size:12px;color:var(--ink-faint);}
+  .bar{display:grid;grid-template-columns:130px 1fr 130px;gap:10px;align-items:center;font-size:13px;}
+  .bar .t{height:14px;background:var(--surface-alt);border-radius:99px;overflow:hidden;} .bar .t i{display:block;height:100%;background:var(--accent);}
+  .bar .n{text-align:right;font-variant-numeric:tabular-nums;color:var(--ink-soft);}
+  .tw{overflow:auto;max-height:440px;}
+  table{width:100%;border-collapse:collapse;font-size:12.5px;}
+  th{text-align:left;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--ink-faint);padding:6px 8px;border-bottom:1px solid var(--border);white-space:nowrap;position:sticky;top:0;background:var(--surface);}
+  td{padding:7px 8px;border-bottom:1px solid var(--border);vertical-align:top;}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;}
+  tr.cl{cursor:pointer;} tr.cl:hover td{background:var(--accent-soft);}
+  .link{background:none;border:0;padding:0;font:inherit;font-weight:600;color:var(--accent);cursor:pointer;text-decoration:underline;}
+  .empty{font-size:13px;color:var(--ink-faint);text-align:center;padding:24px 8px;line-height:1.5;}
+  .note{font-size:12px;color:var(--ink-faint);line-height:1.5;}
+  .btn{border:1px solid var(--border);background:transparent;color:var(--ink);border-radius:10px;padding:7px 12px;font:inherit;font-weight:600;cursor:pointer;}
+</style></head>
+<body>
+<div class="wrap" id="vista"></div>
+<script>
+(function(){
+  "use strict";
+  var $v = document.getElementById("vista");
+  var D = null, mes = "", cedis = "", q = "", ordenAbierta = null;
+  var MESES = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+  function esc(s){ return String(s == null ? "" : s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+  function money(n){ return "$" + Number(n || 0).toLocaleString("es-MX", { maximumFractionDigits:0 }); }
+  function money2(n){ return "$" + Number(n || 0).toLocaleString("es-MX", { minimumFractionDigits:2, maximumFractionDigits:2 }); }
+  function int(n){ return Number(n || 0).toLocaleString("es-MX"); }
+  function etMes(m){ if(!m) return "Sin fecha"; var p = m.split("-"); return MESES[+p[1]-1] + " " + p[0]; }
+  function fDia(d){ return d ? d.toLocaleDateString("es-MX", { day:"2-digit", month:"short", year:"numeric", timeZone:"UTC" }) : "—"; }
+
+  function filtradas(){
+    return D.ordenes.filter(function(o){
+      if(mes && o.mes !== mes) return false;
+      if(cedis && o.cedis !== cedis) return false;
+      if(q){ var t = (o.orden + " " + o.equipo + " " + o.texto).toLowerCase(); if(t.indexOf(q) < 0) return false; }
+      return true;
+    });
+  }
+  function sumar(arr){ return arr.reduce(function(s, o){ return s + o.costo; }, 0); }
+  function agrupar(arr, f){
+    var g = {}; arr.forEach(function(o){ var k = f(o); (g[k] = g[k] || { k:k, n:0, costo:0 }); g[k].n++; g[k].costo += o.costo; });
+    return Object.keys(g).map(function(k){ return g[k]; });
+  }
+
+  function pintar(){
+    if(ordenAbierta) return pintarOrden();
+    var L = filtradas(), total = sumar(L);
+    var unidades = {}; L.forEach(function(o){ if(o.equipo) unidades[o.equipo] = 1; });
+    var h = '<div class="hero"><h1>Correctivos</h1><p>Órdenes OM01 de SAP: número de órdenes y gasto por CEDIS, mes y unidad. Incluye remosamientos. La información sale del mismo archivo que Carga de trabajo.</p><p class="meta" id="meta"></p></div>';
+    h += '<div class="fbar"><select id="fMes"><option value="">Todos los meses</option>' + D.meses.map(function(m){ return '<option value="'+m+'"'+(m===mes?' selected':'')+'>'+etMes(m)+'</option>'; }).join("") + '</select>' +
+         '<select id="fCed"><option value="">Todos los CEDIS</option>' + window.CORR.CEDIS.map(function(c){ return '<option'+(c===cedis?' selected':'')+'>'+c+'</option>'; }).join("") + '</select>' +
+         '<input type="search" id="fQ" placeholder="Buscar orden, unidad o texto" value="'+esc(q)+'"></div>';
+    h += '<div class="kpi-row">' +
+      '<div class="kpi"><span class="l">Órdenes OM01</span><span class="v">'+int(L.length)+'</span><span class="s">'+(mes?etMes(mes):'todo el periodo cargado')+'</span></div>' +
+      '<div class="kpi"><span class="l">Gasto total</span><span class="v">'+money(total)+'</span><span class="s">costes totales reales</span></div>' +
+      '<div class="kpi"><span class="l">Gasto promedio</span><span class="v">'+(L.length?money(total/L.length):'—')+'</span><span class="s">por orden</span></div>' +
+      '<div class="kpi"><span class="l">Unidades atendidas</span><span class="v">'+int(Object.keys(unidades).length)+'</span><span class="s">económicos distintos</span></div></div>';
+
+    var gc = agrupar(L, function(o){ return o.cedis; }).sort(function(a,b){ return b.costo - a.costo; });
+    var mx = Math.max.apply(null, gc.map(function(x){ return x.costo; }).concat([1]));
+    h += '<div class="card"><h2>Gasto por CEDIS</h2>' + (gc.length ? gc.map(function(x){ return '<div class="bar"><span>'+esc(x.k)+'</span><span class="t"><i style="width:'+(x.costo/mx*100)+'%"></i></span><span class="n">'+money(x.costo)+' · '+x.n+' órd.</span></div>'; }).join("") : '<p class="empty">Sin órdenes con estos filtros.</p>') + '</div>';
+
+    var gm = agrupar(L, function(o){ return o.mes; }).sort(function(a,b){ return a.k < b.k ? -1 : 1; });
+    var mxm = Math.max.apply(null, gm.map(function(x){ return x.costo; }).concat([1]));
+    h += '<div class="card"><h2>Gasto por mes</h2>' + (gm.length ? gm.map(function(x){ return '<div class="bar"><span>'+etMes(x.k)+'</span><span class="t"><i style="width:'+(x.costo/mxm*100)+'%"></i></span><span class="n">'+money(x.costo)+' · '+x.n+' órd.</span></div>'; }).join("") : '<p class="empty">Sin datos.</p>') + '</div>';
+
+    var gu = agrupar(L, function(o){ return o.equipo || "(sin equipo)"; }).sort(function(a,b){ return b.costo - a.costo; }).slice(0, 15);
+    h += '<div class="card"><h2>Unidades con más gasto</h2><div class="tw"><table><thead><tr><th>Unidad</th><th class="num">Órdenes</th><th class="num">Gasto</th></tr></thead><tbody>' +
+      gu.map(function(x){ return '<tr><td>'+esc(x.k)+'</td><td class="num">'+x.n+'</td><td class="num">'+money(x.costo)+'</td></tr>'; }).join("") + '</tbody></table></div></div>';
+
+    var ord = L.slice().sort(function(a,b){ return (b.fecha||0) - (a.fecha||0); });
+    h += '<div class="card"><h2>Órdenes</h2><span class="sub">Toca una orden para ver el material usado'+(ord.length>300?' · se muestran las 300 más recientes':'')+'</span><div class="tw"><table><thead><tr><th>Orden</th><th>Fecha</th><th>Unidad</th><th>CEDIS</th><th>Texto</th><th class="num">Costo</th></tr></thead><tbody>' +
+      (ord.length ? ord.slice(0,300).map(function(o){ return '<tr class="cl" data-o="'+esc(o.orden)+'"><td>'+esc(o.orden)+'</td><td>'+fDia(o.fecha)+'</td><td>'+esc(o.equipo)+'</td><td>'+esc(o.cedis)+'</td><td>'+esc(o.texto)+'</td><td class="num">'+money2(o.costo)+'</td></tr>'; }).join("") : '<tr><td colspan="6" class="empty">Sin órdenes con estos filtros.</td></tr>') + '</tbody></table></div></div>';
+    $v.innerHTML = h;
+    if(D.meta) document.getElementById("meta").textContent = D.meta;
+    document.getElementById("fMes").onchange = function(e){ mes = e.target.value; pintar(); };
+    document.getElementById("fCed").onchange = function(e){ cedis = e.target.value; pintar(); };
+    var fq = document.getElementById("fQ");
+    fq.oninput = function(e){ q = e.target.value.trim().toLowerCase(); var pos = e.target.selectionStart; pintar(); var n = document.getElementById("fQ"); n.focus(); try{ n.setSelectionRange(pos,pos); }catch(x){} };
+    Array.prototype.forEach.call($v.querySelectorAll("tr.cl"), function(tr){ tr.onclick = function(){ ordenAbierta = tr.getAttribute("data-o"); pintar(); window.scrollTo(0,0); }; });
+  }
+
+  function pintarOrden(){
+    var o = D.ordenes.filter(function(x){ return x.orden === ordenAbierta; })[0];
+    var g = {}, claves = [];
+    (D.movs[ordenAbierta] || []).forEach(function(m){
+      var k = String(m.material);
+      if(!g[k]){ g[k] = { material:m.material, texto:m.texto, um:m.um, cant:0, imp:0 }; claves.push(k); }
+      g[k].cant += m.cantidad; g[k].imp += m.importe;
+    });
+    var filas = claves.map(function(k){ g[k].cant = Math.round(g[k].cant*1000)/1000; g[k].imp = Math.round(g[k].imp*100)/100; return g[k]; })
+      .filter(function(x){ return x.cant !== 0 || x.imp !== 0; }).sort(function(a,b){ return b.imp - a.imp; });
+    var tot = filas.reduce(function(s,x){ return s + x.imp; }, 0);
+    var h = '<p><button class="link" id="atras">‹ Correctivos</button></p><div class="hero"><h1>Orden '+esc(ordenAbierta)+'</h1><p>'+esc(o ? o.texto : "")+'</p></div>';
+    h += '<div class="kpi-row"><div class="kpi"><span class="l">Unidad</span><span class="v">'+esc(o ? o.equipo : "—")+'</span><span class="s">'+esc(o ? o.cedis : "")+'</span></div>' +
+         '<div class="kpi"><span class="l">Costo en SAP</span><span class="v">'+money2(o ? o.costo : 0)+'</span><span class="s">'+esc(o ? fDia(o.fecha) : "")+'</span></div>' +
+         '<div class="kpi"><span class="l">Suma de materiales</span><span class="v">'+money2(tot)+'</span><span class="s">'+filas.length+' materiales o servicios</span></div></div>';
+    h += '<div class="card"><h2>Material utilizado</h2>' + (filas.length ? '<div class="tw"><table><thead><tr><th>Material</th><th>Descripción</th><th class="num">Cantidad</th><th>Unidad</th><th class="num">Importe</th></tr></thead><tbody>' +
+      filas.map(function(x){ return '<tr><td>'+esc(x.material)+'</td><td>'+esc(x.texto)+'</td><td class="num">'+x.cant.toLocaleString("es-MX",{maximumFractionDigits:3})+'</td><td>'+esc(x.um)+'</td><td class="num">'+money2(x.imp)+'</td></tr>'; }).join("") + '</tbody></table></div>' : '<p class="empty">No hay movimientos de material para esta orden en el archivo.</p>') +
+      '<p class="note">Una salida y su devolución se cancelan entre sí y no se muestran.</p></div>';
+    $v.innerHTML = h;
+    document.getElementById("atras").onclick = function(){ ordenAbierta = null; pintar(); };
+  }
+
+  $v.innerHTML = '<p class="empty">Cargando…</p>';
+  ERP.rest("correctivos_datos?select=archivo,corte,actualizado_at,datos&id=eq.1").then(function(r){
+    if(!r || !r[0]){ $v.innerHTML = '<p class="empty">Todavía no hay un archivo cargado, o tu usuario no tiene acceso a esta sección.</p>'; return; }
+    D = window.CORR.leer(r[0].datos);
+    var c = String(r[0].corte || "").slice(0,10).split("-");
+    D.meta = (r[0].archivo || "Archivo") + " · corte del " + c[2] + "/" + c[1] + "/" + c[0].slice(2) + " · " + int(D.ordenes.length) + " órdenes OM01.";
+    pintar();
+  }).catch(function(e){ $v.innerHTML = '<p class="empty">No se pudo cargar la información: ' + esc(e.message) + '</p>'; });
+})();
+</script>
+<script src="offline.js" defer></script>
+</body></html>

@@ -1,5 +1,5 @@
 <!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif}img{max-width:100%}</style></head><body>
-<title>Carga de Mecánicos</title>
+<title>Carga de trabajo</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="erp-auth.js"></script>
@@ -142,7 +142,7 @@
 
 <div class="wrap">
   <div class="hero">
-    <h1>Carga de Mecánicos</h1>
+    <h1>Carga de trabajo</h1>
     <p class="solover">Avisos (correctivos A4 y auxilios viales A5) por mecánico. El nombre sale de la pestaña Puestos de trabajo, validando el autor del aviso contra el Pto.tbjo.responsable.</p>
     <p class="sologuardar">Sube la exportación de SAP con la carga de trabajo. Reemplaza la información vigente y la ven todos los usuarios con acceso.</p>
     <div id="nubeMeta"></div>
@@ -903,7 +903,7 @@
     });
 
     var h = '';
-    h += '<div class="crumbs"><button type="button" class="link" data-back="main">Carga de Mecánicos</button><span>›</span><span>'+esc(m.nombre)+'</span></div>';
+    h += '<div class="crumbs"><button type="button" class="link" data-back="main">Carga de trabajo</button><span>›</span><span>'+esc(m.nombre)+'</span></div>';
     h += '<div class="hero"><h1>'+esc(m.nombre)+'</h1><p>'+esc(m.puesto)+' · '+esc(titleCase(m.cedis))+' · Códigos en SAP: '+esc(Object.keys(m.codigos).join(", "))+'</p></div>';
     h += '<div class="kpi-row">' +
       kpiTile("Total de avisos", fmtInt(m.total), "") +
@@ -963,7 +963,7 @@
     var equipo = (info && info.equipo) || (avisos[0] && avisos[0].equipo) || "—";
 
     var h = '';
-    h += '<div class="crumbs"><button type="button" class="link" data-back="main">Carga de Mecánicos</button><span>›</span><button type="button" class="link" data-back="mech">'+esc(m.nombre)+'</button><span>›</span><span>Orden '+esc(ord)+'</span></div>';
+    h += '<div class="crumbs"><button type="button" class="link" data-back="main">Carga de trabajo</button><span>›</span><button type="button" class="link" data-back="mech">'+esc(m.nombre)+'</button><span>›</span><span>Orden '+esc(ord)+'</span></div>';
     h += '<div class="hero"><h1>Orden '+esc(ord)+'</h1><p>'+esc(info && info.texto ? info.texto : (avisos[0] ? avisos[0].desc : ""))+'</p></div>';
     h += '<div class="kpi-row">' +
       kpiTile("Clase de orden", claseTxt, "") +
@@ -1097,14 +1097,14 @@
     if(!confirm("¿Reemplazar la información vigente por este archivo, con corte del " + fCorta(c) + "?")) return;
     b.disabled = true; meta.textContent = "Guardando…";
     ERP.rest("correctivos_datos?on_conflict=id", { method:"POST", body:[{ id:1, archivo:PENDIENTE.archivo, corte:c, datos:PENDIENTE.datos, actualizado_at:new Date().toISOString() }], prefer:"resolution=merge-duplicates,return=minimal" }).then(function(){
-      meta.textContent = "Listo. Correctivos ya muestra el corte del " + fCorta(c) + ".";
+      meta.textContent = "Listo. Carga de trabajo y Correctivos ya muestran el corte del " + fCorta(c) + ".";
       PENDIENTE = null; var g = document.getElementById("bGuardarNube"); if(g) g.remove(); infoActual();
     }).catch(function(e){ b.disabled = false; meta.textContent = "No se pudo guardar: " + e.message; });
   }
 
   if(MODO_CARGA){
     infoActual();
-    if(!ERP.puede("correctivos")){ $("fileMeta").textContent = "Tu usuario no puede actualizar esta sección."; $("btnPick").disabled = true; }
+    if(!ERP.puede("carga_trabajo")){ $("fileMeta").textContent = "Tu usuario no puede actualizar esta sección."; $("btnPick").disabled = true; }
   } else {
     cargarDeNube();
   }
