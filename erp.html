@@ -493,48 +493,70 @@
       function pintar(mes){
         cuerpo.textContent = ""; nota.textContent = "";
         var verP = items.some(function(i){ return i.id === "preventivos"; }), verC = items.some(function(i){ return i.id === "correctivos"; }), verH = items.some(function(i){ return i.id === "hojalateria"; });
-        var gP = 0, gC = 0, gH = 0, gH2 = 0, corrOrd = {};
+        var C = D.corr, gP = 0, gC = 0, gH01 = 0, gH12 = 0;
+        if(C){ gP = window.CORR.suma(C, "OM02", mes); gC = window.CORR.suma(C, "OM01", mes); }
+        (D.hojMovs || []).forEach(function(m){
+          if(String(m.fecha_documento || "").slice(0, 7) !== mes) return;
+          var cl = D.hojClase[String(m.orden)], v = Number(m.importe || 0);
+          if(cl === "OM01") gH01 += v; else if(cl === "OM12") gH12 += v;
+        });
+        var gH = gH01 + gH12;
+        function nOrd(clase){ var o = {}; if(C) C.lineas.forEach(function(l){ if(l.clase === clase && l.mes === mes) o[l.orden] = 1; }); return Object.keys(o).length; }
+
         if(verP){
           var rows = (D.prev && D.prev[mes]) || null;
+          var fP = [];
           if(rows){
             var ins = rows.filter(function(x){ return x.estatus === "inhabilitado"; }).length, rea = rows.filter(function(x){ return x.estatus === "realizado"; }).length;
-            gP = rows.reduce(function(s, x){ return s + Number(x.costo_real || 0); }, 0);
-            cuerpo.appendChild(tarjeta("Preventivos", etMes(mes), "mantenimiento/preventivos", [["Cumplimiento", pct(rea, rows.length - ins), rea + " de " + (rows.length - ins) + " servicios"], ["Gasto", pesos(gP), "refacciones y servicios de las órdenes OM02"]]));
-          } else cuerpo.appendChild(tarjeta("Preventivos", etMes(mes), "mantenimiento/preventivos", [["Cumplimiento", "—", "Aún no hay carga de este mes"]]));
+            fP.push(["Cumplimiento", pct(rea, rows.length - ins), rea + " de " + (rows.length - ins) + " servicios"]);
+          } else fP.push(["Cumplimiento", "—", "Aún no hay carga de este mes"]);
+          fP.push(["Gasto", pesos(gP), nOrd("OM02") + " órdenes OM02"]);
+          cuerpo.appendChild(tarjeta("Preventivos", etMes(mes), "mantenimiento/preventivos", fP));
         }
-        if(verC){
-          var os = D.corr ? D.corr.ordenes.filter(function(o){ return o.mes === mes; }) : [];
-          os.forEach(function(o){ corrOrd[o.orden] = 1; gC += o.costo; });
-          cuerpo.appendChild(tarjeta("Correctivos", etMes(mes) + " · solo órdenes OM01", "mantenimiento/correctivos", [["Órdenes", String(os.length), os.length ? "promedio " + pesos(gC / os.length) + " por orden" : "Sin órdenes en este mes"], ["Gasto", pesos(gC), "costes totales reales"]]));
-        }
+        if(verC) cuerpo.appendChild(tarjeta("Correctivos", etMes(mes) + " · solo órdenes OM01", "mantenimiento/correctivos", [["Gasto", pesos(gC), nOrd("OM01") + " órdenes" + (gH01 ? " · incluye " + pesos(gH01) + " de remosamiento" : "")]]));
         if(verH){
           var cr = D.crono || [], reaH = cr.filter(function(x){ return String(x.estatus || "").toUpperCase() === "REALIZADO"; }).length;
-          var rm = (D.remo || []).filter(function(r){ return String(r.fecha_referencia || "").slice(0, 7) === mes; });
-          rm.forEach(function(r){ var c = Number(r.costo_real || 0); gH += c; if(!(r.clase_orden === "OM01" && corrOrd[String(r.orden)])) gH2 += c; });
-          cuerpo.appendChild(tarjeta("Hojalatería y Pintura", "Cronograma vigente · gasto de " + etMes(mes), "mantenimiento/hojalateria", [["Cumplimiento", pct(reaH, cr.length), reaH + " de " + cr.length + " unidades"], ["Gasto en remosamiento", pesos(gH), rm.length + " órdenes (OM01 y OM12)"]]));
+          cuerpo.appendChild(tarjeta("Hojalatería y Pintura", "Cronograma vigente · gasto de " + etMes(mes), "mantenimiento/hojalateria", [["Cumplimiento", pct(reaH, cr.length), reaH + " de " + cr.length + " unidades"], ["Remosamiento OM01", pesos(gH01), "presupuesto asignado · ya incluido en Correctivos"], ["Remosamiento OM12", pesos(gH12), "proyectos especiales"], ["Total remosamiento", pesos(gH), "OM01 + OM12"]]));
         }
         if(verP && verC && verH){
-          var total = gP + gC + gH2;
-          var t = tarjeta("Gasto total de mantenimiento", etMes(mes), "mantenimiento", [["Gasto total", pesos(total), "preventivo + correctivo + hojalatería"]]);
-          t.removeAttribute("href"); t.style.cursor = "default"; t.addEventListener("click", function(e){ e.preventDefault(); e.stopImmediatePropagation(); });
-          cuerpo.appendChild(t);
-          nota.textContent = "Los remosamientos OM01 ya están dentro de Correctivos, por eso no se suman otra vez; de Hojalatería solo se agregan las órdenes que Correctivos no tiene (por ejemplo OM12).";
+          var total = gP + gC + gH12;
+          var t = el("div", "card"); t.style.gridColumn = "1 / -1";
+          t.appendChild(el("h3", "", "Gasto total de mantenimiento · " + etMes(mes)));
+          var big = el("div", "", pesos(total)); big.style.cssText = "font-family:'Barlow Semi Condensed',sans-serif;font-size:38px;font-weight:700;line-height:1.1"; t.appendChild(big);
+          var tb = el("table"); tb.style.maxWidth = "520px";
+          [["Preventivos (OM02)", gP, 0], ["Correctivos (OM01)", gC, 0], ["de los cuales remosamiento OM01 · presupuesto asignado (no se suma otra vez)", gH01, 1], ["Remosamiento OM12 · proyectos especiales", gH12, 0], ["Total", total, 2]].forEach(function(f){
+            var tr = el("tr"); var a = el("td", "", f[0]); var b2 = el("td", "", pesos(f[1])); b2.style.textAlign = "right";
+            if(f[2] === 1){ a.style.cssText = "padding-left:24px;color:var(--ink-faint);font-size:12.5px"; b2.style.color = "var(--ink-faint)"; b2.style.fontSize = "12.5px"; }
+            if(f[2] === 2){ a.style.fontWeight = b2.style.fontWeight = "700"; }
+            tr.appendChild(a); tr.appendChild(b2); tb.appendChild(tr);
+          });
+          t.appendChild(tb);
+          cuerpo.insertBefore(t, cuerpo.firstChild);
+          nota.textContent = "El gasto se cuenta en el mes en que se sacó el material (fecha de documento de SAP). Los remosamientos OM01 ya van dentro de Correctivos y también se muestran en Hojalatería, por eso no se suman otra vez; el remosamiento OM12 se suma aparte. OM03 no se incluye.";
         }
+      }
+
+      function pag(path){
+        var out = [];
+        function sig(off){ return json(path + "&limit=1000&offset=" + off).then(function(r){ out = out.concat(r); return r.length === 1000 ? sig(off + 1000) : out; }); }
+        return sig(0);
       }
 
       // Datos en vivo
       var tareas = [];
       if(items.some(function(i){ return i.id === "preventivos"; })) tareas.push(json("preventivos_cargas?select=periodo&order=periodo.desc").then(function(cs){
         D.prev = {}; D.prevMeses = cs.map(function(c){ return c.periodo.slice(0, 7); });
-        return Promise.all(cs.map(function(c){ return json("v_preventivos?select=estatus,costo_real&periodo=eq." + c.periodo + "&limit=3000").then(function(r){ D.prev[c.periodo.slice(0, 7)] = r; }); }));
+        return Promise.all(cs.map(function(c){ return json("v_preventivos?select=estatus&periodo=eq." + c.periodo + "&limit=3000").then(function(r){ D.prev[c.periodo.slice(0, 7)] = r; }); }));
       }));
-      if(items.some(function(i){ return i.id === "correctivos"; })) tareas.push(json("correctivos_datos?select=datos&id=eq.1").then(function(r){ if(r[0]) D.corr = window.CORR.leer(r[0].datos); }));
-      if(items.some(function(i){ return i.id === "hojalateria"; })) tareas.push(Promise.all([ json("hojalateria_cronograma?select=estatus&limit=1000"), json("hojalateria_remo?select=orden,clase_orden,costo_real,fecha_referencia&limit=3000") ]).then(function(r){ D.crono = r[0]; D.remo = r[1]; }));
+      if(items.some(function(i){ return i.id === "correctivos" || i.id === "preventivos"; })) tareas.push(json("correctivos_datos?select=datos&id=eq.1").then(function(r){ if(r[0]) D.corr = window.CORR.leer(r[0].datos); }));
+      if(items.some(function(i){ return i.id === "hojalateria"; })) tareas.push(Promise.all([ json("hojalateria_cronograma?select=estatus&limit=1000"), pag("hojalateria_remo?select=orden,clase_orden&order=orden"), pag("hojalateria_remomov?select=orden,importe,fecha_documento&order=id") ]).then(function(r){
+        D.crono = r[0]; D.hojClase = {}; r[1].forEach(function(x){ D.hojClase[String(x.orden)] = x.clase_orden; }); D.hojMovs = r[2];
+      }));
       Promise.all(tareas).then(function(){
         var ms = {};
         (D.prevMeses || []).forEach(function(m){ ms[m] = 1; });
         ((D.corr && D.corr.meses) || []).forEach(function(m){ ms[m] = 1; });
-        (D.remo || []).forEach(function(r){ if(r.fecha_referencia) ms[String(r.fecha_referencia).slice(0, 7)] = 1; });
+        (D.hojMovs || []).forEach(function(r){ if(r.fecha_documento) ms[String(r.fecha_documento).slice(0, 7)] = 1; });
         var lista = Object.keys(ms).sort().reverse();
         if(!lista.length){ nota.textContent = "Todavía no hay información cargada."; return; }
         lista.forEach(function(m){ var o = el("option", "", etMes(m)); o.value = m; sel.appendChild(o); });
