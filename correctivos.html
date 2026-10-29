@@ -54,49 +54,52 @@
   function etMes(m){ if(!m) return "Sin fecha"; var p = m.split("-"); return MESES[+p[1]-1] + " " + p[0]; }
   function fDia(d){ return d ? d.toLocaleDateString("es-MX", { day:"2-digit", month:"short", year:"numeric", timeZone:"UTC" }) : "—"; }
 
+  // Solo correctivo (OM01). Cada renglón es un movimiento de material y cuenta en el mes de su fecha de documento.
   function filtradas(){
-    return D.ordenes.filter(function(o){
-      if(mes && o.mes !== mes) return false;
-      if(cedis && o.cedis !== cedis) return false;
-      if(q){ var t = (o.orden + " " + o.equipo + " " + o.texto).toLowerCase(); if(t.indexOf(q) < 0) return false; }
+    return D.lineas.filter(function(l){
+      if(l.clase !== "OM01") return false;
+      if(mes && l.mes !== mes) return false;
+      if(cedis && l.cedis !== cedis) return false;
+      if(q){ var t = (l.orden + " " + l.equipo + " " + l.texto0).toLowerCase(); if(t.indexOf(q) < 0) return false; }
       return true;
     });
   }
-  function sumar(arr){ return arr.reduce(function(s, o){ return s + o.costo; }, 0); }
+  function sumar(arr){ return arr.reduce(function(s, l){ return s + l.importe; }, 0); }
   function agrupar(arr, f){
-    var g = {}; arr.forEach(function(o){ var k = f(o); (g[k] = g[k] || { k:k, n:0, costo:0 }); g[k].n++; g[k].costo += o.costo; });
-    return Object.keys(g).map(function(k){ return g[k]; });
+    var g = {}; arr.forEach(function(l){ var k = f(l); var x = (g[k] = g[k] || { k:k, ord:{}, costo:0, fecha:null, l:l }); x.ord[l.orden] = 1; x.costo += l.importe; if(l.fecha && (!x.fecha || l.fecha > x.fecha)) x.fecha = l.fecha; });
+    return Object.keys(g).map(function(k){ g[k].n = Object.keys(g[k].ord).length; return g[k]; });
   }
 
   function pintar(){
     if(ordenAbierta) return pintarOrden();
     var L = filtradas(), total = sumar(L);
-    var unidades = {}; L.forEach(function(o){ if(o.equipo) unidades[o.equipo] = 1; });
-    var h = '<div class="hero"><h1>Correctivos</h1><p>Órdenes OM01 de SAP: número de órdenes y gasto por CEDIS, mes y unidad. Incluye remosamientos. La información sale del mismo archivo que Carga de trabajo.</p><p class="meta" id="meta"></p></div>';
+    var ordenes = {}, unidades = {}; L.forEach(function(l){ ordenes[l.orden] = 1; if(l.equipo) unidades[l.equipo] = 1; });
+    var nOrd = Object.keys(ordenes).length;
+    var h = '<div class="hero"><h1>Correctivos</h1><p>Órdenes OM01 de SAP. El gasto cuenta en el mes en que se sacó el material (fecha de documento), no en el de la orden. Incluye remosamientos; no incluye OM03 ni OM12. Sale del mismo archivo que Carga de trabajo.</p><p class="meta" id="meta"></p></div>';
     h += '<div class="fbar"><select id="fMes"><option value="">Todos los meses</option>' + D.meses.map(function(m){ return '<option value="'+m+'"'+(m===mes?' selected':'')+'>'+etMes(m)+'</option>'; }).join("") + '</select>' +
          '<select id="fCed"><option value="">Todos los CEDIS</option>' + window.CORR.CEDIS.map(function(c){ return '<option'+(c===cedis?' selected':'')+'>'+c+'</option>'; }).join("") + '</select>' +
          '<input type="search" id="fQ" placeholder="Buscar orden, unidad o texto" value="'+esc(q)+'"></div>';
     h += '<div class="kpi-row">' +
-      '<div class="kpi"><span class="l">Órdenes OM01</span><span class="v">'+int(L.length)+'</span><span class="s">'+(mes?etMes(mes):'todo el periodo cargado')+'</span></div>' +
-      '<div class="kpi"><span class="l">Gasto total</span><span class="v">'+money(total)+'</span><span class="s">costes totales reales</span></div>' +
-      '<div class="kpi"><span class="l">Gasto promedio</span><span class="v">'+(L.length?money(total/L.length):'—')+'</span><span class="s">por orden</span></div>' +
+      '<div class="kpi"><span class="l">Órdenes con gasto</span><span class="v">'+int(nOrd)+'</span><span class="s">'+(mes?etMes(mes):'todo el periodo cargado')+'</span></div>' +
+      '<div class="kpi"><span class="l">Gasto total</span><span class="v">'+money(total)+'</span><span class="s">material y servicios del mes</span></div>' +
+      '<div class="kpi"><span class="l">Gasto promedio</span><span class="v">'+(nOrd?money(total/nOrd):'—')+'</span><span class="s">por orden</span></div>' +
       '<div class="kpi"><span class="l">Unidades atendidas</span><span class="v">'+int(Object.keys(unidades).length)+'</span><span class="s">económicos distintos</span></div></div>';
 
-    var gc = agrupar(L, function(o){ return o.cedis; }).sort(function(a,b){ return b.costo - a.costo; });
+    var gc = agrupar(L, function(l){ return l.cedis; }).sort(function(a,b){ return b.costo - a.costo; });
     var mx = Math.max.apply(null, gc.map(function(x){ return x.costo; }).concat([1]));
-    h += '<div class="card"><h2>Gasto por CEDIS</h2>' + (gc.length ? gc.map(function(x){ return '<div class="bar"><span>'+esc(x.k)+'</span><span class="t"><i style="width:'+(x.costo/mx*100)+'%"></i></span><span class="n">'+money(x.costo)+' · '+x.n+' órd.</span></div>'; }).join("") : '<p class="empty">Sin órdenes con estos filtros.</p>') + '</div>';
+    h += '<div class="card"><h2>Gasto por CEDIS</h2>' + (gc.length ? gc.map(function(x){ return '<div class="bar"><span>'+esc(x.k)+'</span><span class="t"><i style="width:'+(x.costo/mx*100)+'%"></i></span><span class="n">'+money(x.costo)+' · '+x.n+' órd.</span></div>'; }).join("") : '<p class="empty">Sin gasto con estos filtros.</p>') + '</div>';
 
-    var gm = agrupar(L, function(o){ return o.mes; }).sort(function(a,b){ return a.k < b.k ? -1 : 1; });
+    var gm = agrupar(L, function(l){ return l.mes; }).sort(function(a,b){ return a.k < b.k ? -1 : 1; });
     var mxm = Math.max.apply(null, gm.map(function(x){ return x.costo; }).concat([1]));
     h += '<div class="card"><h2>Gasto por mes</h2>' + (gm.length ? gm.map(function(x){ return '<div class="bar"><span>'+etMes(x.k)+'</span><span class="t"><i style="width:'+(x.costo/mxm*100)+'%"></i></span><span class="n">'+money(x.costo)+' · '+x.n+' órd.</span></div>'; }).join("") : '<p class="empty">Sin datos.</p>') + '</div>';
 
-    var gu = agrupar(L, function(o){ return o.equipo || "(sin equipo)"; }).sort(function(a,b){ return b.costo - a.costo; }).slice(0, 15);
+    var gu = agrupar(L, function(l){ return l.equipo || "(sin equipo)"; }).sort(function(a,b){ return b.costo - a.costo; }).slice(0, 15);
     h += '<div class="card"><h2>Unidades con más gasto</h2><div class="tw"><table><thead><tr><th>Unidad</th><th class="num">Órdenes</th><th class="num">Gasto</th></tr></thead><tbody>' +
       gu.map(function(x){ return '<tr><td>'+esc(x.k)+'</td><td class="num">'+x.n+'</td><td class="num">'+money(x.costo)+'</td></tr>'; }).join("") + '</tbody></table></div></div>';
 
-    var ord = L.slice().sort(function(a,b){ return (b.fecha||0) - (a.fecha||0); });
-    h += '<div class="card"><h2>Órdenes</h2><span class="sub">Toca una orden para ver el material usado'+(ord.length>300?' · se muestran las 300 más recientes':'')+'</span><div class="tw"><table><thead><tr><th>Orden</th><th>Fecha</th><th>Unidad</th><th>CEDIS</th><th>Texto</th><th class="num">Costo</th></tr></thead><tbody>' +
-      (ord.length ? ord.slice(0,300).map(function(o){ return '<tr class="cl" data-o="'+esc(o.orden)+'"><td>'+esc(o.orden)+'</td><td>'+fDia(o.fecha)+'</td><td>'+esc(o.equipo)+'</td><td>'+esc(o.cedis)+'</td><td>'+esc(o.texto)+'</td><td class="num">'+money2(o.costo)+'</td></tr>'; }).join("") : '<tr><td colspan="6" class="empty">Sin órdenes con estos filtros.</td></tr>') + '</tbody></table></div></div>';
+    var ord = agrupar(L, function(l){ return l.orden; }).sort(function(a,b){ return (b.fecha||0) - (a.fecha||0); });
+    h += '<div class="card"><h2>Órdenes</h2><span class="sub">Gasto de cada orden dentro del filtro. Toca una orden para ver el material'+(ord.length>300?' · se muestran las 300 más recientes':'')+'</span><div class="tw"><table><thead><tr><th>Orden</th><th>Último movimiento</th><th>Unidad</th><th>CEDIS</th><th>Texto</th><th class="num">Gasto</th></tr></thead><tbody>' +
+      (ord.length ? ord.slice(0,300).map(function(x){ return '<tr class="cl" data-o="'+esc(x.k)+'"><td>'+esc(x.k)+'</td><td>'+fDia(x.fecha)+'</td><td>'+esc(x.l.equipo)+'</td><td>'+esc(x.l.cedis)+'</td><td>'+esc(x.l.texto0)+'</td><td class="num">'+money2(x.costo)+'</td></tr>'; }).join("") : '<tr><td colspan="6" class="empty">Sin órdenes con estos filtros.</td></tr>') + '</tbody></table></div></div>';
     $v.innerHTML = h;
     if(D.meta) document.getElementById("meta").textContent = D.meta;
     document.getElementById("fMes").onchange = function(e){ mes = e.target.value; pintar(); };
@@ -107,7 +110,7 @@
   }
 
   function pintarOrden(){
-    var o = D.ordenes.filter(function(x){ return x.orden === ordenAbierta; })[0];
+    var o = D.ordenes[ordenAbierta];
     var g = {}, claves = [];
     (D.movs[ordenAbierta] || []).forEach(function(m){
       var k = String(m.material);
@@ -119,11 +122,11 @@
     var tot = filas.reduce(function(s,x){ return s + x.imp; }, 0);
     var h = '<p><button class="link" id="atras">‹ Correctivos</button></p><div class="hero"><h1>Orden '+esc(ordenAbierta)+'</h1><p>'+esc(o ? o.texto : "")+'</p></div>';
     h += '<div class="kpi-row"><div class="kpi"><span class="l">Unidad</span><span class="v">'+esc(o ? o.equipo : "—")+'</span><span class="s">'+esc(o ? o.cedis : "")+'</span></div>' +
-         '<div class="kpi"><span class="l">Costo en SAP</span><span class="v">'+money2(o ? o.costo : 0)+'</span><span class="s">'+esc(o ? fDia(o.fecha) : "")+'</span></div>' +
+         '<div class="kpi"><span class="l">Costo en SAP</span><span class="v">'+money2(o ? o.costo : 0)+'</span><span class="s">costes totales reales</span></div>' +
          '<div class="kpi"><span class="l">Suma de materiales</span><span class="v">'+money2(tot)+'</span><span class="s">'+filas.length+' materiales o servicios</span></div></div>';
     h += '<div class="card"><h2>Material utilizado</h2>' + (filas.length ? '<div class="tw"><table><thead><tr><th>Material</th><th>Descripción</th><th class="num">Cantidad</th><th>Unidad</th><th class="num">Importe</th></tr></thead><tbody>' +
       filas.map(function(x){ return '<tr><td>'+esc(x.material)+'</td><td>'+esc(x.texto)+'</td><td class="num">'+x.cant.toLocaleString("es-MX",{maximumFractionDigits:3})+'</td><td>'+esc(x.um)+'</td><td class="num">'+money2(x.imp)+'</td></tr>'; }).join("") + '</tbody></table></div>' : '<p class="empty">No hay movimientos de material para esta orden en el archivo.</p>') +
-      '<p class="note">Una salida y su devolución se cancelan entre sí y no se muestran.</p></div>';
+      '<p class="note">Aquí se ve todo el material de la orden, sin importar el mes. Una salida y su devolución se cancelan entre sí y no se muestran.</p></div>';
     $v.innerHTML = h;
     document.getElementById("atras").onclick = function(){ ordenAbierta = null; pintar(); };
   }
@@ -133,7 +136,8 @@
     if(!r || !r[0]){ $v.innerHTML = '<p class="empty">Todavía no hay un archivo cargado, o tu usuario no tiene acceso a esta sección.</p>'; return; }
     D = window.CORR.leer(r[0].datos);
     var c = String(r[0].corte || "").slice(0,10).split("-");
-    D.meta = (r[0].archivo || "Archivo") + " · corte del " + c[2] + "/" + c[1] + "/" + c[0].slice(2) + " · " + int(D.ordenes.length) + " órdenes OM01.";
+    var nOM01 = Object.keys(D.ordenes).filter(function(k){ return D.ordenes[k].clase === "OM01"; }).length;
+    D.meta = (r[0].archivo || "Archivo") + " · corte del " + c[2] + "/" + c[1] + "/" + c[0].slice(2) + " · " + int(nOM01) + " órdenes OM01 en el archivo.";
     pintar();
   }).catch(function(e){ $v.innerHTML = '<p class="empty">No se pudo cargar la información: ' + esc(e.message) + '</p>'; });
 })();
