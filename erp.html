@@ -516,7 +516,7 @@
         if(verC) cuerpo.appendChild(tarjeta("Correctivos", etMes(mes) + " · solo órdenes OM01", "mantenimiento/correctivos", [["Gasto", pesos(gC), nOrd("OM01") + " órdenes" + (gH01 ? " · incluye " + pesos(gH01) + " de remosamiento" : "")]]));
         if(verH){
           var cr = D.crono || [], reaH = cr.filter(function(x){ return String(x.estatus || "").toUpperCase() === "REALIZADO"; }).length;
-          cuerpo.appendChild(tarjeta("Hojalatería y Pintura", "Cronograma vigente · gasto de " + etMes(mes), "mantenimiento/hojalateria", [["Cumplimiento", pct(reaH, cr.length), reaH + " de " + cr.length + " unidades"], ["Gasto en remosamiento", pesos(gH), "OM01 " + pesos(gH01) + " + OM12 " + pesos(gH12)]]));
+          cuerpo.appendChild(tarjeta("Hojalatería y Pintura", "Cronograma vigente · gasto de " + etMes(mes), "mantenimiento/hojalateria", [["Cumplimiento", pct(reaH, cr.length), reaH + " de " + cr.length + " unidades"], ["Remosamiento OM01", pesos(gH01), "presupuesto asignado · ya incluido en Correctivos"], ["Remosamiento OM12", pesos(gH12), "proyectos especiales"], ["Total remosamiento", pesos(gH), "OM01 + OM12"]]));
         }
         if(verP && verC && verH){
           var total = gP + gC + gH12;
@@ -524,14 +524,15 @@
           t.appendChild(el("h3", "", "Gasto total de mantenimiento · " + etMes(mes)));
           var big = el("div", "", pesos(total)); big.style.cssText = "font-family:'Barlow Semi Condensed',sans-serif;font-size:38px;font-weight:700;line-height:1.1"; t.appendChild(big);
           var tb = el("table"); tb.style.maxWidth = "520px";
-          [["Preventivos (OM02)", gP, false], ["Correctivos (OM01)", gC, false], ["Hojalatería y Pintura (remosamiento OM01 + OM12)", gH, false], ["Menos: remosamiento OM01, ya incluido en Correctivos", -gH01, false], ["Total", total, true]].forEach(function(f){
-            var tr = el("tr"); var a = el("td", "", f[0]); var b2 = el("td", "", (f[1] < 0 ? "−" : "") + pesos(Math.abs(f[1]))); b2.style.textAlign = "right";
-            if(f[2]){ a.style.fontWeight = b2.style.fontWeight = "700"; }
+          [["Preventivos (OM02)", gP, 0], ["Correctivos (OM01)", gC, 0], ["de los cuales remosamiento OM01 · presupuesto asignado (no se suma otra vez)", gH01, 1], ["Remosamiento OM12 · proyectos especiales", gH12, 0], ["Total", total, 2]].forEach(function(f){
+            var tr = el("tr"); var a = el("td", "", f[0]); var b2 = el("td", "", pesos(f[1])); b2.style.textAlign = "right";
+            if(f[2] === 1){ a.style.cssText = "padding-left:24px;color:var(--ink-faint);font-size:12.5px"; b2.style.color = "var(--ink-faint)"; b2.style.fontSize = "12.5px"; }
+            if(f[2] === 2){ a.style.fontWeight = b2.style.fontWeight = "700"; }
             tr.appendChild(a); tr.appendChild(b2); tb.appendChild(tr);
           });
           t.appendChild(tb);
           cuerpo.insertBefore(t, cuerpo.firstChild);
-          nota.textContent = "El gasto se cuenta en el mes en que se sacó el material (fecha de documento de SAP). Los remosamientos OM01 aparecen en Correctivos y en Hojalatería, por eso se restan una vez. OM03 no se incluye.";
+          nota.textContent = "El gasto se cuenta en el mes en que se sacó el material (fecha de documento de SAP). Los remosamientos OM01 ya van dentro de Correctivos y también se muestran en Hojalatería, por eso no se suman otra vez; el remosamiento OM12 se suma aparte. OM03 no se incluye.";
         }
       }
 
