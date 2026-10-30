@@ -131,7 +131,7 @@
 
   <div class="card" id="cardActualizar">
     <h2>Actualizar con el catálogo de SAP</h2>
-    <p class="sub">Sube el Excel tal como lo bajas de SAP, con las pestañas <b>Indice</b>, <b>Stock</b>, <b>Codbloq</b> y las seis de última entrada y salida (<b>UESMCV, UESMCU, UESMJO, UESMPU, UESMAX, UESMCC</b>). El curado se hace aquí al leer el archivo. Reemplaza la información vigente.</p>
+    <p class="sub">Sube el Excel tal como lo bajas de SAP, con las pestañas <b>Indice</b>, <b>Stock</b>, <b>Bloqueos</b> (antes Codbloq) y las seis de última entrada y salida (<b>UESMCV, UESMCU, UESMJO, UESMPU, UESMAX, UESMCC</b>). El curado se hace aquí al leer el archivo. Reemplaza la información vigente.</p>
     <div class="drop">
       <input type="file" id="fArch" accept=".xlsx,.xls,.xlsm" hidden>
       <button class="btn" id="bElegir" type="button">Elegir archivo del catálogo</button>
@@ -248,7 +248,7 @@ function procesar(XL, buf, nombre, corteIni){
   var wb=XL.read(buf,{type:"array"}), avisos=[];
   function hoja(n){ var k=wb.SheetNames.filter(function(x){ return sinAcentos(x)===n; })[0]; return k ? wb.Sheets[k] : null; }
   function filas(ws){ return XL.utils.sheet_to_json(ws,{defval:null,raw:true}); }
-  var sI=hoja("indice"), sS=hoja("stock"), sC=hoja("codbloq");
+  var sI=hoja("indice"), sS=hoja("stock"), sC=hoja("bloqueos")||hoja("codbloq");
   if(!sI||!sS) throw new Error("El archivo debe traer las pestañas Indice y Stock. Encontré: "+wb.SheetNames.join(", ")+".");
   var uesNombres=wb.SheetNames.filter(function(n){ return /^ues/i.test(n.trim()); });
   if(!uesNombres.length) throw new Error("No encontré las pestañas de última entrada y salida (UESMCV, UESMCU, UESMJO, UESMPU, UESMAX, UESMCC). Encontré: "+wb.SheetNames.join(", ")+".");

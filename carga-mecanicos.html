@@ -149,7 +149,7 @@
   </div>
 
   <div id="uploader" class="uploader">
-    <p><strong>Arrastra aquí el archivo "Carga de trabajo" (.xlsx)</strong>, o selecciónalo. Debe tener las pestañas Operaciones, OM01OM02, OM01OM02MOV y Puestos De trabajo.</p>
+    <p><strong>Arrastra aquí el archivo "Carga de trabajo" (.xlsx)</strong>, o selecciónalo. Debe tener las pestañas Avisos, Ordenes, MaterialOrden y Puestos (también se aceptan los nombres anteriores: Operaciones, OM01OM02, OM01OM02MOV y Puestos De trabajo).</p>
     <button id="btnPick" class="btn-primary">Elegir archivo</button>
     <input id="fileInput" type="file" accept=".xlsx,.xls" hidden>
     <span id="fileMeta" class="file-meta"></span>
@@ -288,10 +288,12 @@
     return null;
   }
   // Búsqueda de hoja insensible a mayúsculas/minúsculas (SAP re-exporta con distinto capitalizado).
+  // Acepta también los nombres nuevos del archivo Correctivos.xlsx (Avisos, Ordenes, MaterialOrden, Puestos).
+  var ALIAS_HOJAS = { "operaciones":"avisos", "om01om02":"ordenes", "om01om02mov":"materialorden", "puestos de trabajo":"puestos" };
   function findSheet(wb, name){
     if(wb.Sheets[name]) return wb.Sheets[name];
-    var target = name.toLowerCase();
-    var found = wb.SheetNames.filter(function(n){ return n.toLowerCase() === target; })[0];
+    var target = name.toLowerCase(), alt = ALIAS_HOJAS[target];
+    var found = wb.SheetNames.filter(function(n){ var l = n.toLowerCase(); return l === target || (alt && l === alt); })[0];
     return found ? wb.Sheets[found] : null;
   }
   function normOrden(v){
@@ -1084,7 +1086,7 @@
         $("uploader").appendChild(fila); $("fCorte").value = PENDIENTE.corte;
         $("bGuardar2").addEventListener("click", guardarNube);
       }catch(err){
-        meta.className = "file-meta"; meta.textContent = err && /pestaña/.test(err.message) ? err.message : "No se pudo leer el archivo. Confirma que tiene las pestañas Operaciones, OM01OM02, OM01OM02MOV y Puestos De trabajo.";
+        meta.className = "file-meta"; meta.textContent = err && /pestaña/.test(err.message) ? err.message : "No se pudo leer el archivo. Confirma que tiene las pestañas Avisos, Ordenes, MaterialOrden y Puestos (o Operaciones, OM01OM02, OM01OM02MOV y Puestos De trabajo).";
       }
     };
     reader.readAsArrayBuffer(file);

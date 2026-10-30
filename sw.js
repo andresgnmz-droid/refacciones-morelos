@@ -2,7 +2,7 @@
    Guarda en el equipo las páginas, las librerías y la última respuesta de Supabase,
    para poder consultar la información ya cargada cuando no hay internet.
    Si cambias este archivo, sube el número de VERSION. */
-var VERSION = "v13";
+var VERSION = "v14";
 var SHELL = "erp-paginas-" + VERSION;
 var LIBS = "erp-librerias-" + VERSION;
 var DATOS = "erp-datos-" + VERSION;
