@@ -41,10 +41,10 @@
 <body>
 <div class="card">
   <h2>Actualizar Unidades en piso</h2>
-  <p class="sub">Sube el Excel de unidades en piso tal como lo generas, con las pestañas <b>UPiso</b>, <b>Cargas</b>, <b>Pedidos</b>, <b>Movimientos</b>, <b>Uso</b> y <b>Usoc</b>. El cruce se calcula aquí mismo y reemplaza el corte vigente.</p>
+  <p class="sub">Elige a la vez <b>Unidades_en_piso.xlsx</b> (UnidadesPiso y Cargas), <b>Faltante_Refacciones.xlsx</b> (Pedidos, Ingresos y Salidas) y <b>Correctivos.xlsx</b> (Ordenes y MaterialOrden) y <b>Historico_Ordenes.xlsx</b> (órdenes de 2024 y 2025: sin él, el material surtido de las unidades que llevan meses en piso sale incompleto). Sigue funcionando el archivo anterior de seis pestañas (UPiso, Cargas, Pedidos, Movimientos, Uso, Usoc). El cruce se calcula aquí mismo y reemplaza el corte vigente.</p>
   <div class="row">
-    <input type="file" id="fArch" accept=".xlsx,.xls,.xlsm" hidden>
-    <button class="btn" id="bElegir" type="button">Elegir archivo de unidades en piso</button>
+    <input type="file" id="fArch" accept=".xlsx,.xls,.xlsm" multiple hidden>
+    <button class="btn" id="bElegir" type="button">Elegir archivos de unidades en piso</button>
   </div>
   <div class="msg" id="cMsg"></div>
   <div id="cResumen"></div>
@@ -81,10 +81,70 @@ function fechaISO(v){
 function hoja(wb,nombre){
   var k=wb.SheetNames.filter(function(n){ return norm(n)===nombre; })[0];
   if(!k) return null;
-  var filas=XLSX.utils.sheet_to_json(wb.Sheets[k],{defval:null,raw:true});
+  var filas=wb.__filas ? wb.__filas[k] : XLSX.utils.sheet_to_json(wb.Sheets[k],{defval:null,raw:true});
   if(!filas.length) return filas;
-  var mapa={}; Object.keys(filas[0]).forEach(function(c){ mapa[norm(c)]=c; });
-  filas.__mapa=mapa; return filas;
+  if(!filas.__mapa){ var mapa={}; Object.keys(filas[0]).forEach(function(c){ mapa[norm(c)]=c; }); filas.__mapa=mapa; }
+  return filas;
+}
+
+/* ================= unir varios archivos ================= */
+/* Acepta el archivo anterior (UPiso, Cargas, Pedidos, Movimientos, Uso, Usoc) o los archivos ordenados:
+   Unidades_en_piso (UnidadesPiso, Cargas), Faltante_Refacciones (Pedidos, Ingresos, Salidas) y
+   Correctivos / Historico_Ordenes (Ordenes, MaterialOrden). Devuelve un libro con los nombres de siempre. */
+var ALIAS_PISO={ upiso:"UPiso", unidadespiso:"UPiso", cargas:"Cargas", pedidos:"Pedidos", movimientos:"Movimientos", ingresos:"Movimientos", salidas:"Movimientos",
+  uso:"Uso", ordenes:"Uso", usoc:"Usoc", materialorden:"Usoc" };
+function conMapa(filas){ if(filas.length&&!filas.__mapa){ var m={}; Object.keys(filas[0]).forEach(function(c){ m[norm(c)]=c; }); filas.__mapa=m; } return filas; }
+function fechaMax(filas,cols){
+  var mx=""; if(!filas.length) return mx; conMapa(filas);
+  var k=null; cols.forEach(function(c){ if(!k&&filas.__mapa[norm(c)]) k=filas.__mapa[norm(c)]; });
+  if(!k) return mx;
+  filas.forEach(function(r){ var f=fechaISO(r[k]); if(f>mx) mx=f; });
+  return mx;
+}
+function llaveOrden(filas){ conMapa(filas); return filas.__mapa&&filas.__mapa["orden"]; }
+function fusionar(wbs){
+  var grupos={}, avisos=[];
+  wbs.forEach(function(wb){
+    wb.SheetNames.forEach(function(n){
+      var c=ALIAS_PISO[norm(n)]; if(!c) return;
+      var f=XLSX.utils.sheet_to_json(wb.Sheets[n],{defval:null,raw:true});
+      (grupos[c]=grupos[c]||[]).push({ filas:f, hoja:norm(n) });
+    });
+  });
+  var out={ SheetNames:[], Sheets:{}, __filas:{}, avisos:avisos };
+  function poner(c,f){ out.SheetNames.push(c); out.__filas[c]=conMapa(f); }
+  var FECHA={ Cargas:["Fecha"], Pedidos:["Fecha de solicitud"], Movimientos:["Fe.contabilización"] };
+  ["UPiso","Cargas","Pedidos"].forEach(function(c){
+    var g=grupos[c]; if(!g) return;
+    var mejor=g[0];
+    if(c!=="UPiso") g.forEach(function(x){ if(fechaMax(x.filas,FECHA[c])>fechaMax(mejor.filas,FECHA[c])) mejor=x; });
+    poner(c,mejor.filas);
+  });
+  if(grupos.Movimientos){
+    var g=grupos.Movimientos, viejo=g.filter(function(x){ return x.hoja==="movimientos"; });
+    if(viejo.length){
+      var mv=viejo[0]; viejo.forEach(function(x){ if(fechaMax(x.filas,FECHA.Movimientos)>fechaMax(mv.filas,FECHA.Movimientos)) mv=x; });
+      poner("Movimientos",mv.filas);
+    } else {
+      var todo=[]; g.forEach(function(x){ x.filas.forEach(function(r){ todo.push(r); }); });
+      poner("Movimientos",todo);
+    }
+  }
+  /* Uso y Usoc pueden venir en dos archivos (Correctivos y Historico_Ordenes): por cada orden se queda la versión del archivo más reciente */
+  [["Uso",["Fecha de referencia","Fecha entrada"]],["Usoc",["Fecha de documento","Fe.contabilización"]]].forEach(function(par){
+    var c=par[0], g=grupos[c]; if(!g) return;
+    g.forEach(function(x){ x.max=fechaMax(x.filas,par[1]); });
+    g.sort(function(a,b){ return a.max<b.max?1:a.max>b.max?-1:0; });
+    var vistos={}, res=[];
+    g.forEach(function(x){
+      var kO=llaveOrden(x.filas), propios={};
+      x.filas.forEach(function(r){ var o=kO?String(r[kO]).trim():""; if(!(o in vistos)) res.push(r); propios[o]=1; });
+      Object.keys(propios).forEach(function(o){ vistos[o]=1; });
+    });
+    poner(c,res);
+    if(g.length>1) avisos.push("Se unieron "+g.length+" archivos de "+(c==="Uso"?"órdenes":"material por orden")+": por cada orden se usó el archivo más reciente.");
+  });
+  return out;
 }
 function tiene(filas,col){ return !!(filas.__mapa&&filas.__mapa[norm(col)]); }
 function val(fila,filas,col){ var k=filas.__mapa&&filas.__mapa[norm(col)]; return k?fila[k]:null; }
@@ -99,7 +159,8 @@ function calcular(wb, corte, ctx){
   var avisos=[];
   var U=hoja(wb,"upiso"), C=hoja(wb,"cargas"), P=hoja(wb,"pedidos"), M=hoja(wb,"movimientos"), US=hoja(wb,"uso"), UC=hoja(wb,"usoc");
   var faltaH=[["UPiso",U],["Cargas",C],["Pedidos",P],["Movimientos",M],["Uso",US],["Usoc",UC]].filter(function(x){ return !x[1]; }).map(function(x){ return x[0]; });
-  if(faltaH.length) throw new Error("Al archivo le faltan las pestañas: "+faltaH.join(", ")+". Encontré: "+wb.SheetNames.join(", ")+".");
+  if(wb.avisos) wb.avisos.forEach(function(a){ avisos.push(a); });
+  if(faltaH.length) throw new Error("Faltan datos de: "+faltaH.map(function(h){ return {UPiso:"UnidadesPiso",Cargas:"Cargas",Pedidos:"Pedidos",Movimientos:"Ingresos y Salidas",Uso:"Ordenes",Usoc:"MaterialOrden"}[h]||h; }).join(", ")+". Elige juntos Unidades_en_piso, Faltante_Refacciones, Correctivos e Historico_Ordenes, o el archivo anterior de seis pestañas.");
   var req=[["UPiso",U,["ECONÓMICO","CEDIS","FALLA","MECÁNICO ASIGNADO"]],
     ["Cargas",C,["Equipo","Fecha","UnidadCaracterística"]],
     ["Pedidos",P,["Centro","Fecha de solicitud","Pedido","Material","Texto breve","Cantidad solicitada","Cantidad pedida","Clase documento","Número de necesidad"]],
@@ -249,8 +310,9 @@ function hoyISO(){ var d=new Date(); return d.getFullYear()+"-"+("0"+(d.getMonth
 function corteDeNombre(n){
   var m=String(n).match(/(\d{2})(\d{2})(\d{4})(?!\d)/);
   if(m&&+m[2]>=1&&+m[2]<=12&&+m[1]>=1&&+m[1]<=31) return m[3]+"-"+m[2]+"-"+m[1];
-  return hoyISO();
+  return "";
 }
+function corteDeNombres(fs){ var b=""; fs.forEach(function(f){ var d=corteDeNombre(f.name); if(d>b) b=d; }); return b||hoyISO(); }
 function fCorta(iso){ if(!iso) return "—"; var p=iso.split("-"); return p[2]+"/"+p[1]+"/"+p[0].slice(2); }
 function resumen(R){
   var por={}; R.units.forEach(function(u){ por[u.cedis]=(por[u.cedis]||0)+1; });
@@ -282,21 +344,23 @@ function contexto(){
   if(!ERP.puede("piso")){ $("cMsg").className="msg err"; $("cMsg").textContent="Tu usuario no puede actualizar esta sección."; $("bElegir").disabled=true; }
   $("bElegir").addEventListener("click",function(){ $("fArch").click(); });
   $("fArch").addEventListener("change",function(){
-    var f=this.files[0]; if(!f) return;
+    var fs=Array.prototype.slice.call(this.files); if(!fs.length) return;
     var m=$("cMsg"), inp=this;
-    m.className="msg"; m.textContent="Leyendo "+f.name+"…"; $("filaGuardar").hidden=true; $("cResumen").innerHTML=""; PENDIENTE=null;
-    var rd=new FileReader();
-    rd.onload=function(){
-      var wb; try{ wb=XLSX.read(new Uint8Array(rd.result),{type:"array"}); }catch(e){ m.className="msg err"; m.textContent="No pude abrir el archivo como Excel."; inp.value=""; return; }
-      contexto().then(function(ctx){
-        try{ PENDIENTE=calcular(wb,corteDeNombre(f.name),ctx); }
-        catch(e){ m.className="msg err"; m.textContent=e.message; inp.value=""; return; }
-        m.className="msg ok"; m.textContent="Archivo leído. Revisa el resumen, confirma la fecha del corte y guarda.";
-        $("cResumen").innerHTML=resumen(PENDIENTE); $("fCorte").value=PENDIENTE.corte; $("filaGuardar").hidden=false; inp.value="";
-      });
-    };
-    rd.onerror=function(){ m.className="msg err"; m.textContent="No se pudo leer el archivo."; };
-    rd.readAsArrayBuffer(f);
+    m.className="msg"; m.textContent="Leyendo "+fs.map(function(f){ return f.name; }).join(", ")+"…"; $("filaGuardar").hidden=true; $("cResumen").innerHTML=""; PENDIENTE=null;
+    function leer(f){ return new Promise(function(ok,mal){
+      var rd=new FileReader();
+      rd.onload=function(){ try{ ok(XLSX.read(new Uint8Array(rd.result),{type:"array"})); }catch(e){ mal(new Error("No pude abrir "+f.name+" como Excel.")); } };
+      rd.onerror=function(){ mal(new Error("No se pudo leer "+f.name+".")); };
+      rd.readAsArrayBuffer(f);
+    }); }
+    Promise.all(fs.map(leer)).then(function(wbs){
+      var wb=fusionar(wbs);
+      return contexto().then(function(ctx){ return calcular(wb,corteDeNombres(fs),ctx); });
+    }).then(function(R){
+      PENDIENTE=R;
+      m.className="msg ok"; m.textContent="Archivos leídos. Revisa el resumen, confirma la fecha del corte y guarda.";
+      $("cResumen").innerHTML=resumen(PENDIENTE); $("fCorte").value=PENDIENTE.corte; $("filaGuardar").hidden=false; inp.value="";
+    }).catch(function(e){ m.className="msg err"; m.textContent=e.message; inp.value=""; });
   });
   $("bGuardar").addEventListener("click",function(){
     if(!PENDIENTE) return;
