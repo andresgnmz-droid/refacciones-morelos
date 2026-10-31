@@ -156,6 +156,7 @@
   </div>
 
   <div id="content" hidden>
+    <div id="yearBox"></div>
     <div id="viewMech" hidden></div>
     <div id="viewOrder" hidden></div>
     <div id="viewMain">
@@ -427,7 +428,9 @@
     return out;
   }
 
-  function parseWorkbook(wb){
+  function mesDe(d){ return d ? d.getFullYear() + "-" + ("0"+(d.getMonth()+1)).slice(-2) : null; }
+  // mes: "AAAA-MM" para quedarse solo con los avisos (y el resumen de órdenes) de ese mes; sin mes, todo el archivo.
+  function parseWorkbook(wb, mes){
     var out = {
       mechanics:{}, cedisTotals:{}, dayTotals:{}, orders:{}, parts:{}, mismatches:[],
       meta:{ totalAvisos:0, minDate:null, maxDate:null, ordenesSinNumero:0, ordenesSinCierreSAP:0, ordenesConCosto:0, costoTotal:0, om02SinLiberar:0, puestosOk:false, sinAutor:0 }
@@ -469,6 +472,7 @@
         var ocedis = CEDIS_FROM_FILE_CODE[ocentro] || (ocentro || "SIN CEDIS");
         ordenInfo[oOrden] = { clase:oclase, cedis:ocedis, costo: (typeof ocosto === "number" ? ocosto : 0), texto: orow[ordCols["Texto breve"]] || "", equipo: orow[ordCols["Equipo"]] || "", fecha: excelDateToJS(orow[ordCols["Fecha de referencia"]]) };
 
+        if(mes && mesDe(ordenInfo[oOrden].fecha) !== mes) continue;
         var key = ocedis + "|" + oclase;
         if(!out.orders[key]) out.orders[key] = { cedis:ocedis, clase:oclase, count:0, costo:0 };
         out.orders[key].count++;
@@ -520,6 +524,7 @@
         clase = String(clase).trim();
         pto = String(pto).trim();
         if(clase !== "A4" && clase !== "A5") continue;
+        if(mes && mesDe(fecha) !== mes) continue;
 
         var res = resolveAviso(P, pto, autor, ctro);
         var person = res.person || pseudoPerson(pto, res.entry);
@@ -653,6 +658,75 @@
   }
 
   var lastPairs = [];
+  // ---------- Año: totales por mes y comparativa ----------
+  var MESES_ES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+  function mesTxt(k){ var p = k.split("-"); return MESES_ES[+p[1]-1] + " " + p[0]; }
+  function mesCorto(k){ var p = k.split("-"); return MESES_ES[+p[1]-1].slice(0,3) + " " + p[0].slice(2); }
+  var CURRENT_WB = null;
+  function monthlyStats(all){
+    var by = {};
+    Object.keys(all.mechanics).forEach(function(k){
+      all.mechanics[k].avisos.forEach(function(r){
+        var mk = mesDe(r.fecha); if(!mk) return;
+        var b = by[mk] || (by[mk] = { mes:mk, total:0, cor:0, prev:0, pend:0, aux:0, costo:0 });
+        b.total++;
+        if(r.cat === "cor") b.cor++; else if(r.cat === "prev") b.prev++; else if(r.cat === "aux") b.aux++; else b.pend++;
+        var info = r.orden ? all.ordenInfo[r.orden] : null;
+        if(info) b.costo += info.costo;
+      });
+    });
+    return Object.keys(by).sort().map(function(k){ return by[k]; });
+  }
+  function deltaTxt(cur, prev){
+    if(prev == null || prev === 0) return "—";
+    var d = (cur - prev) / prev * 100;
+    return (d > 0 ? "+" : d < 0 ? "−" : "") + Math.abs(d).toFixed(0) + "%";
+  }
+  function renderYear(stats, sel){
+    var box = $("yearBox");
+    if(!stats.length){ box.innerHTML = ""; return; }
+    var tot = stats.reduce(function(a,b){ return { total:a.total+b.total, cor:a.cor+b.cor, prev:a.prev+b.prev, pend:a.pend+b.pend, aux:a.aux+b.aux, costo:a.costo+b.costo }; }, { total:0, cor:0, prev:0, pend:0, aux:0, costo:0 });
+    var maxT = Math.max.apply(null, stats.map(function(x){ return x.total; }).concat([1]));
+    var h = '<div class="card"><div class="card-head"><h2>Totales del año</h2><span class="card-sub">' + mesCorto(stats[0].mes) + ' – ' + mesCorto(stats[stats.length-1].mes) + ' · ' + stats.length + ' meses</span></div>';
+    h += '<div class="kpi-row">' +
+      kpiTile("Avisos del periodo", fmtInt(tot.total), "A4 más A5") +
+      kpiTile("Correctivo (A4)", fmtInt(tot.cor), "orden OM01") +
+      kpiTile("Preventivo (A4)", fmtInt(tot.prev), "orden OM02") +
+      kpiTile("Auxilio vial (A5)", fmtInt(tot.aux), "") +
+      kpiTile("Costo en SAP", (tot.costo >= 1e6 ? "$" + (tot.costo/1e6).toFixed(2) + " M" : fmtMoney(tot.costo)), "órdenes ligadas a los avisos") + '</div>';
+    h += '<div class="card-head" style="margin-top:14px"><h2 style="font-size:15px">Comparativa por mes</h2><span class="card-sub">Toca un mes para ver su detalle abajo</span></div>';
+    h += '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="text-align:right;color:var(--ink-soft)">' +
+      '<th style="text-align:left;padding:6px 8px">Mes</th><th style="padding:6px 8px">Avisos</th><th style="padding:6px 8px">vs mes anterior</th><th style="padding:6px 8px">Correctivo</th><th style="padding:6px 8px">Preventivo</th><th style="padding:6px 8px">Sin clasificar</th><th style="padding:6px 8px">Auxilio</th><th style="padding:6px 8px">Costo</th><th style="padding:6px 8px">vs mes anterior</th><th style="padding:6px 8px;min-width:120px;text-align:left"> </th></tr></thead><tbody>';
+    stats.forEach(function(x, i){
+      var prev = i > 0 ? stats[i-1] : null, on = (x.mes === sel);
+      var seg = function(n, c){ return n ? '<span style="display:inline-block;height:10px;width:' + (n / maxT * 100).toFixed(1) + '%;background:var(' + c + ')"></span>' : ""; };
+      h += '<tr data-mes="' + x.mes + '" style="cursor:pointer;border-top:1px solid var(--border);text-align:right;' + (on ? 'background:var(--surface-alt);font-weight:600' : '') + '">' +
+        '<td style="text-align:left;padding:6px 8px;white-space:nowrap">' + mesTxt(x.mes) + '</td><td style="padding:6px 8px">' + fmtInt(x.total) + '</td><td style="padding:6px 8px;color:var(--ink-soft)">' + deltaTxt(x.total, prev && prev.total) + '</td>' +
+        '<td style="padding:6px 8px">' + fmtInt(x.cor) + '</td><td style="padding:6px 8px">' + fmtInt(x.prev) + '</td><td style="padding:6px 8px">' + fmtInt(x.pend) + '</td><td style="padding:6px 8px">' + fmtInt(x.aux) + '</td>' +
+        '<td style="padding:6px 8px">' + fmtMoney(x.costo) + '</td><td style="padding:6px 8px;color:var(--ink-soft)">' + deltaTxt(x.costo, prev && prev.costo) + '</td>' +
+        '<td style="padding:6px 8px;text-align:left"><span style="display:flex;width:100%;min-width:110px">' + seg(x.cor, "--a4") + seg(x.prev, "--prev") + seg(x.pend, "--pend") + seg(x.aux, "--a5") + '</span></td></tr>';
+    });
+    h += '</tbody></table></div>';
+    h += '<div style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><label for="mesSel" style="font-weight:600">Detalle de:</label>' +
+      '<select id="mesSel" style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--ink)">' +
+      stats.slice().reverse().map(function(x){ return '<option value="' + x.mes + '"' + (x.mes === sel ? ' selected' : '') + '>' + mesTxt(x.mes) + '</option>'; }).join("") +
+      '<option value="ALL"' + (sel === "ALL" ? ' selected' : '') + '>Todo el periodo</option></select></div></div>';
+    box.innerHTML = h;
+    $("mesSel").addEventListener("change", function(){ mostrar(CURRENT_WB, this.value); });
+    box.querySelectorAll("tr[data-mes]").forEach(function(tr){ tr.addEventListener("click", function(){ mostrar(CURRENT_WB, tr.getAttribute("data-mes")); }); });
+  }
+  // Muestra el año completo arriba y el detalle del mes elegido (por defecto, el más reciente).
+  function mostrar(wb, mes){
+    CURRENT_WB = wb;
+    var all = parseWorkbook(wb);
+    var stats = monthlyStats(all);
+    var sel = mes || (stats.length ? stats[stats.length-1].mes : "ALL");
+    if(sel !== "ALL" && !stats.some(function(x){ return x.mes === sel; })) sel = "ALL";
+    render(sel === "ALL" ? all : parseWorkbook(wb, sel));
+    renderYear(stats, sel);
+    return all;
+  }
+
   function renderMismatches(data){
     var total = data.meta.totalAvisos, list = data.mismatches;
     var re = list.filter(function(x){ return x.tipo === "reasignado"; }).length;
@@ -1062,8 +1136,7 @@
     $("nubeMeta").textContent = "Cargando…";
     ERP.rest("correctivos_datos?select=archivo,corte,actualizado_at,datos&id=eq.1").then(function(r){
       if(!r || !r[0]){ $("nubeMeta").textContent = "Todavía no hay un archivo cargado, o tu usuario no tiene acceso a esta sección."; return; }
-      var parsed = parseWorkbook(reconstruir(r[0].datos));
-      render(parsed);
+      var parsed = mostrar(reconstruir(r[0].datos));
       var cuando = new Date(r[0].actualizado_at).toLocaleString("es-MX", { day:"2-digit", month:"short", hour:"2-digit", minute:"2-digit" });
       $("nubeMeta").textContent = (r[0].archivo || "Archivo") + " · corte del " + fCorta(r[0].corte) + " · cargado " + cuando + " — " + fmtInt(parsed.meta.totalAvisos) + " avisos.";
     }).catch(function(e){ $("nubeMeta").textContent = "No se pudo cargar la información: " + e.message; });
