@@ -145,6 +145,14 @@ function calcular(wb, periodo, ctx){
     var fuera=ordenes.filter(function(o){ return o.fecha_referencia&&o.fecha_referencia.slice(0,7)!==perIni.slice(0,7); });
     if(fuera.length) avisos.push(fuera.length+" órdenes tienen fecha de referencia fuera del mes elegido ("+fuera.slice(0,5).map(function(o){ return o.orden; }).join(", ")+(fuera.length>5?"…":"")+"). Revisa que el mes sea el correcto.");
   }
+  /* Una orden solo puede vivir en un mes (la llave de la tabla es la orden). Si ya está guardada en otro mes, no se vuelve a insertar. */
+  var otras=(ctx&&ctx.otras)||{}, repetidas=ordenes.filter(function(o){ return otras[o.orden]&&otras[o.orden]!==perIni; });
+  if(repetidas.length){
+    var cr=0; repetidas.forEach(function(o){ cr+=o.costo_real||0; });
+    ordenes=ordenes.filter(function(o){ return !(otras[o.orden]&&otras[o.orden]!==perIni); });
+    O={}; ordenes.forEach(function(o){ O[o.orden]=o; });
+    avisos.push(repetidas.length+" órdenes ya estaban guardadas en otro mes (p. ej. "+repetidas.slice(0,5).map(function(o){ return o.orden; }).join(", ")+(repetidas.length>5?"…":"")+") y se dejaron en ese mes para no duplicarlas"+(cr>0?"; su gasto de este mes ($"+Math.round(cr).toLocaleString("es-MX")+") no se suma aquí":"")+".");
+  }
   var byKey={};
   ordenes.forEach(function(o){ if(o.servicio){ var k=o.economico+"|"+o.servicio; (byKey[k]=byKey[k]||[]).push(o.orden); } });
 
@@ -265,13 +273,15 @@ function mesDeNombre(n,wb){
 }
 function mesTxt(p){ var x=String(p).slice(0,7).split("-"); return MESES[+x[1]-1]+" "+x[0]; }
 function money(n){ return "$"+n.toLocaleString("es-MX",{minimumFractionDigits:2,maximumFractionDigits:2}); }
-function contextoPrev(){
+function contextoPrev(per){
   return Promise.all([
     ERP.rest("preventivos_bajas?select=economico,baja_desde").catch(function(){ return []; }),
-    ERP.rest("unidades_piso_datos?select=datos&id=eq.1").catch(function(){ return []; })
+    ERP.rest("unidades_piso_datos?select=datos&id=eq.1").catch(function(){ return []; }),
+    per?ERP.rest("preventivos_ordenes?select=orden,periodo&periodo=neq."+per+"&limit=100000").catch(function(){ return []; }):Promise.resolve([])
   ]).then(function(r){
+    var otras={}; (r[2]||[]).forEach(function(x){ otras[x.orden]=String(x.periodo).slice(0,10); });
     var u=(r[1]&&r[1][0]&&r[1][0].datos&&r[1][0].datos.units)||[];
-    return { bajas:r[0]||[], piso:u.map(function(x){ return x.eco; }) };
+    return { bajas:r[0]||[], piso:u.map(function(x){ return x.eco; }), otras:otras };
   });
 }
 function resumen(R){
@@ -302,9 +312,9 @@ function infoActual(){
     var rd=new FileReader();
     rd.onload=function(){
       var wb; try{ wb=XLSX.read(new Uint8Array(rd.result),{type:"array"}); }catch(e){ m.className="msg err"; m.textContent="No pude abrir el archivo como Excel."; inp.value=""; return; }
-      contextoPrev().then(function(ctx0){ var bajas=ctx0.bajas;
-        var mes=mesDeNombre(f.name,wb);
-        try{ PENDIENTE=calcular(wb,mes+"-01",{bajas:bajas||[],piso:ctx0.piso}); }
+      var mes=mesDeNombre(f.name,wb);
+      contextoPrev(mes+"-01").then(function(ctx0){ var bajas=ctx0.bajas;
+        try{ PENDIENTE=calcular(wb,mes+"-01",{bajas:bajas||[],piso:ctx0.piso,otras:ctx0.otras}); }
         catch(e){ m.className="msg err"; m.textContent=e.message; inp.value=""; return; }
         PENDIENTE._wb=wb;
         m.className="msg ok"; m.textContent="Archivo leído. Revisa el resumen, confirma el mes y guarda.";
@@ -316,8 +326,8 @@ function infoActual(){
   });
   $("fMes").addEventListener("change",function(){
     if(!PENDIENTE||!/^\d{4}-\d{2}$/.test(this.value)) return;
-    contextoPrev().then(function(ctx0){ var bajas=ctx0.bajas;
-      try{ PENDIENTE=calcular(PENDIENTE._wb,$("fMes").value+"-01",{bajas:bajas||[],piso:ctx0.piso}); PENDIENTE._wb=PENDIENTE._wb; }catch(e){ $("cMsg").className="msg err"; $("cMsg").textContent=e.message; return; }
+    contextoPrev($("fMes").value+"-01").then(function(ctx0){ var bajas=ctx0.bajas;
+      try{ PENDIENTE=calcular(PENDIENTE._wb,$("fMes").value+"-01",{bajas:bajas||[],piso:ctx0.piso,otras:ctx0.otras}); PENDIENTE._wb=PENDIENTE._wb; }catch(e){ $("cMsg").className="msg err"; $("cMsg").textContent=e.message; return; }
       $("cResumen").innerHTML=resumen(PENDIENTE);
     });
   });
