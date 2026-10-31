@@ -64,7 +64,7 @@
 function $(i){ return document.getElementById(i); }
 function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
 
-var PRE={"cuernavaca":["Cuernavaca","MCV"],"cuautla":["Cuautla","MCU"],"jojutla":["Jojutla","MJO"],"puente de ixtla":["Puente De Ixtla","MPU"],"axochiapan":["Axochiapan","MAX"],"cocoyoc":["Cocoyoc","MCC"]};
+var PRE={"mmcv":["Cuernavaca","MCV"],"mmcu":["Cuautla","MCU"],"mmjo":["Jojutla","MJO"],"mmpu":["Puente De Ixtla","MPU"],"mmax":["Axochiapan","MAX"],"mmcc":["Cocoyoc","MCC"],"cuernavaca":["Cuernavaca","MCV"],"cuautla":["Cuautla","MCU"],"jojutla":["Jojutla","MJO"],"puente de ixtla":["Puente De Ixtla","MPU"],"axochiapan":["Axochiapan","MAX"],"cocoyoc":["Cocoyoc","MCC"]};
 var SERVS=["LUBRICACION","AFINACION","FRENOS"];
 var MESES=["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
 
@@ -94,9 +94,9 @@ function col(o,n){ return o[norm(n).toLowerCase()]; }
 function calcular(wb, periodo, ctx){
   var avisos=[];
   var hO=hojaNombre(wb,function(n){ return norm(n).toLowerCase()==="ordenes"; });
-  var hM=hojaNombre(wb,function(n){ return norm(n).toLowerCase()==="ordmov"; });
+  var hM=hojaNombre(wb,function(n){ var l=norm(n).toLowerCase(); return l==="ordmov"||l==="materialorden"; });
   var hC=wb.SheetNames.filter(function(n){ return PRE[norm(n).toLowerCase()]; });
-  if(!hO||!hM) throw new Error("Al archivo le faltan las pestañas "+(!hO?"Ordenes ":"")+(!hM?"Ordmov":"")+". Encontré: "+wb.SheetNames.join(", ")+".");
+  if(!hO||!hM) throw new Error("Al archivo le faltan las pestañas "+(!hO?"Ordenes ":"")+(!hM?"MaterialOrden (antes Ordmov)":"")+". Encontré: "+wb.SheetNames.join(", ")+".");
   if(!hC.length) throw new Error("No encontré pestañas de CEDIS (Cuernavaca, Cuautla, Jojutla, Puente de Ixtla, Axochiapan, Cocoyoc).");
   var perIni=periodo; // yyyy-mm-01
 
@@ -198,6 +198,7 @@ window.PREV_CALCULAR=calcular;
 var PENDIENTE=null, ARCHIVO="";
 function mesDeNombre(n){
   var s=norm(n).toLowerCase(), a=s.match(/(20\d{2})/), m=null;
+  var iso=s.match(/(20\d{2})[-_.](0[1-9]|1[0-2])(?!\d)/); if(iso) return iso[1]+"-"+iso[2];
   MESES.forEach(function(x,i){ if(s.indexOf(x)>=0) m=i+1; });
   if(m&&a) return a[1]+"-"+("0"+m).slice(-2);
   var d=new Date(); return d.getFullYear()+"-"+("0"+(d.getMonth()+1)).slice(-2);
