@@ -2,7 +2,7 @@
    Guarda en el equipo las páginas, las librerías y la última respuesta de Supabase,
    para poder consultar la información ya cargada cuando no hay internet.
    Si cambias este archivo, sube el número de VERSION. */
-var VERSION = "v15";
+var VERSION = "v16";
 var SHELL = "erp-paginas-" + VERSION;
 var LIBS = "erp-librerias-" + VERSION;
 var DATOS = "erp-datos-" + VERSION;
@@ -60,9 +60,10 @@ function avisarGuardado(hit){
 }
 
 // Primero la red; si falla o tarda, la copia guardada.
-function redPrimero(req, nombre, espera, ignorarQuery, alUsarCopia){
+function redPrimero(req, nombre, espera, ignorarQuery, alUsarCopia, revalidar){
   return caches.open(nombre).then(function(cache){
-    var red = fetch(req).then(function(res){
+    /* Las páginas se revalidan siempre contra el servidor (si no cambiaron, responde 304 y es rápido): así un cambio publicado se ve de inmediato y no hasta 10 minutos después. */
+    var red = fetch(revalidar ? new Request(req, { cache: "no-cache" }) : req).then(function(res){
       if(res.status >= 500) throw new Error("servidor");
       if(res.status === 200) guardar(cache, req, res);
       return res;
@@ -108,7 +109,7 @@ self.addEventListener("fetch", function(e){
     return;
   }
   if(req.mode === "navigate" || (url.origin === self.location.origin && /\.html?$/.test(url.pathname))){
-    e.respondWith(redPrimero(req, SHELL, 5000, true, null));
+    e.respondWith(redPrimero(req, SHELL, 5000, true, null, true));
     return;
   }
   e.respondWith(copiaYActualiza(e, url.origin === self.location.origin ? SHELL : LIBS));
