@@ -114,11 +114,6 @@ function calcular(wb, periodo, ctx){
     O[id]=o; ordenes.push(o);
   });
   if(!ordenes.length) throw new Error("La pestaña Ordenes no trae órdenes OM02 (preventivos).");
-  var fuera=ordenes.filter(function(o){ return o.fecha_referencia&&o.fecha_referencia.slice(0,7)!==perIni.slice(0,7); });
-  if(fuera.length) avisos.push(fuera.length+" órdenes tienen fecha de referencia fuera del mes elegido ("+fuera.slice(0,5).map(function(o){ return o.orden; }).join(", ")+(fuera.length>5?"…":"")+"). Revisa que el mes sea el correcto.");
-
-  var byKey={};
-  ordenes.forEach(function(o){ if(o.servicio){ var k=o.economico+"|"+o.servicio; (byKey[k]=byKey[k]||[]).push(o.orden); } });
 
   /* Renglones de las pestañas de CEDIS: los de datos traen un número en la columna B (económico) */
   var rows=[];
@@ -132,9 +127,27 @@ function calcular(wb, periodo, ctx){
   });
   if(!rows.length) throw new Error("No encontré renglones de programa en las pestañas de los CEDIS.");
 
+  /* Si el archivo trae las órdenes de varios meses (descarga completa de SAP), se toman las del mes elegido:
+     las que SAP libera el día 1, las del mes anterior que siguen abiertas y las que cita el programa. */
+  var mesesOrd={}; ordenes.forEach(function(o){ if(o.fecha_referencia) mesesOrd[o.fecha_referencia.slice(0,7)]=1; });
+  if(Object.keys(mesesOrd).length>3){
+    var pm=perIni.slice(0,7), py=+pm.slice(0,4), pmo=+pm.slice(5,7)-1; if(pmo===0){ pmo=12; py--; }
+    var prevM=py+"-"+("0"+pmo).slice(-2), citadas={}, totalOrd=ordenes.length;
+    rows.forEach(function(r){ if(typeof r.orden==="number") citadas[Math.round(r.orden)]=1; });
+    ordenes=ordenes.filter(function(o){ var fe=o.fecha_entrada||"", fr=o.fecha_referencia||""; return citadas[o.orden]||fe===pm+"-01"||(fe===prevM+"-01"&&fr>=pm+"-01"); });
+    O={}; ordenes.forEach(function(o){ O[o.orden]=o; });
+    avisos.push("El archivo trae órdenes de varios meses ("+totalOrd+" OM02): se tomaron "+ordenes.length+" del mes elegido (las liberadas el día 1, las del mes anterior que siguen abiertas y las que cita el programa).");
+  } else {
+    var fuera=ordenes.filter(function(o){ return o.fecha_referencia&&o.fecha_referencia.slice(0,7)!==perIni.slice(0,7); });
+    if(fuera.length) avisos.push(fuera.length+" órdenes tienen fecha de referencia fuera del mes elegido ("+fuera.slice(0,5).map(function(o){ return o.orden; }).join(", ")+(fuera.length>5?"…":"")+"). Revisa que el mes sea el correcto.");
+  }
+  var byKey={};
+  ordenes.forEach(function(o){ if(o.servicio){ var k=o.economico+"|"+o.servicio; (byKey[k]=byKey[k]||[]).push(o.orden); } });
+
   var claimed={};
   rows.forEach(function(r){ var o=typeof r.orden==="number"?Math.round(r.orden):null; if(o&&O[o]&&O[o].economico===r.eco) claimed[o]=(claimed[o]||0)+1; });
 
+  var piso={}; (ctx.piso||[]).forEach(function(e){ piso[e]=1; }); var nEnPiso=0, nPendiente=0;
   var bajas={}; (ctx.bajas||[]).forEach(function(b){ if(b.baja_desde&&b.baja_desde.slice(0,10)<=perIni) bajas[b.economico]=1; });
   var omitidos=[], programa=[], vistos={}, duplicados=[];
   rows.forEach(function(r){
@@ -156,19 +169,32 @@ function calcular(wb, periodo, ctx){
     if(bajas[eco]){ omitidos.push(eco); return; }
     var od=o?O[o]:null;
     var evraw=r.ev==null?null:String(r.ev).trim();
+    var evnum=(evraw===null||evraw==="")?NaN:Number(evraw), evOk=isFinite(evnum)&&evnum>0;   /* cualquier número mayor que 0 cuenta como evidencia */
     var est;
     if(evraw&&/^inhab/i.test(evraw)) est="inhabilitado";
-    else if(od&&od.costo_plan===0){ est="inhabilitado"; if(evraw==="1") alerta="orden sin movimiento (costo plan 0); la hoja traía 1 con la orden marcada INABILITADO"; }
-    else if(evraw==="1") est="realizado";
+    else if(od&&od.costo_plan===0){
+      est="inhabilitado";
+      var leyenda=/inab|inhab/i.test(od.texto_breve||"")||/inhab/i.test(String(r.seg||""));
+      if(evOk) alerta="orden sin movimiento (costo plan 0); la hoja traía evidencia con la orden marcada INABILITADO";
+      else if(!leyenda) alerta="orden con valor 0 sin leyenda de inhabilitada en SAP ni en la hoja: revisar";
+    }
+    else if(evOk) est="realizado";
     else if(r.seg&&/no se realiz/i.test(String(r.seg))) est="no_realizado";
     else est="sin_evidencia";
+    if((est==="sin_evidencia"||est==="no_realizado")&&od&&od.costo_real>0){
+      var nota;
+      if(piso[eco]){ nEnPiso++; nota="sin evidencia: la unidad está en piso y se le sacó material por reparación (cuadrar con Unidades en piso)"; }
+      else { nPendiente++; nota="sin evidencia: ya se sacó material y el servicio no se había hecho a la fecha de la descarga"; }
+      alerta=alerta?alerta+" · "+nota:nota;
+    }
     var key=eco+"|"+s;
     if(vistos[key]){ duplicados.push(eco+" "+s); return; }
     vistos[key]=1;
-    programa.push({ cedis:r.cedis, economico:eco, servicio:s, folio:r.folio, modelo_desc:r.modelo, mecanico:r.mecanico, evidencia:evraw==="1", evidencia_raw:evraw,
+    programa.push({ cedis:r.cedis, economico:eco, servicio:s, folio:r.folio, modelo_desc:r.modelo, mecanico:r.mecanico, evidencia:evOk, evidencia_raw:evraw,
       estatus:est, orden:o, mes_reportado:r.mes==null?null:String(r.mes).trim().toLowerCase(), fecha_material:fechaISO(r.fmat), inspeccion_fisica:r.insp==null?null:String(r.insp).trim(),
       seguimiento:r.seg==null?null:String(r.seg).trim(), alerta:alerta });
   });
+  if(nEnPiso||nPendiente) avisos.push("Sin evidencia con material ya sacado: "+nEnPiso+" con la unidad en piso (reparación) y "+nPendiente+" con el servicio pendiente a la fecha de la descarga.");
   if(omitidos.length) avisos.push("Se omitieron por baja: "+omitidos.join(", ")+".");
   if(duplicados.length) avisos.push("Renglones repetidos (se tomó el primero): "+duplicados.join(", ")+".");
   var sinOrden=programa.filter(function(p){ return !p.orden; });
@@ -196,16 +222,33 @@ window.PREV_CALCULAR=calcular;
 
 /* ================= pantalla ================= */
 var PENDIENTE=null, ARCHIVO="";
-/* Si el nombre no trae el mes (por ejemplo "Preventivos.xlsx"), se toma el mes en que más órdenes OM02 tienen fecha de referencia. */
+/* Si el nombre no trae el mes (por ejemplo "Preventivos.xlsx"), se toma de la columna "Realizado Fecha" de las pestañas de CEDIS
+   (tolera errores de dedo como "octbre" u "otubre"); si no sirve, del mes en que más órdenes OM02 tienen fecha de referencia. */
+function lev(a,b){ var d=[],i,j; for(i=0;i<=a.length;i++){ d[i]=[i]; } for(j=1;j<=b.length;j++) d[0][j]=j;
+  for(i=1;i<=a.length;i++) for(j=1;j<=b.length;j++) d[i][j]=Math.min(d[i-1][j]+1,d[i][j-1]+1,d[i-1][j-1]+(a[i-1]===b[j-1]?0:1)); return d[a.length][b.length]; }
 function mesDeDatos(wb){
   if(!wb) return null;
-  var hO=wb.SheetNames.filter(function(n){ return norm(n).toLowerCase()==="ordenes"; })[0]; if(!hO) return null;
-  var c={}, best=null;
-  filasObj(wb.Sheets[hO]).forEach(function(r){
-    if(str(col(r,"Clase de orden"))!=="OM02") return;
-    var f=fechaISO(col(r,"Fecha de referencia")); if(f){ var k=f.slice(0,7); c[k]=(c[k]||0)+1; }
+  var hO=wb.SheetNames.filter(function(n){ return norm(n).toLowerCase()==="ordenes"; })[0];
+  var cm={}, cy={}, co={}, best=null;
+  wb.SheetNames.forEach(function(n){
+    if(!PRE[norm(n).toLowerCase()]) return;
+    aoa(wb.Sheets[n]).forEach(function(r){
+      if(typeof r[1]!=="number"||r[7]==null) return;
+      var t=norm(r[7]).toLowerCase().replace(/^0/,"o").replace(/[^a-z]/g,""); if(t.length<3) return;
+      var bi=-1, bd=9; MESES.forEach(function(m,i){ var dd=lev(t,m); if(dd<bd){ bd=dd; bi=i; } });
+      if(bd<=2) cm[bi]=(cm[bi]||0)+1;
+    });
   });
-  Object.keys(c).forEach(function(k){ if(!best||c[k]>c[best]) best=k; });
+  if(hO) filasObj(wb.Sheets[hO]).forEach(function(r){
+    if(str(col(r,"Clase de orden"))!=="OM02") return;
+    var f=fechaISO(col(r,"Fecha de referencia")); if(f){ var k=f.slice(0,7); co[k]=(co[k]||0)+1; cy[f.slice(0,4)]=(cy[f.slice(0,4)]||0)+1; }
+  });
+  var mi=null; Object.keys(cm).forEach(function(k){ if(mi===null||cm[k]>cm[mi]) mi=k; });
+  if(mi!==null){
+    var yr=null; Object.keys(cy).forEach(function(k){ if(yr===null||k>yr) yr=k; });
+    return (yr||String(new Date().getFullYear()))+"-"+("0"+(+mi+1)).slice(-2);
+  }
+  Object.keys(co).forEach(function(k){ if(!best||co[k]>co[best]) best=k; });
   return best;
 }
 function mesDeNombre(n,wb){
@@ -218,6 +261,15 @@ function mesDeNombre(n,wb){
 }
 function mesTxt(p){ var x=String(p).slice(0,7).split("-"); return MESES[+x[1]-1]+" "+x[0]; }
 function money(n){ return "$"+n.toLocaleString("es-MX",{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function contextoPrev(){
+  return Promise.all([
+    ERP.rest("preventivos_bajas?select=economico,baja_desde").catch(function(){ return []; }),
+    ERP.rest("unidades_piso_datos?select=datos&id=eq.1").catch(function(){ return []; })
+  ]).then(function(r){
+    var u=(r[1]&&r[1][0]&&r[1][0].datos&&r[1][0].datos.units)||[];
+    return { bajas:r[0]||[], piso:u.map(function(x){ return x.eco; }) };
+  });
+}
 function resumen(R){
   var c={realizado:0,sin_evidencia:0,no_realizado:0,inhabilitado:0};
   R.programa.forEach(function(p){ c[p.estatus]++; });
@@ -246,9 +298,9 @@ function infoActual(){
     var rd=new FileReader();
     rd.onload=function(){
       var wb; try{ wb=XLSX.read(new Uint8Array(rd.result),{type:"array"}); }catch(e){ m.className="msg err"; m.textContent="No pude abrir el archivo como Excel."; inp.value=""; return; }
-      ERP.rest("preventivos_bajas?select=economico,baja_desde").catch(function(){ return []; }).then(function(bajas){
+      contextoPrev().then(function(ctx0){ var bajas=ctx0.bajas;
         var mes=mesDeNombre(f.name,wb);
-        try{ PENDIENTE=calcular(wb,mes+"-01",{bajas:bajas||[]}); }
+        try{ PENDIENTE=calcular(wb,mes+"-01",{bajas:bajas||[],piso:ctx0.piso}); }
         catch(e){ m.className="msg err"; m.textContent=e.message; inp.value=""; return; }
         PENDIENTE._wb=wb;
         m.className="msg ok"; m.textContent="Archivo leído. Revisa el resumen, confirma el mes y guarda.";
@@ -260,8 +312,8 @@ function infoActual(){
   });
   $("fMes").addEventListener("change",function(){
     if(!PENDIENTE||!/^\d{4}-\d{2}$/.test(this.value)) return;
-    ERP.rest("preventivos_bajas?select=economico,baja_desde").catch(function(){ return []; }).then(function(bajas){
-      try{ PENDIENTE=calcular(PENDIENTE._wb,$("fMes").value+"-01",{bajas:bajas||[]}); PENDIENTE._wb=PENDIENTE._wb; }catch(e){ $("cMsg").className="msg err"; $("cMsg").textContent=e.message; return; }
+    contextoPrev().then(function(ctx0){ var bajas=ctx0.bajas;
+      try{ PENDIENTE=calcular(PENDIENTE._wb,$("fMes").value+"-01",{bajas:bajas||[],piso:ctx0.piso}); PENDIENTE._wb=PENDIENTE._wb; }catch(e){ $("cMsg").className="msg err"; $("cMsg").textContent=e.message; return; }
       $("cResumen").innerHTML=resumen(PENDIENTE);
     });
   });

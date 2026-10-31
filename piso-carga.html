@@ -91,7 +91,7 @@ function hoja(wb,nombre){
 /* Acepta el archivo anterior (UPiso, Cargas, Pedidos, Movimientos, Uso, Usoc) o los archivos ordenados:
    Unidades_en_piso (UnidadesPiso, Cargas), Faltante_Refacciones (Pedidos, Ingresos, Salidas) y
    Correctivos / Historico_Ordenes (Ordenes, MaterialOrden). Devuelve un libro con los nombres de siempre. */
-var ALIAS_PISO={ upiso:"UPiso", unidadespiso:"UPiso", cargas:"Cargas", pedidos:"Pedidos", movimientos:"Movimientos", ingresos:"Movimientos", salidas:"Movimientos", traspasos:"Movimientos",
+var ALIAS_PISO={ upiso:"UPiso", unidadespiso:"UPiso", cargas:"Cargas", pedidos:"Pedidos", movimientos:"Movimientos", ingresos:"Movimientos", salidas:"Movimientos", traspasos:"Movimientos", historicoordenes:"Uso", historicomaterial:"Usoc",
   uso:"Uso", ordenes:"Uso", usoc:"Usoc", materialorden:"Usoc" };
 function conMapa(filas){ if(filas.length&&!filas.__mapa){ var m={}; Object.keys(filas[0]).forEach(function(c){ m[norm(c)]=c; }); filas.__mapa=m; } return filas; }
 function fechaMax(filas,cols){
