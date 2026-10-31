@@ -104,7 +104,7 @@ function calcular(wb, periodo, ctx){
   var Orows=filasObj(wb.Sheets[hO]);
   var need=["orden","clase de orden","texto breve","equipo","costes tot.reales","suma de costes plan","fecha de referencia","fecha entrada","status del sistema"];
   if(Orows.length){ var falt=need.filter(function(c){ return !(c in Orows[0]); }); if(falt.length) throw new Error("En Ordenes faltan las columnas: "+falt.join(", ")+"."); }
-  var O={}, ordenes=[];
+  var O={}, ordenes=[], gastoMes=null, MrowsAll=null;
   Orows.forEach(function(r){
     if(str(col(r,"Clase de orden"))!=="OM02") return;
     var id=Math.round(num(col(r,"Orden"))); if(!id) return;
@@ -134,9 +134,13 @@ function calcular(wb, periodo, ctx){
     var pm=perIni.slice(0,7), py=+pm.slice(0,4), pmo=+pm.slice(5,7)-1; if(pmo===0){ pmo=12; py--; }
     var prevM=py+"-"+("0"+pmo).slice(-2), citadas={}, totalOrd=ordenes.length;
     rows.forEach(function(r){ if(typeof r.orden==="number") citadas[Math.round(r.orden)]=1; });
-    ordenes=ordenes.filter(function(o){ var fe=o.fecha_entrada||"", fr=o.fecha_referencia||""; return citadas[o.orden]||fe===pm+"-01"||(fe===prevM+"-01"&&fr>=pm+"-01"); });
+    /* Gasto del mes = material con fecha de documento dentro del mes (así cuadra con el control manual y con Mantenimiento) */
+    gastoMes={};
+    if(hM){ MrowsAll=filasObj(wb.Sheets[hM]); MrowsAll.forEach(function(r){ var f=fechaISO(col(r,"Fecha de documento")); if(f&&f.slice(0,7)===pm){ var id=Math.round(num(col(r,"Orden"))); gastoMes[id]=(gastoMes[id]||0)+num(col(r,"Importe ML")); } }); }
+    ordenes=ordenes.filter(function(o){ var fe=o.fecha_entrada||"", fr=o.fecha_referencia||""; return citadas[o.orden]||fe===pm+"-01"||(fe===prevM+"-01"&&fr>=pm+"-01")||gastoMes[o.orden]; });
+    ordenes.forEach(function(o){ o.costo_real=r2(gastoMes[o.orden]||0); });
     O={}; ordenes.forEach(function(o){ O[o.orden]=o; });
-    avisos.push("El archivo trae órdenes de varios meses ("+totalOrd+" OM02): se tomaron "+ordenes.length+" del mes elegido (las liberadas el día 1, las del mes anterior que siguen abiertas y las que cita el programa).");
+    avisos.push("El archivo trae órdenes de varios meses ("+totalOrd+" OM02): se tomaron "+ordenes.length+" del mes elegido (las liberadas el día 1, las del mes anterior que siguen abiertas, las que cita el programa y las que tuvieron material en el mes). El costo es el gasto del mes por fecha de documento del material.");
   } else {
     var fuera=ordenes.filter(function(o){ return o.fecha_referencia&&o.fecha_referencia.slice(0,7)!==perIni.slice(0,7); });
     if(fuera.length) avisos.push(fuera.length+" órdenes tienen fecha de referencia fuera del mes elegido ("+fuera.slice(0,5).map(function(o){ return o.orden; }).join(", ")+(fuera.length>5?"…":"")+"). Revisa que el mes sea el correcto.");
@@ -204,7 +208,7 @@ function calcular(wb, periodo, ctx){
   if(huer.length) avisos.push(huer.length+" órdenes OM02 no están en el programa del mes (se cargan, pero no cuentan): "+huer.slice(0,8).map(function(o){ return o.orden+" "+o.economico; }).join(", ")+(huer.length>8?"…":"")+".");
 
   /* Materiales por orden (solo de las órdenes OM02 cargadas) */
-  var Mrows=filasObj(wb.Sheets[hM]), ordmov=[];
+  var Mrows=MrowsAll||filasObj(wb.Sheets[hM]), ordmov=[];
   if(Mrows.length){ var fm=["orden","fecha de documento","material","texto breve de material","cantidad","un.medida de entrada","importe ml","cuenta de mayor"].filter(function(c){ return !(c in Mrows[0]); }); if(fm.length) throw new Error("En Ordmov faltan las columnas: "+fm.join(", ")+"."); }
   Mrows.forEach(function(r){
     var id=Math.round(num(col(r,"Orden"))); if(!O[id]) return;
@@ -213,7 +217,7 @@ function calcular(wb, periodo, ctx){
   });
   var difs=[];
   var imp={}; ordmov.forEach(function(m){ imp[m.orden]=(imp[m.orden]||0)+m.importe; });
-  programa.forEach(function(p){ if(p.orden&&Math.abs((imp[p.orden]||0)-O[p.orden].costo_real)>0.05) difs.push(p.orden); });
+  if(!gastoMes) programa.forEach(function(p){ if(p.orden&&Math.abs((imp[p.orden]||0)-O[p.orden].costo_real)>0.05) difs.push(p.orden); });
   if(difs.length) avisos.push("El costo de "+difs.length+" órdenes no coincide con la suma de sus materiales en Ordmov ("+difs.slice(0,6).join(", ")+(difs.length>6?"…":"")+").");
 
   return { periodo:periodo, ordenes:ordenes, programa:programa, ordmov:ordmov, avisos:avisos };
