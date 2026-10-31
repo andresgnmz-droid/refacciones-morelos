@@ -859,8 +859,11 @@
     intro.appendChild(el("h3", "", "Cargas de Excel"));
     intro.appendChild(el("p", "", "Aquí subes los archivos con las modificaciones; las pestañas finales solo muestran la información ya limpia. Elige qué actualizar."));
     root.appendChild(intro);
-    var grid = el("div", "cargas"); root.appendChild(grid);
+    var principales = el("div", "cargas"); root.appendChild(principales);
     var visor = el("div"); root.appendChild(visor);
+    var det = el("details"); det.style.marginTop = "12px";
+    var resumen = el("summary", "", "Cargas individuales (por si necesitas subir una sola sección)"); resumen.style.cursor = "pointer"; det.appendChild(resumen);
+    var grid = el("div", "cargas"); grid.style.marginTop = "10px"; det.appendChild(grid); root.appendChild(det);
 
     function abrirFrame(src, titulo){
       visor.textContent = "";
@@ -874,6 +877,15 @@
       if(boton){ var b = el("button", "btn", boton); b.style.alignSelf = "flex-start"; b.addEventListener("click", accion); c.appendChild(b); }
       grid.appendChild(c); return c;
     }
+    function principal(titulo, desc, boton, accion, pendiente){
+      var c = el("div", "card"); c.appendChild(el("h3", "", titulo)); c.appendChild(el("p", "", desc));
+      if(pendiente){ c.appendChild(el("span", "pill warn", pendiente)); }
+      if(boton){ var b = el("button", "btn", boton); b.style.alignSelf = "flex-start"; b.addEventListener("click", accion); c.appendChild(b); }
+      principales.appendChild(c); return c;
+    }
+    principal("Libro de mantenimiento", "Archivo ERP_Mantenimiento.xlsx. Se sube una sola vez y alimenta: Unidades en piso, Carga de trabajo y Correctivos, Preventivos, Hojalatería y Pintura, y Control de refacciones faltantes. Revisas el resumen de cada sección y guardas.", "Subir libro", function(){ abrirFrame("carga-libro.html?libro=mantenimiento", "Libro de mantenimiento"); });
+    principal("Libro de catálogos", "Archivo ERP_Catalogos.xlsx. Se sube una sola vez y alimenta: Catálogo de refacciones, Catálogo de unidades y Cronograma de mantenimientos (el ERP lo limpia solo). Revisas el resumen de cada sección y guardas.", "Subir libro", function(){ abrirFrame("carga-libro.html?libro=catalogos", "Libro de catálogos"); });
+    principal("En proceso", "Combustible, control de llantas y horas extras se agregarán aquí cuando estén definidos.", null, null, "En proceso");
     tarjeta("Catálogo de unidades", "Archivo Catalogo_Unidades.xlsx (pestañas Unidades, antes Morelos, y Dotaciones): altas, bajas, cambios y dotaciones.", "Subir archivo", function(){ abrirFrame("catalogo-maestro.html?modo=carga", "Catálogo de unidades"); });
     tarjeta("Cronograma de mantenimientos", "Sube ERP_Catalogos.xlsx (trae las 6 pestañas del cronograma tal como llegan) o el archivo del cronograma suelto (.xls o .xlsx). El ERP lo limpia solo (6 pestañas de CEDIS, bajas, rentados, periodicidad), te deja descargar el Excel limpio y guarda el cronograma del año.", "Subir archivo", function(){ abrirFrame("cronograma-carga.html", "Cronograma de mantenimientos"); });
     tarjeta("Hojalatería y Pintura", "Elige juntos Cronograma_Hojalateria.xlsx (Cronograma) y Correctivos.xlsx (Ordenes y MaterialOrden). También sirve el archivo anterior con CRONOGRAMA, Remo y Remomov.", "Subir archivo", function(){ abrirFrame("hojalateria.html?modo=carga", "Hojalatería y Pintura"); });

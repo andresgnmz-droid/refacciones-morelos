@@ -756,6 +756,13 @@ function parseCatalogoLibro(wb){
     statusBox.hidden = true;
     var reader = new FileReader();
     reader.onload = function(ev){
+      /* El cruce contra la base (altas, bajas, líneas de Magna ya cargadas) necesita que la base ya esté leída */
+      (window.__CAT_LISTO || Promise.resolve()).catch(function(){}).then(function(){ procesarArchivo(ev, file, statusBox); });
+    };
+    reader.readAsArrayBuffer(file);
+  });
+  function procesarArchivo(ev, file, statusBox){
+    {
       try{
         var wb = XLSX.read(ev.target.result, { type:"array" });
         var libro = parseCatalogoLibro(wb);
@@ -784,9 +791,8 @@ function parseCatalogoLibro(wb){
         statusBox.className = "status-box err";
         statusBox.textContent = "No se pudo leer el archivo: " + err.message;
       }
-    };
-    reader.readAsArrayBuffer(file);
-  });
+    }
+  }
 
   function chequear(p, etiqueta){ return p; }
 
@@ -843,7 +849,8 @@ function parseCatalogoLibro(wb){
     }).finally(function(){ btn.disabled = false; });
   });
 
-  loadCatalog().then(loadExtras).catch(function(err){
+  window.__CAT_LISTO = loadCatalog().then(loadExtras);
+  window.__CAT_LISTO.catch(function(err){
     document.getElementById("tableSub").textContent = "Error al cargar: " + err.message;
   });
 })();
