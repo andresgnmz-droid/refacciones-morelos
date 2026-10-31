@@ -874,7 +874,7 @@
       if(boton){ var b = el("button", "btn", boton); b.style.alignSelf = "flex-start"; b.addEventListener("click", accion); c.appendChild(b); }
       grid.appendChild(c); return c;
     }
-    tarjeta("Catálogo de unidades", "Excel mensual del catálogo (pestaña Morelos): altas, bajas y cambios.", "Subir archivo", function(){ abrirFrame("catalogo-maestro.html?modo=carga", "Catálogo de unidades"); });
+    tarjeta("Catálogo de unidades", "Archivo Catalogo_Unidades.xlsx (pestañas Unidades, antes Morelos, y Dotaciones): altas, bajas, cambios y dotaciones.", "Subir archivo", function(){ abrirFrame("catalogo-maestro.html?modo=carga", "Catálogo de unidades"); });
     tarjeta("Hojalatería y Pintura", "Elige juntos Cronograma_Hojalateria.xlsx (Cronograma) y Correctivos.xlsx (Ordenes y MaterialOrden). También sirve el archivo anterior con CRONOGRAMA, Remo y Remomov.", "Subir archivo", function(){ abrirFrame("hojalateria.html?modo=carga", "Hojalatería y Pintura"); });
     tarjeta("Control de refacciones faltantes", "Archivo Faltante_Refacciones.xlsx, con las pestañas Pedidos e Ingresos (la pestaña Salidas no se usa aquí).", "Subir archivo", function(){ abrirFrame("faltantes.html?modo=carga", "Control de refacciones faltantes"); });
 
