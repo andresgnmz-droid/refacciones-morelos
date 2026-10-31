@@ -69,6 +69,8 @@ var CEDIS_PREF={MCV:"Cuernavaca",MCU:"Cuautla",MJO:"Jojutla",MPU:"Puente de Ixtl
 
 function norm(s){ return String(s==null?"":s).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").trim(); }
 function str(v){ return v==null?"":String(v).trim(); }
+/* Números de documento, pedido, material, orden y clase de movimiento: igual si SAP los trae como texto ("101"), número (101) o con decimal ("101.0") */
+function idStr(v){ return str(v).replace(/\.0+$/,""); }
 function num(v){ if(v==null||v==="") return 0; var n=Number(String(v).replace(/,/g,"")); return isFinite(n)?n:0; }
 function r2(x){ return Math.round(x*100)/100; }
 function fechaISO(v){
@@ -182,14 +184,14 @@ function calcular(wb, corte, ctx){
     var nec=val(r,P,"Número de necesidad"), necS=str(nec), ecos=[];
     if(CEN[centro]&&necS){ var re=/(?<!\d)(\d{4})(?!\d)/g, m; while((m=re.exec(necS))) ecos.push(CEN[centro]+m[1]); }
     var uniq={}; ecos.forEach(function(e){ uniq[e]=1; });
-    p.push({ centro:centro, f:f, fp:hayFp?fechaISO(val(r,P,"Fecha de pedido")):"", pedido:str(val(r,P,"Pedido")), mat:str(val(r,P,"Material")), txt:str(val(r,P,"Texto breve")),
+    p.push({ centro:centro, f:f, fp:hayFp?fechaISO(val(r,P,"Fecha de pedido")):"", pedido:idStr(val(r,P,"Pedido")), mat:idStr(val(r,P,"Material")), txt:str(val(r,P,"Texto breve")),
       base:cp>0?cp:cs, clase:str(val(r,P,"Clase documento")), nec:necS, ecos:ecos, neco:Math.max(Object.keys(uniq).length,1) });
   });
   var gp={};
   p.forEach(function(l){ if(l.pedido){ var k=l.pedido+"|"+l.mat; gp[k]=(gp[k]||0)+l.base; } });
 
   /* Movimientos */
-  var mov=M.map(function(r){ return { centro:str(val(r,M,"Centro")), f:fechaISO(val(r,M,"Fe.contabilización")), q:num(val(r,M,"Cantidad")), pedido:str(val(r,M,"Pedido")), mat:str(val(r,M,"Material")), cl:str(val(r,M,"Clase de movimiento")) }; });
+  var mov=M.map(function(r){ return { centro:str(val(r,M,"Centro")), f:fechaISO(val(r,M,"Fe.contabilización")), q:num(val(r,M,"Cantidad")), pedido:idStr(val(r,M,"Pedido")), mat:idStr(val(r,M,"Material")), cl:idStr(val(r,M,"Clase de movimiento")) }; });
   var ing={};
   mov.forEach(function(m){
     if(m.cl!=="101"||!m.pedido||!m.f) return;
@@ -200,10 +202,10 @@ function calcular(wb, corte, ctx){
   var tra=mov.filter(function(m){ return m.cl==="301"&&m.q>0&&m.f; });
 
   /* Uso y Usoc */
-  var uso=US.map(function(r){ return { o:str(val(r,US,"Orden")), eq:str(val(r,US,"Equipo")), c:str(val(r,US,"Clase de orden")), t:str(val(r,US,"Texto breve")), fe:fechaISO(val(r,US,"Fecha entrada")), st:str(val(r,US,"Status del sistema")), cost:num(val(r,US,"Costes tot.reales")) }; });
+  var uso=US.map(function(r){ return { o:idStr(val(r,US,"Orden")), eq:str(val(r,US,"Equipo")), c:str(val(r,US,"Clase de orden")), t:str(val(r,US,"Texto breve")), fe:fechaISO(val(r,US,"Fecha entrada")), st:str(val(r,US,"Status del sistema")), cost:num(val(r,US,"Costes tot.reales")) }; });
   var ordInfo={}; uso.forEach(function(o){ if(!(o.o in ordInfo)) ordInfo[o.o]=o; });
   var usoc=UC.map(function(r){
-    var o=str(val(r,UC,"Orden")), inf=ordInfo[o]||{};
+    var o=idStr(val(r,UC,"Orden")), inf=ordInfo[o]||{};
     return { fc:fechaISO(val(r,UC,"Fe.contabilización")), o:o, c:inf.c||"", eq:inf.eq||"", m:str(val(r,UC,"Material")), t:str(val(r,UC,"Texto breve de material")), q:num(val(r,UC,"Cantidad")), u:str(val(r,UC,"Un.medida de entrada")), i:r2(num(val(r,UC,"Importe ML"))) };
   });
 

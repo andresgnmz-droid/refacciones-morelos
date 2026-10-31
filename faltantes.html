@@ -443,6 +443,7 @@ function serialAISO(v){
   var s=String(v).trim(), m=s.match(/^(\d{4})-(\d{2})-(\d{2})/); if(m) return m[1]+"-"+m[2]+"-"+m[3];
   m=s.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})/); return m ? m[3]+"-"+("0"+m[2]).slice(-2)+"-"+("0"+m[1]).slice(-2) : "";
 }
+function idS(v){ return String(v==null?"":v).trim().replace(/\.0+$/,""); }
 function hoja(wb,nombre){
   var k=wb.SheetNames.filter(function(n){ return n.trim().toLowerCase()===nombre; })[0];
   return k ? XLSX.utils.sheet_to_json(wb.Sheets[k],{defval:null,raw:true}) : null;
@@ -461,12 +462,12 @@ function procesar(buf,nombre){
   P.forEach(function(r){
     if(r["Material"]==null||r["Material"]==="") return;
     var f=serialAISO(r["Fecha de solicitud"]); if(!f){ sinFecha++; return; }
-    pr.push([String(r["Centro"]||"").trim(), f, serialAISO(r["Fecha de pedido"]), String(r["Solicitante"]==null?"":r["Solicitante"]).trim(), entero(r["Solicitud de pedido"]), String(r["Pedido"]==null?"":r["Pedido"]).trim(), entero(r["Pos.solicitud pedido"]), String(r["Material"]).trim(), String(r["Texto breve"]||"").trim(), entero(r["Cantidad solicitada"]), entero(r["Cantidad pedida"]), String(r["Unidad de medida"]||"").trim(), String(r["Clase documento"]||"").trim(), String(r["Número de necesidad"]==null?"":r["Número de necesidad"]).trim()]);
+    pr.push([String(r["Centro"]||"").trim(), f, serialAISO(r["Fecha de pedido"]), String(r["Solicitante"]==null?"":r["Solicitante"]).trim(), entero(r["Solicitud de pedido"]), idS(r["Pedido"]), entero(r["Pos.solicitud pedido"]), idS(r["Material"]), String(r["Texto breve"]||"").trim(), entero(r["Cantidad solicitada"]), entero(r["Cantidad pedida"]), String(r["Unidad de medida"]||"").trim(), String(r["Clase documento"]||"").trim(), String(r["Número de necesidad"]==null?"":r["Número de necesidad"]).trim()]);
   });
   I.forEach(function(r){
     if(r["Material"]==null||r["Material"]===""||!r["Centro"]) return;
     var f=serialAISO(r["Fe.contabilización"]); if(!f) return;
-    ir.push([String(r["Material"]).trim(), String(r["Texto breve de material"]||"").trim(), String(r["Centro"]).trim(), f, entero(r["Cantidad"]), String(r["Pedido"]==null?"":r["Pedido"]).trim(), String(r["Unidad medida base"]||"").trim(), entero(r["Clase de movimiento"])]);
+    ir.push([idS(r["Material"]), String(r["Texto breve de material"]||"").trim(), String(r["Centro"]).trim(), f, entero(r["Cantidad"]), idS(r["Pedido"]), String(r["Unidad medida base"]||"").trim(), entero(r["Clase de movimiento"])]);
   });
   if(!pr.length) throw new Error("No encontré renglones de pedidos con material y fecha de solicitud.");
   var maxF=pr.concat(ir.map(function(r){ return [0,r[3]]; })).reduce(function(m,r){ return r[1]>m?r[1]:m; },"");
