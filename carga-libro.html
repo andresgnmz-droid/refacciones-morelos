@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cargar un libro completo</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="erp-auth.js"></script>
+<style>
+  :root{
+    --ink:#142433; --ink-soft:#48607A; --bg:#EEF2F5; --surface:#FFFFFF; --surface-alt:#E4EAEF; --border:#D3DCE3;
+    --accent:#0E7C86; --accent-ink:#FFFFFF; --good:#1b7443; --warn:#9a5b00; --bad:#bf2a2a;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --ink:#E7EDF2; --ink-soft:#9AB0C2; --bg:#0F1620; --surface:#182230; --surface-alt:#1F2C3C; --border:#2B3B4D;
+      --accent:#35B6C2; --accent-ink:#06232A; --good:#59d08c; --warn:#f2b44d; --bad:#ff7a72;
+    }
+  }
+  :root[data-theme="dark"]{ --ink:#E7EDF2; --ink-soft:#9AB0C2; --bg:#0F1620; --surface:#182230; --surface-alt:#1F2C3C; --border:#2B3B4D; --accent:#35B6C2; --accent-ink:#06232A; --good:#59d08c; --warn:#f2b44d; --bad:#ff7a72; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:16px}
+  .col{max-width:980px;margin:0 auto;display:flex;flex-direction:column;gap:12px}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:10px}
+  h2{margin:0;font-size:20px} h3{margin:0;font-size:15px}
+  p{margin:0}
+  .sub{color:var(--ink-soft)}
+  .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+  .btn{font:inherit;font-weight:600;background:var(--accent);color:var(--accent-ink);border:0;border-radius:8px;padding:9px 16px;cursor:pointer}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .msg{min-height:1.2em} .msg.ok{color:var(--good)} .msg.err{color:var(--bad)}
+  .estado{font-size:12px;color:var(--ink-soft)}
+  .estado.ok{color:var(--good)} .estado.err{color:var(--bad)}
+  .panel iframe{width:100%;height:520px;border:1px solid var(--border);border-radius:8px;background:var(--surface)}
+  details summary{cursor:pointer;color:var(--ink-soft)}
+</style>
+</head>
+<body>
+<div class="col">
+  <div class="card">
+    <h2 id="titulo">Cargar un libro completo</h2>
+    <p class="sub" id="desc"></p>
+    <div class="row">
+      <input type="file" id="fArch" accept=".xlsx,.xlsm" hidden>
+      <button class="btn" id="bElegir" type="button">Elegir el libro</button>
+      <span id="nombre" class="sub"></span>
+    </div>
+    <div class="msg" id="cMsg"></div>
+    <div id="lista"></div>
+  </div>
+  <div id="paneles" class="col"></div>
+</div>
+
+<script>
+(function(){
+"use strict";
+function $(i){ return document.getElementById(i); }
+function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
+function norm(s){ return String(s==null?"":s).normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/\s+/g," ").trim().toLowerCase(); }
+function porId(doc,id){ return doc.getElementById(id); }
+function txt(doc,id){ var e=doc.getElementById(id); return e?e.textContent:""; }
+function visible(doc,id){ var e=doc.getElementById(id); return !!e && !e.hidden; }
+
+/* Cada módulo: página que ya sabe leer sus pestañas, el campo de archivo de esa página, las pestañas que necesita
+   (cada entrada es una lista de nombres posibles) y cómo saber que ya terminó de leer el archivo. */
+var LIBROS={
+  mantenimiento:{
+    titulo:"Libro de mantenimiento (ERP_Mantenimiento.xlsx)",
+    desc:"Elige el libro una sola vez. Se abre un panel por cada sección que trae pestañas en el libro: revisa el resumen de cada una y pulsa Guardar en ese panel.",
+    modulos:[
+      { t:"Unidades en piso", u:"piso-carga.html", i:"#fArch", needs:[["UnidadesPiso","UPiso"],["Cargas"]], listo:function(d){ return /ok|err/.test((d.getElementById("cMsg")||{}).className||""); } },
+      { t:"Carga de trabajo y Correctivos", u:"carga-mecanicos.html?modo=carga", i:"#fileInput", needs:[["Avisos","Operaciones"],["Ordenes","OM01OM02"],["MaterialOrden","OM01OM02mov"]], listo:function(d){ return /leído|No se pudo|Falta/.test(txt(d,"fileMeta")); } },
+      { t:"Preventivos", u:"preventivos-carga.html", i:"#fArch", needs:[["MMCV","Cuernavaca"],["MMCU","Cuautla"]], listo:function(d){ return /ok|err/.test((d.getElementById("cMsg")||{}).className||""); } },
+      { t:"Hojalatería y Pintura", u:"hojalateria.html?modo=carga", i:"#fileInput", needs:[["CronogramaHojalateria","Cronograma","CRONOGRAMA"],["Ordenes","Remo"],["MaterialOrden","Remomov"]], listo:function(d){ return visible(d,"diffPreview") || /No se|No pude/.test(txt(d,"statusBox")); } },
+      { t:"Control de refacciones faltantes", u:"faltantes.html?modo=carga", i:"#fArch", needs:[["Pedidos"],["Ingresos"]], listo:function(d){ return /ok|err/.test((d.getElementById("cMsg")||{}).className||""); } }
+    ]
+  },
+  catalogos:{
+    titulo:"Libro de catálogos (ERP_Catalogos.xlsx)",
+    desc:"Elige el libro una sola vez. Se abre un panel por cada sección que trae pestañas en el libro: revisa el resumen de cada una y pulsa Guardar en ese panel.",
+    modulos:[
+      { t:"Catálogo de refacciones", u:"catalogo-refacciones.html?modo=carga", i:"#fArch", needs:[["Indice"],["Stock"]], listo:function(d){ return /ok|err/.test((d.getElementById("cMsg")||{}).className||""); } },
+      { t:"Catálogo de unidades", u:"catalogo-maestro.html?modo=carga", i:"#fileInput", needs:[["Unidades","Morelos"]], listo:function(d){ return visible(d,"diffPreview") || /No se|No pude/.test(txt(d,"statusBox")); } },
+      { t:"Cronograma de mantenimientos", u:"cronograma-carga.html", i:"#fArch", needs:[["CUERNAVACA"],["CUAUTLA"],["COCOYOC"]], listo:function(d){ return /ok|err/.test((d.getElementById("cMsg")||{}).className||""); } }
+    ]
+  }
+};
+var params=new URLSearchParams(location.search), LIBRO=LIBROS[params.get("libro")]||LIBROS.mantenimiento;
+$("titulo").textContent=LIBRO.titulo; $("desc").textContent=LIBRO.desc;
+document.title=LIBRO.titulo;
+
+function tiene(nombres, hojas){ return nombres.some(function(n){ return hojas.indexOf(norm(n))>=0; }); }
+function esperar(cond, ms, paso){
+  return new Promise(function(ok){
+    var t0=Date.now();
+    (function vuelta(){ var r=false; try{ r=cond(); }catch(e){ r=false; } if(r) return ok(true); if(Date.now()-t0>ms) return ok(false); setTimeout(vuelta,paso||400); })();
+  });
+}
+function cargarModulo(mod, file, host){
+  return new Promise(function(ok){
+    var card=document.createElement("div"); card.className="card panel";
+    card.innerHTML='<div class="row" style="justify-content:space-between"><h3>'+esc(mod.t)+'</h3><span class="estado">Abriendo…</span></div>';
+    var fr=document.createElement("iframe"); fr.title=mod.t; card.appendChild(fr); host.appendChild(card);
+    var est=card.querySelector(".estado");
+    fr.addEventListener("load",function(){
+      var win=fr.contentWindow, doc=fr.contentDocument;
+      if(doc.documentElement.dataset) { var t=document.documentElement.dataset.theme; if(t) doc.documentElement.dataset.theme=t; }
+      esperar(function(){ return !!doc.querySelector(mod.i) && !doc.querySelector(mod.i).disabled; }, 20000).then(function(h){
+        var inp=doc.querySelector(mod.i);
+        if(!h||!inp){ est.className="estado err"; est.textContent="No pude abrir esta sección."; return ok(); }
+        est.textContent="Leyendo el libro…";
+        var dt=new win.DataTransfer(); dt.items.add(new win.File([file],file.name,{type:file.type}));
+        inp.files=dt.files; inp.dispatchEvent(new win.Event("change",{bubbles:true}));
+        esperar(function(){ return mod.listo(doc); }, 300000, 500).then(function(fin){
+          est.className="estado "+(fin?"ok":"err");
+          est.textContent=fin?"Listo: revisa el resumen y pulsa Guardar en este panel.":"Tardó demasiado en leer el libro.";
+          ok();
+        });
+      });
+    });
+    fr.src=mod.u;
+  });
+}
+$("bElegir").addEventListener("click",function(){ $("fArch").click(); });
+$("fArch").addEventListener("change",function(){
+  var f=this.files[0]; if(!f) return; var inp=this;
+  $("nombre").textContent=f.name; $("paneles").innerHTML=""; $("lista").innerHTML=""; $("cMsg").className="msg"; $("cMsg").textContent="Leyendo las pestañas de "+f.name+"…";
+  $("bElegir").disabled=true;
+  var rd=new FileReader();
+  rd.onload=function(){
+    var wb; try{ wb=XLSX.read(new Uint8Array(rd.result),{type:"array",bookSheets:true}); }catch(e){ $("cMsg").className="msg err"; $("cMsg").textContent="No pude abrir el archivo como Excel."; $("bElegir").disabled=false; inp.value=""; return; }
+    var hojas=wb.SheetNames.map(norm);
+    var aplican=[], noAplican=[];
+    LIBRO.modulos.forEach(function(m){
+      var falta=m.needs.filter(function(n){ return !tiene(n,hojas); }).map(function(n){ return n[0]; });
+      (falta.length?noAplican:aplican).push(falta.length?{m:m,falta:falta}:{m:m});
+    });
+    if(!aplican.length){ $("cMsg").className="msg err"; $("cMsg").textContent="Este archivo no trae las pestañas de ninguna sección de este libro. Pestañas encontradas: "+wb.SheetNames.join(", ")+"."; $("bElegir").disabled=false; inp.value=""; return; }
+    var h='<p><b>Se van a leer:</b> '+aplican.map(function(a){ return esc(a.m.t); }).join(", ")+'.</p>';
+    if(noAplican.length) h+='<details><summary>No aplican a este libro ('+noAplican.length+')</summary><ul>'+noAplican.map(function(a){ return '<li>'+esc(a.m.t)+': faltan las pestañas '+esc(a.falta.join(", "))+'</li>'; }).join("")+'</ul></details>';
+    $("lista").innerHTML=h;
+    $("cMsg").textContent="Abriendo las secciones, una por una…";
+    var cadena=Promise.resolve();
+    aplican.forEach(function(a){ cadena=cadena.then(function(){ return cargarModulo(a.m,f,$("paneles")); }); });
+    cadena.then(function(){ $("cMsg").className="msg ok"; $("cMsg").textContent="Listo. Revisa cada panel y pulsa Guardar en los que quieras actualizar."; $("bElegir").disabled=false; inp.value=""; });
+  };
+  rd.onerror=function(){ $("cMsg").className="msg err"; $("cMsg").textContent="No se pudo leer el archivo."; $("bElegir").disabled=false; };
+  rd.readAsArrayBuffer(f);
+});
+})();
+</script>
+<script src="offline.js"></script>
+</body>
+</html>

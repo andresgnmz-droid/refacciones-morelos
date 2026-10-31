@@ -766,7 +766,9 @@
       rd.onerror = function(){ mal(new Error("No se pudo leer " + f.name + ".")); };
       rd.readAsArrayBuffer(f);
     }); };
-    Promise.all(files.map(leer)).then(function(wbs){
+    /* el cruce contra la base (altas, cambios, bajas) necesita que la base ya esté leída */
+    Promise.all(files.map(leer).concat([(window.__HOJ_LISTO||Promise.resolve()).catch(function(){})])).then(function(res){
+      var wbs=res.slice(0,files.length);
       try{
         var wb = unirLibros(wbs);
         var cronoRows = parseCronogramaSheet(wb);
@@ -878,7 +880,8 @@
       .finally(function(){ btn.disabled = false; });
   });
 
-  loadAll().catch(function(err){
+  window.__HOJ_LISTO = loadAll();
+  window.__HOJ_LISTO.catch(function(err){
     document.getElementById("cronoSub").textContent = "Error al cargar: " + err.message;
   });
 })();
