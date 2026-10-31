@@ -196,11 +196,24 @@ window.PREV_CALCULAR=calcular;
 
 /* ================= pantalla ================= */
 var PENDIENTE=null, ARCHIVO="";
-function mesDeNombre(n){
+/* Si el nombre no trae el mes (por ejemplo "Preventivos.xlsx"), se toma el mes en que más órdenes OM02 tienen fecha de referencia. */
+function mesDeDatos(wb){
+  if(!wb) return null;
+  var hO=wb.SheetNames.filter(function(n){ return norm(n).toLowerCase()==="ordenes"; })[0]; if(!hO) return null;
+  var c={}, best=null;
+  filasObj(wb.Sheets[hO]).forEach(function(r){
+    if(str(col(r,"Clase de orden"))!=="OM02") return;
+    var f=fechaISO(col(r,"Fecha de referencia")); if(f){ var k=f.slice(0,7); c[k]=(c[k]||0)+1; }
+  });
+  Object.keys(c).forEach(function(k){ if(!best||c[k]>c[best]) best=k; });
+  return best;
+}
+function mesDeNombre(n,wb){
   var s=norm(n).toLowerCase(), a=s.match(/(20\d{2})/), m=null;
   var iso=s.match(/(20\d{2})[-_.](0[1-9]|1[0-2])(?!\d)/); if(iso) return iso[1]+"-"+iso[2];
   MESES.forEach(function(x,i){ if(s.indexOf(x)>=0) m=i+1; });
   if(m&&a) return a[1]+"-"+("0"+m).slice(-2);
+  var dd=mesDeDatos(wb); if(dd) return dd;
   var d=new Date(); return d.getFullYear()+"-"+("0"+(d.getMonth()+1)).slice(-2);
 }
 function mesTxt(p){ var x=String(p).slice(0,7).split("-"); return MESES[+x[1]-1]+" "+x[0]; }
@@ -234,7 +247,7 @@ function infoActual(){
     rd.onload=function(){
       var wb; try{ wb=XLSX.read(new Uint8Array(rd.result),{type:"array"}); }catch(e){ m.className="msg err"; m.textContent="No pude abrir el archivo como Excel."; inp.value=""; return; }
       ERP.rest("preventivos_bajas?select=economico,baja_desde").catch(function(){ return []; }).then(function(bajas){
-        var mes=mesDeNombre(f.name);
+        var mes=mesDeNombre(f.name,wb);
         try{ PENDIENTE=calcular(wb,mes+"-01",{bajas:bajas||[]}); }
         catch(e){ m.className="msg err"; m.textContent=e.message; inp.value=""; return; }
         PENDIENTE._wb=wb;
