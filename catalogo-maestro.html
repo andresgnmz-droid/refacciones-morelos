@@ -148,7 +148,7 @@
   <div class="card" id="cardActualizar">
     <div class="card-head">
       <h2>Actualizar catálogo</h2>
-      <span class="card-sub">Sube el Excel mensual (pestañas "Morelos" y "Dotaciones") para reflejar altas, bajas, cambios y dotaciones en Supabase</span>
+      <span class="card-sub">Sube Catalogo_Unidades.xlsx (pestañas "Unidades", antes "Morelos", y "Dotaciones") para reflejar altas, bajas, cambios y dotaciones en Supabase</span>
     </div>
     <div class="update-form">
       <div class="row">
@@ -702,8 +702,8 @@ function parseDotaciones(ws,ecosCatalogo,avisos){
 
 function parseCatalogoLibro(wb){
   var avisos=[];
-  var wsM=hojaPorNombre(wb,"Morelos");
-  if(!wsM) throw new Error("No se encontró la pestaña 'Morelos' en el archivo.");
+  var wsM=hojaPorNombre(wb,"Unidades")||hojaPorNombre(wb,"Morelos");
+  if(!wsM) throw new Error("No se encontró la pestaña 'Unidades' (antes 'Morelos') en el archivo.");
   var unidades=parseMorelos(wsM,avisos);
   var eco={}; unidades.forEach(function(u){ eco[u.economico]=true; });
   var wsD=hojaPorNombre(wb,"Dotaciones"), dot=null;

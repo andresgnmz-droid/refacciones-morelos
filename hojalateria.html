@@ -212,11 +212,11 @@
     <div class="card">
       <div class="card-head">
         <h2>Actualizar desde Excel</h2>
-        <span class="card-sub">Sube el archivo mensual completo (pestañas CRONOGRAMA, Remo y Remomov) para refrescar las tres tablas en Supabase</span>
+        <span class="card-sub">Elige juntos Cronograma_Hojalateria.xlsx (pestaña Cronograma) y Correctivos.xlsx (Ordenes y MaterialOrden) para refrescar las tres tablas en Supabase. También sirve el archivo anterior con CRONOGRAMA, Remo y Remomov</span>
       </div>
       <div class="update-form">
         <div class="row">
-          <input id="fileInput" type="file" accept=".xlsx,.xls" hidden>
+          <input id="fileInput" type="file" accept=".xlsx,.xls" multiple hidden>
           <button id="btnPick" class="btn-ghost">Elegir archivo</button>
           <span class="note" id="fileMeta"></span>
         </div>
@@ -623,9 +623,24 @@
   }
 
   // ================= ACTUALIZAR: parseo del Excel =================
+  // Remo y Remomov son la misma descarga de SAP que las pestañas Ordenes y MaterialOrden de Correctivos.xlsx.
+  var ALIAS_HOJALATERIA = { "remo":"ordenes", "remomov":"materialorden" };
   function findSheet(wb, name){
-    var hit = wb.SheetNames.filter(function(n){ return n.trim().toLowerCase() === name.toLowerCase(); })[0];
+    var t = name.toLowerCase(), alt = ALIAS_HOJALATERIA[t];
+    var hit = wb.SheetNames.filter(function(n){ return n.trim().toLowerCase() === t; })[0]
+           || (alt ? wb.SheetNames.filter(function(n){ return n.trim().toLowerCase() === alt; })[0] : null);
     return hit ? wb.Sheets[hit] : null;
+  }
+  // Une varios libros en uno solo (si una pestaña se repite, se queda la del primer archivo).
+  function unirLibros(wbs){
+    var out = { SheetNames: [], Sheets: {} }, vistos = {};
+    wbs.forEach(function(wb){
+      wb.SheetNames.forEach(function(n){
+        var k = n.trim().toLowerCase(); if(vistos[k]) return; vistos[k] = 1;
+        out.SheetNames.push(n); out.Sheets[n] = wb.Sheets[n];
+      });
+    });
+    return out;
   }
 
   function parseCronogramaSheet(wb){
@@ -651,7 +666,7 @@
 
   function parseRemoSheet(wb){
     var ws = findSheet(wb, "Remo");
-    if(!ws) throw new Error("No se encontró la pestaña Remo.");
+    if(!ws) throw new Error("No se encontró la pestaña Remo. Elige también Correctivos.xlsx (pestaña Ordenes).");
     var arr = XLSX.utils.sheet_to_json(ws, {header:1, defval:null, raw:true});
     var all = [];
     for(var r=1; r<arr.length; r++){
@@ -678,7 +693,7 @@
 
   function parseRemomovSheet(wb, ordenSet){
     var ws = findSheet(wb, "Remomov");
-    if(!ws) throw new Error("No se encontró la pestaña Remomov.");
+    if(!ws) throw new Error("No se encontró la pestaña Remomov. Elige también Correctivos.xlsx (pestaña MaterialOrden).");
     var arr = XLSX.utils.sheet_to_json(ws, {header:1, defval:null, raw:true});
     var out = [];
     for(var r=1; r<arr.length; r++){
@@ -740,14 +755,20 @@
   // ---------------- Flujo de actualización ----------------
   document.getElementById("btnPick").addEventListener("click", function(){ document.getElementById("fileInput").click(); });
   document.getElementById("fileInput").addEventListener("change", function(e){
-    var file = e.target.files[0];
-    if(!file) return;
+    var files = Array.prototype.slice.call(e.target.files);
+    if(!files.length) return;
+    var file = { name: files.map(function(f){ return f.name; }).join(" + ") };
     var statusBox = document.getElementById("statusBox");
     statusBox.hidden = true;
-    var reader = new FileReader();
-    reader.onload = function(ev){
+    var leer = function(f){ return new Promise(function(ok, mal){
+      var rd = new FileReader();
+      rd.onload = function(ev){ try{ ok(XLSX.read(ev.target.result, {type:"array"})); }catch(x){ mal(new Error("No pude abrir " + f.name + " como Excel.")); } };
+      rd.onerror = function(){ mal(new Error("No se pudo leer " + f.name + ".")); };
+      rd.readAsArrayBuffer(f);
+    }); };
+    Promise.all(files.map(leer)).then(function(wbs){
       try{
-        var wb = XLSX.read(ev.target.result, {type:"array"});
+        var wb = unirLibros(wbs);
         var cronoRows = parseCronogramaSheet(wb);
         var remoParsed = parseRemoSheet(wb);
         var ordenSet = new Set(remoParsed.filtradas.map(function(r){ return r.orden; }));
@@ -779,8 +800,10 @@
         statusBox.hidden = false; statusBox.className = "status-box err";
         statusBox.textContent = "No se pudo leer el archivo: " + err.message;
       }
-    };
-    reader.readAsArrayBuffer(file);
+    }).catch(function(err){
+      statusBox.hidden = false; statusBox.className = "status-box err";
+      statusBox.textContent = err.message;
+    });
   });
 
   document.getElementById("btnConfirm").addEventListener("click", function(){
