@@ -624,7 +624,7 @@
 
   // ================= ACTUALIZAR: parseo del Excel =================
   // Remo y Remomov son la misma descarga de SAP que las pestañas Ordenes y MaterialOrden de Correctivos.xlsx.
-  var ALIAS_HOJALATERIA = { "remo":"ordenes", "remomov":"materialorden" };
+  var ALIAS_HOJALATERIA = { "remo":"ordenes", "remomov":"materialorden", "cronograma":"cronogramahojalateria" };
   function findSheet(wb, name){
     var t = name.toLowerCase(), alt = ALIAS_HOJALATERIA[t];
     var hit = wb.SheetNames.filter(function(n){ return n.trim().toLowerCase() === t; })[0]

@@ -207,7 +207,8 @@
     var tareas = [
       rest("catalogo_dotaciones?select=*&order=economico").then(function(d){
         state.dotRows = d; state.dot = {};
-        d.forEach(function(x){ (state.dot[x.economico] = state.dot[x.economico] || []).push(x); });
+        window.__DOT_EXISTENTES = {};
+        d.forEach(function(x){ (state.dot[x.economico] = state.dot[x.economico] || []).push(x); window.__DOT_EXISTENTES[x.economico + "|" + (x.combustible_codigo || "")] = true; });
       }).catch(function(){}),
       rest("catalogo_virtuales?select=*&order=economico").then(function(v){
         state.virt = v; state.virtSet = {}; v.forEach(function(x){ state.virtSet[x.economico] = x; });
@@ -675,6 +676,16 @@ function parseDotaciones(ws,ecosCatalogo,avisos){
   var T=leerTabla(ws,["CENTRO","EQUIPO","COMBUSTIBLE","CENTRO DE COSTE","CANTIDAD DE PEDIDO","FUERA DE SERVICIO","RESERVA"].concat(DIAS_COL),"Dotaciones");
   var m=T.map, out={}, fuera={}, omitidas=0;
   var virt={}; VIRTUALES.forEach(function(v){ virt[v]=true; });
+  /* SAP agrega líneas de Magna (260073) a unidades que ya tienen su combustible: las que aún no están cargadas no se toman en cuenta
+     (las que ya estaban en la base se siguen actualizando). */
+  var existentes=window.__DOT_EXISTENTES||{};
+  var tieneOtro={}, magnaExtra=0;
+  T.rows.forEach(function(row){
+    if(!row) return;
+    var e=tx(row[m["EQUIPO"]]), c0=tx(row[m["COMBUSTIBLE"]]);
+    if(c0!==null && /^\d+(\.0+)?$/.test(c0)) c0=c0.replace(/\.0+$/,"");
+    if(e && c0 && c0!=="260073" && !COD_OMITIR[c0]) tieneOtro[e]=true;
+  });
   T.rows.forEach(function(row){
     if(!row) return;
     var eco=tx(row[m["EQUIPO"]]); if(!eco) return;
@@ -683,6 +694,7 @@ function parseDotaciones(ws,ecosCatalogo,avisos){
     if(cod===null && COD_FORZADO[eco]) cod=COD_FORZADO[eco];
     if(cod!==null && COD_OMITIR[cod]){ omitidas++; return; }
     if(SOLO_COD[eco] && cod!==SOLO_COD[eco]){ omitidas++; return; }
+    if(cod==="260073" && tieneOtro[eco] && !SOLO_COD[eco] && !existentes[eco+"|260073"]){ magnaExtra++; return; }
     if(!ecosCatalogo[eco] && !virt[eco]){ fuera[eco]=(fuera[eco]||0)+1; return; }
     var r={
       economico:eco, centro:tx(row[m["CENTRO"]]), combustible_codigo:cod===null?"":cod,
@@ -697,7 +709,7 @@ function parseDotaciones(ws,ecosCatalogo,avisos){
     if(cod!==null && !COMBUSTIBLE_COD[cod]) avisos.push({k:"cod",eco:eco,txt:eco+": código de combustible "+cod+" que no conozco; la tarjeta dirá 'Combustible no indicado'."});
     out[k]=r;
   });
-  return { filas:Object.keys(out).map(function(k){ return out[k]; }), fuera:fuera, omitidas:omitidas };
+  return { filas:Object.keys(out).map(function(k){ return out[k]; }), fuera:fuera, omitidas:omitidas, magnaExtra:magnaExtra };
 }
 
 function parseCatalogoLibro(wb){
@@ -713,7 +725,7 @@ function parseCatalogoLibro(wb){
     if(eco[v]) avisos.push({k:"virt_cat",eco:v,txt:v+" está en el catálogo como unidad real; se tomó como unidad real y no como virtual."});
     return { economico:v, bodega:PREFIX_TO_BODEGA[v.substring(0,3)] };
   }).filter(function(v){ return !eco[v.economico]; });
-  return { unidades:unidades, dotaciones:dot?dot.filas:null, fueraCatalogo:dot?dot.fuera:{}, omitidas:dot?dot.omitidas:0, virtuales:virtuales, avisos:avisos };
+  return { unidades:unidades, dotaciones:dot?dot.filas:null, fueraCatalogo:dot?dot.fuera:{}, omitidas:dot?dot.omitidas:0, magnaExtra:dot?dot.magnaExtra:0, virtuales:virtuales, avisos:avisos };
 }
 /*CORE-END*/
 
@@ -759,7 +771,7 @@ function parseCatalogoLibro(wb){
         document.getElementById("diffVirt").textContent = libro.virtuales.length;
         var fuera = Object.keys(libro.fueraCatalogo).length;
         document.getElementById("dotNota").textContent = libro.dotaciones
-          ? fuera + " económicos de Dotaciones no están en el catálogo (bajas) y se ignoran; " + libro.omitidas + " líneas con combustible omitido o descartado."
+          ? fuera + " económicos de Dotaciones no están en el catálogo (bajas) y se ignoran; " + libro.omitidas + " líneas con combustible omitido o descartado; " + (libro.magnaExtra||0) + " líneas nuevas de Magna en unidades con otro combustible no se toman en cuenta."
           : "";
         var av = document.getElementById("avisos");
         if(libro.avisos.length){
