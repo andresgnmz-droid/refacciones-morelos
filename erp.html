@@ -875,6 +875,7 @@
       grid.appendChild(c); return c;
     }
     tarjeta("Catálogo de unidades", "Archivo Catalogo_Unidades.xlsx (pestañas Unidades, antes Morelos, y Dotaciones): altas, bajas, cambios y dotaciones.", "Subir archivo", function(){ abrirFrame("catalogo-maestro.html?modo=carga", "Catálogo de unidades"); });
+    tarjeta("Cronograma de mantenimientos", "Sube ERP_Catalogos.xlsx (trae las 6 pestañas del cronograma tal como llegan) o el archivo del cronograma suelto (.xls o .xlsx). El ERP lo limpia solo (6 pestañas de CEDIS, bajas, rentados, periodicidad), te deja descargar el Excel limpio y guarda el cronograma del año.", "Subir archivo", function(){ abrirFrame("cronograma-carga.html", "Cronograma de mantenimientos"); });
     tarjeta("Hojalatería y Pintura", "Elige juntos Cronograma_Hojalateria.xlsx (Cronograma) y Correctivos.xlsx (Ordenes y MaterialOrden). También sirve el archivo anterior con CRONOGRAMA, Remo y Remomov.", "Subir archivo", function(){ abrirFrame("hojalateria.html?modo=carga", "Hojalatería y Pintura"); });
     tarjeta("Control de refacciones faltantes", "Archivo Faltante_Refacciones.xlsx, con las pestañas Pedidos e Ingresos (la pestaña Salidas no se usa aquí).", "Subir archivo", function(){ abrirFrame("faltantes.html?modo=carga", "Control de refacciones faltantes"); });
 
@@ -882,7 +883,7 @@
     tarjeta("Unidades en piso", "Elige juntos Unidades_en_piso.xlsx (UnidadesPiso y Cargas), Faltante_Refacciones.xlsx (Pedidos, Ingresos y Salidas) Correctivos.xlsx e Historico_Ordenes.xlsx (Ordenes y MaterialOrden; el histórico completa el material surtido). También funciona el archivo anterior de seis pestañas. Reemplaza el corte vigente.", "Subir archivo", function(){ abrirFrame("piso-carga.html", "Unidades en piso"); });
 
     tarjeta("Preventivos", "Archivo Preventivos.xlsx con las pestañas MMCV, MMCU, MMJO, MMPU, MMAX y MMCC, Ordenes y MaterialOrden (antes Ordmov); el mes se toma de las fechas de las órdenes (puedes cambiarlo antes de guardar). También sirven los nombres anteriores. Reemplaza lo cargado de ese mes.", "Subir archivo", function(){ abrirFrame("preventivos-carga.html", "Preventivos"); });
-    tarjeta("Catálogo de refacciones", "Archivo Catalogo_Refacciones.xlsx, con Indice, Stock, Bloqueos (antes Codbloq) y las pestañas UESMCV, UESMCU, UESMJO, UESMPU, UESMAX y UESMCC. Se cura al subirlo y reemplaza el corte vigente.", "Subir archivo", function(){ abrirFrame("catalogo-refacciones.html?modo=carga", "Catálogo de refacciones"); });
+    tarjeta("Catálogo de refacciones", "Archivo ERP_Catalogos.xlsx (o Catalogo_Refacciones.xlsx), con Indice, Stock, Bloqueos (antes Codbloq) y las pestañas UESMCV, UESMCU, UESMJO, UESMPU, UESMAX y UESMCC. Se cura al subirlo y reemplaza el corte vigente.", "Subir archivo", function(){ abrirFrame("catalogo-refacciones.html?modo=carga", "Catálogo de refacciones"); });
     tarjeta("Stock de refacciones", "CSV de existencias de SAP.", "Abrir carga", function(){ abrirFrame("index.html", "Stock de refacciones"); });
   }
 

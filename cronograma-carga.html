@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Carga del cronograma de mantenimientos</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="erp-auth.js"></script>
+<style>
+  :root{
+    --ink:#142433; --ink-soft:#48607A; --bg:#EEF2F5; --surface:#FFFFFF; --surface-alt:#E4EAEF; --border:#D3DCE3;
+    --accent:#0E7C86; --accent-ink:#FFFFFF; --good:#1b7443; --warn:#9a5b00; --bad:#bf2a2a;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --ink:#E7EDF2; --ink-soft:#9AB0C2; --bg:#0F1620; --surface:#182230; --surface-alt:#1F2C3C; --border:#2B3B4D;
+      --accent:#35B6C2; --accent-ink:#06232A; --good:#59d08c; --warn:#f2b44d; --bad:#ff7a72;
+    }
+  }
+  :root[data-theme="dark"]{ --ink:#E7EDF2; --ink-soft:#9AB0C2; --bg:#0F1620; --surface:#182230; --surface-alt:#1F2C3C; --border:#2B3B4D; --accent:#35B6C2; --accent-ink:#06232A; --good:#59d08c; --warn:#f2b44d; --bad:#ff7a72; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:16px}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px;max-width:900px;margin:0 auto;display:flex;flex-direction:column;gap:12px}
+  h2{margin:0;font-size:20px} h3{margin:6px 0 0;font-size:15px}
+  p{margin:0}
+  .sub{color:var(--ink-soft)}
+  .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+  .btn{font:inherit;font-weight:600;background:var(--accent);color:var(--accent-ink);border:0;border-radius:8px;padding:9px 16px;cursor:pointer}
+  .btn.sec{background:var(--surface-alt);color:var(--ink);border:1px solid var(--border)}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  input[type=number]{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 8px;width:90px}
+  .msg{min-height:1.2em}
+  .msg.ok{color:var(--good)} .msg.err{color:var(--bad)}
+  .kpis{display:flex;flex-wrap:wrap;gap:10px}
+  .kpi{background:var(--surface-alt);border-radius:8px;padding:8px 12px;min-width:120px;color:var(--ink-soft);font-size:12px}
+  .kpi b{display:block;font-size:20px;color:var(--ink)}
+  table{border-collapse:collapse;width:100%;font-size:13px}
+  th,td{padding:5px 8px;border-bottom:1px solid var(--border);text-align:left}
+  th{color:var(--ink-soft);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+  .wrap{overflow-x:auto;border:1px solid var(--border);border-radius:6px}
+  .aviso{background:var(--surface-alt);border-radius:6px;padding:8px 10px}
+  .aviso.warn{color:var(--warn)}
+  ul{margin:0;padding-left:18px}
+</style>
+</head>
+<body>
+<div class="card">
+  <h2>Cronograma de mantenimientos</h2>
+  <p class="sub">Sube ERP_Catalogos.xlsx (trae las 6 pestañas de CEDIS del cronograma tal como llegan) o el archivo del cronograma suelto (.xls o .xlsx). Aquí mismo se limpia: se quedan las 6 pestañas de CEDIS con sus bloques por servicio, se quitan bajas y rentados, se revisa la periodicidad y se corrigen los casos fijos. Puedes descargar el Excel limpio y guardar el cronograma del año en el ERP.</p>
+  <div class="row">
+    <input type="file" id="fArch" accept=".xlsx,.xls,.xlsm" hidden>
+    <button class="btn" id="bElegir" type="button">Elegir archivo del cronograma</button>
+    <label>Año <input type="number" id="fAnio" min="2020" max="2100"></label>
+  </div>
+  <div class="msg" id="cMsg"></div>
+  <div id="cResumen"></div>
+  <div class="row" id="filaAcciones" hidden>
+    <button class="btn sec" id="bDescargar" type="button">Descargar Excel limpio</button>
+    <button class="btn" id="bGuardar" type="button">Guardar en el ERP</button>
+  </div>
+  <p class="sub" id="cActual"></p>
+</div>
+
+<script>
+(function(){
+"use strict";
+function $(i){ return document.getElementById(i); }
+function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
+
+/* ================= reglas fijas (ver procedimiento del cronograma) ================= */
+var CEDIS_TABS=["CUERNAVACA","CUAUTLA","JOJUTLA","PUENTE DE IXTLA","AXOCHIAPAN","COCOYOC"];
+var PREFIX={MCV:"CUERNAVACA",MCU:"CUAUTLA",MJO:"JOJUTLA",MPU:"PUENTE DE IXTLA",MAX:"AXOCHIAPAN",MCC:"COCOYOC"};
+var MESES=["ENE","FEB","MAR","ABR","MAY","JUN","JUL","AGO","SEP","OCT","NOV","DIC"];
+var MESES_LARGO=["ENERO","FEBRERO","MARZO","ABRIL","MAYO","JUNIO","JULIO","AGOSTO","SEPTIEMBRE","OCTUBRE","NOVIEMBRE","DICIEMBRE"];
+var PREVS=["LUBRICACION","AFINACION","FRENOS"];
+var UNIDS=["REPARTO","AUTOMOVIL","CAMIONETAS","MOTOCICLETA","MONTACARGAS"];
+var NOMBRE={LUBRICACION:"Lubricación",AFINACION:"Afinación",FRENOS:"Frenos"};
+var RENTADOS={MCU9008:1,MCU9009:1};
+var FIX={"MCU2264|LUBRICACION":[3,6,9,12],"MPU4233|AFINACION":[2,6,10]};
+
+function nrm(s){ return String(s==null?"":s).normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/ /g," ").replace(/\s+/g," ").trim().toUpperCase(); }
+function mesIdx(v){
+  /* los encabezados llegan abreviados de varias formas ("MARZ", "FEB  ", "SEPT"): se reconoce por las 3 primeras letras */
+  var h=nrm(v); if(!h||h==="MARCA") return null;
+  for(var i=0;i<12;i++){ if(h.indexOf(MESES[i])===0) return i; }
+  return null;
+}
+
+/* ================= lectura de las 6 pestañas de CEDIS ================= */
+function leerLibro(wb){
+  var filas=[], tabs=[];
+  wb.SheetNames.forEach(function(n){
+    if(CEDIS_TABS.indexOf(nrm(n))<0) return;
+    tabs.push(n);
+    var arr=XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,defval:null,raw:true});
+    var hdr=null;
+    arr.forEach(function(vals,r){
+      vals=vals||[];
+      var ns=vals.map(nrm);
+      if(ns.indexOf("PREVENTIVO")>=0 && ns.some(function(x){ return x.indexOf("ECO")===0; }) && ns.indexOf("ENE")>=0){
+        var m={};
+        ns.forEach(function(v,c){
+          if(v==="PREVENTIVO") m.prev=c; else if(v==="UNIDAD") m.unid=c; else if(v.indexOf("ECO")===0) m.eco=c;
+          else if(v==="SERIE") m.serie=c; else { var mi=mesIdx(vals[c]); if(mi!==null && c>10) m["m"+mi]=c; }
+        });
+        hdr=m; return;
+      }
+      if(!hdr) return;
+      var eco=String(vals[hdr.eco]==null?"":vals[hdr.eco]).trim();
+      if(!/^[A-Z]{3}\d{4}$/.test(eco)) return;
+      var marks=[];
+      for(var i=0;i<12;i++){
+        var v=hdr["m"+i]==null?null:vals[hdr["m"+i]];
+        marks.push((typeof v==="number" ? v!==0 : (typeof v==="string" && v.trim()!=="" && v.trim()!=="0")) ? 1 : 0);
+      }
+      filas.push({ tab:n, fila:r+1, prev:nrm(vals[hdr.prev]), unid:nrm(vals[hdr.unid]), eco:eco,
+        serie:hdr.serie==null?"":String(vals[hdr.serie]==null?"":vals[hdr.serie]).trim().toUpperCase(), marks:marks });
+    });
+  });
+  return { filas:filas, tabs:tabs };
+}
+
+/* ================= limpieza ================= */
+function esperado(p,u){ /* [servicios al año, meses entre servicios] ; excepción de Frenos Reparto: 2 al año */
+  if(p==="LUBRICACION") return {n:[4],sep:3};
+  if(p==="AFINACION") return u==="REPARTO" ? {n:[2],sep:6} : {n:[3],sep:4};
+  return u==="REPARTO" ? {n:[1,2],sep:6} : {n:[2],sep:6};
+}
+function limpiar(lib, ctx){
+  var cat={}, porSerie={}, porSerie8={};
+  (ctx.catalogo||[]).forEach(function(c){
+    cat[c.economico]=c;
+    var s=String(c.serie||"").trim().toUpperCase();
+    if(s){ porSerie[s]=c.economico; if(s.length>=8) porSerie8[s.slice(-8)]=c.economico; }
+  });
+  var bajasPrev={}; (ctx.bajasPrev||[]).forEach(function(e){ bajasPrev[e]=1; });
+  var log={ bajas:[], renumeradas:[], rentados:[], omitidasBaja:[], duplicadas:[], fix:[], tipoMixto:[], periodicidad:[], sinProgramar:[] };
+  var data={}, tipo={}, tiposVistos={};
+  // serie por económico (la columna a veces viene vacía en algunas filas)
+  var serieDe={}; lib.filas.forEach(function(f){ if(f.serie && !serieDe[f.eco]) serieDe[f.eco]=f.serie; });
+  var renombre={}, decidido={};
+  lib.filas.forEach(function(f){
+    var e=f.eco;
+    if(decidido[e]!==undefined) return;
+    if(RENTADOS[e] || (/^[A-Z]{3}9\d{3}$/.test(e) && f.unid==="MONTACARGAS")){ decidido[e]="rentado"; log.rentados.push(e); return; }
+    if(bajasPrev[e]){ decidido[e]="bajaprev"; log.omitidasBaja.push(e); return; }
+    if(cat[e]){ decidido[e]="ok"; return; }
+    var s=serieDe[e], nuevo=null;
+    if(s){ nuevo=porSerie[s]||(s.length>=8?porSerie8[s.slice(-8)]:null)||null; }
+    if(nuevo && nuevo!==e){ decidido[e]="renum"; renombre[e]=nuevo; log.renumeradas.push(e+" → "+nuevo); }
+    else { decidido[e]="baja"; log.bajas.push(e); }
+  });
+  lib.filas.forEach(function(f){
+    var d=decidido[f.eco]; if(d!=="ok"&&d!=="renum") return;
+    var e=renombre[f.eco]||f.eco;
+    var u=f.unid.replace("CAMIONETAS","CAMIONETA").replace("CAMIONETA","CAMIONETAS");
+    (tiposVistos[e]=tiposVistos[e]||{})[u]=1;
+    var k=e+"|"+f.prev;
+    if(data[k]){ log.duplicadas.push(e+" "+f.prev); return; }
+    data[k]=f.marks.slice(); if(!tipo[e]) tipo[e]=u;
+  });
+  Object.keys(FIX).forEach(function(k){
+    if(!data[k]) return;
+    var viejo=[]; data[k].forEach(function(x,i){ if(x) viejo.push(i+1); });
+    var nuevo=FIX[k];
+    if(viejo.join(",")!==nuevo.join(",")){ data[k]=MESES.map(function(_,i){ return nuevo.indexOf(i+1)>=0?1:0; }); log.fix.push(k.replace("|"," ")+": "+viejo.join("/")+" → "+nuevo.join("/")); }
+  });
+  Object.keys(tiposVistos).forEach(function(e){ if(Object.keys(tiposVistos[e]).length>1) log.tipoMixto.push(e+" ("+Object.keys(tiposVistos[e]).join(", ")+")"); });
+  // periodicidad
+  Object.keys(data).sort().forEach(function(k){
+    var p=k.split("|"), e=p[0], pv=p[1], u=tipo[e], ex=esperado(pv,u);
+    var ms=[]; data[k].forEach(function(x,i){ if(x) ms.push(i+1); });
+    var ok=ex.n.indexOf(ms.length)>=0;
+    if(ok && ms.length>1){ for(var i=1;i<ms.length;i++){ if(ms[i]-ms[i-1]!==ex.sep){ ok=false; break; } } }
+    if(!ok) log.periodicidad.push(e+" "+NOMBRE[pv]+" ("+u+"): meses "+(ms.join("/")||"ninguno")+"; se esperan "+ex.n.join(" o ")+" cada "+ex.sep);
+  });
+  // altas del catálogo sin programar
+  var prog={}; Object.keys(tipo).forEach(function(e){ prog[e]=1; });
+  (ctx.catalogo||[]).forEach(function(c){ if(c.activo!==false && !prog[c.economico] && !RENTADOS[c.economico] && !(/^[A-Z]{3}9\d{3}$/.test(c.economico))) log.sinProgramar.push(c.economico); });
+  log.bajas.sort(); log.sinProgramar.sort();
+  return { data:data, tipo:tipo, log:log };
+}
+
+/* ================= filas para el ERP y Excel limpio ================= */
+function filasERP(res, anio){
+  var out=[];
+  Object.keys(res.data).forEach(function(k){
+    var p=k.split("|");
+    res.data[k].forEach(function(x,i){ if(x) out.push({ economico:p[0], servicio:NOMBRE[p[1]], anio:anio, mes:i+1 }); });
+  });
+  return out;
+}
+function libroLimpio(res){
+  var rows={};
+  Object.keys(res.data).forEach(function(k){
+    var p=k.split("|"), e=p[0], tab=PREFIX[e.slice(0,3)]; if(!tab) return;
+    var kk=tab+"|"+p[1]+"|"+res.tipo[e]; (rows[kk]=rows[kk]||[]).push([e,res.data[k]]);
+  });
+  var wb=XLSX.utils.book_new();
+  function col(c){ return XLSX.utils.encode_col(c); }
+  CEDIS_TABS.forEach(function(tab){
+    var aoa=[], formulas=[], pendiente=null, r=1;
+    var bloques=[]; PREVS.forEach(function(p){ UNIDS.forEach(function(u){ if(rows[tab+"|"+p+"|"+u]) bloques.push([p,u]); }); });
+    function filaSuma(fila){
+      var a=pendiente[0], b=pendiente[1], row=aoa[fila-1];
+      for(var c=3;c<15;c++){
+        var tot=0; for(var q=a;q<=b;q++){ tot+=aoa[q-1][c]||0; }
+        row[c]=tot; formulas.push({ r:fila-1, c:c, f:"SUM("+col(c)+a+":"+col(c)+b+")", v:tot });
+      }
+    }
+    bloques.forEach(function(b){
+      var p=b[0], u=b[1];
+      var titulo=["PREVENTIVOS DE "+p+" "+u]; while(titulo.length<15) titulo.push(null);
+      aoa.push(titulo);
+      if(pendiente) filaSuma(r);
+      aoa.push(["PREVENTIVO","UNIDAD","ECO."].concat(MESES));
+      var a=r+2, rr=a;
+      rows[tab+"|"+p+"|"+u].sort(function(x,y){ return x[0]<y[0]?-1:x[0]>y[0]?1:0; }).forEach(function(it){
+        aoa.push([p,u,it[0]].concat(it[1].map(function(x){ return x?1:null; })));
+        rr++;
+      });
+      pendiente=[a,rr-1]; r=rr;
+    });
+    if(pendiente){ var fin=new Array(15); aoa.push(fin); filaSuma(r); }
+    var ws=XLSX.utils.aoa_to_sheet(aoa);
+    formulas.forEach(function(x){ ws[XLSX.utils.encode_cell({r:x.r,c:x.c})]={ t:"n", f:x.f, v:x.v }; });
+    ws["!cols"]=[{wch:14},{wch:14},{wch:11}].concat(MESES.map(function(){ return {wch:6}; }));
+    XLSX.utils.book_append_sheet(wb,ws,tab);
+  });
+  return wb;
+}
+
+/* ================= pantalla ================= */
+var PENDIENTE=null, ARCHIVO="";
+function fmt(n){ return Number(n).toLocaleString("es-MX"); }
+function lista(titulo, arr, cls){
+  if(!arr.length) return "";
+  return '<div class="aviso '+(cls||"")+'"><b>'+esc(titulo)+' ('+arr.length+')</b><br>'+arr.map(esc).join(", ")+'</div>';
+}
+function resumen(R, anio, dif){
+  var L=R.log, unidades=Object.keys(R.tipo).length, servicios=Object.keys(R.data).length, filas=filasERP(R,anio).length;
+  var h='<div class="kpis"><div class="kpi">Unidades<b>'+fmt(unidades)+'</b></div><div class="kpi">Servicios<b>'+fmt(servicios)+'</b></div><div class="kpi">Meses programados<b>'+fmt(filas)+'</b></div>'+
+        (dif?'<div class="kpi">Por agregar al ERP<b>'+fmt(dif.insertar.length)+'</b></div><div class="kpi">Por quitar del ERP<b>'+fmt(dif.borrar.length)+'</b></div>':'')+'</div>';
+  h+=lista("Bajas retiradas (no están en el catálogo y su serie no aparece)",L.bajas,"");
+  h+=lista("Renumeradas (se rastrearon por serie contra el catálogo)",L.renumeradas,"");
+  h+=lista("Rentados que no se programan",L.rentados,"");
+  h+=lista("Económicos viejos de bajas de preventivos que no se toman",L.omitidasBaja,"");
+  h+=lista("Correcciones fijas aplicadas",L.fix,"");
+  h+=lista("Renglones repetidos (se tomó el primero)",L.duplicadas,"warn");
+  h+=lista("Unidades con más de un tipo de unidad en el archivo",L.tipoMixto,"warn");
+  h+=lista("Periodicidad que no cuadra con las reglas (se dejó como viene, revisar)",L.periodicidad,"warn");
+  h+=lista("Unidades del catálogo que no están en el cronograma",L.sinProgramar,"warn");
+  var por={}; Object.keys(R.tipo).forEach(function(e){ var t=PREFIX[e.slice(0,3)]||"?"; por[t]=(por[t]||0)+1; });
+  h+='<div class="wrap"><table><thead><tr><th>CEDIS</th><th>Unidades</th></tr></thead><tbody>'+CEDIS_TABS.map(function(t){ return '<tr><td>'+t+'</td><td>'+(por[t]||0)+'</td></tr>'; }).join("")+'</tbody></table></div>';
+  return h;
+}
+function contexto(){
+  function pag(desde,acum){
+    return ERP.rest("catalogo_unidades?select=economico,serie,activo&order=economico&limit=1000&offset="+desde).then(function(r){
+      r=r||[]; acum=acum.concat(r); return r.length===1000?pag(desde+1000,acum):acum;
+    });
+  }
+  return Promise.all([ pag(0,[]), ERP.rest("preventivos_bajas?select=economico").catch(function(){ return []; }) ]).then(function(r){
+    return { catalogo:r[0]||[], bajasPrev:(r[1]||[]).map(function(x){ return x.economico; }) };
+  });
+}
+function existentes(anio){
+  var acum=[];
+  function pag(desde){
+    return ERP.rest("catalogo_cronograma_servicios?select=economico,servicio,mes&anio=eq."+anio+"&order=economico,servicio,mes&limit=1000&offset="+desde).then(function(r){
+      r=r||[]; acum=acum.concat(r); return r.length===1000?pag(desde+1000):acum;
+    });
+  }
+  return pag(0);
+}
+function diferencias(R, anio){
+  return existentes(anio).then(function(ex){
+    var viejos={}, nuevos={};
+    ex.forEach(function(x){ viejos[x.economico+"|"+x.servicio+"|"+x.mes]=x; });
+    var filas=filasERP(R,anio);
+    filas.forEach(function(x){ nuevos[x.economico+"|"+x.servicio+"|"+x.mes]=x; });
+    return { insertar:filas.filter(function(x){ return !viejos[x.economico+"|"+x.servicio+"|"+x.mes]; }),
+             borrar:ex.filter(function(x){ return !nuevos[x.economico+"|"+x.servicio+"|"+x.mes]; }), existentes:ex.length };
+  });
+}
+function anioDeNombre(n){ var m=String(n).match(/(20\d{2})/); return m?+m[1]:new Date().getFullYear(); }
+function recalcular(){
+  if(!PENDIENTE) return Promise.resolve();
+  var anio=+$("fAnio").value;
+  return diferencias(PENDIENTE.res,anio).then(function(dif){ PENDIENTE.dif=dif; PENDIENTE.anio=anio; $("cResumen").innerHTML=resumen(PENDIENTE.res,anio,dif); });
+}
+function infoActual(){
+  ERP.rest("catalogo_cronograma_servicios?select=anio,updated_at&order=updated_at.desc&limit=1").then(function(r){
+    $("cActual").textContent=r&&r[0]?"En el ERP hay cronograma del año "+r[0].anio+", actualizado el "+new Date(r[0].updated_at).toLocaleDateString("es-MX")+".":"Todavía no hay cronograma cargado.";
+  }).catch(function(){ $("cActual").textContent=""; });
+}
+infoActual();
+var puede=ERP.puede("catalogo_unidades");
+if(!puede){ $("cMsg").className="msg err"; $("cMsg").textContent="Tu usuario puede revisar el archivo, pero no guardarlo en el ERP."; }
+$("bElegir").addEventListener("click",function(){ $("fArch").click(); });
+$("fArch").addEventListener("change",function(){
+  var f=this.files[0]; if(!f) return; var inp=this;
+  var m=$("cMsg"); ARCHIVO=f.name; PENDIENTE=null; $("filaAcciones").hidden=true; $("cResumen").innerHTML="";
+  m.className="msg"; m.textContent="Leyendo "+f.name+"…"; $("fAnio").value=anioDeNombre(f.name);
+  var rd=new FileReader();
+  rd.onload=function(){
+    var wb; try{ wb=XLSX.read(new Uint8Array(rd.result),{type:"array"}); }catch(e){ m.className="msg err"; m.textContent="No pude abrir el archivo como Excel."; inp.value=""; return; }
+    var lib=leerLibro(wb);
+    if(lib.tabs.length<6){ m.className="msg err"; m.textContent="Faltan pestañas de CEDIS. Encontré: "+(lib.tabs.join(", ")||"ninguna")+". Se necesitan CUERNAVACA, CUAUTLA, JOJUTLA, PUENTE DE IXTLA, AXOCHIAPAN y COCOYOC."; inp.value=""; return; }
+    if(!lib.filas.length){ m.className="msg err"; m.textContent="No encontré renglones de unidades en las pestañas de CEDIS."; inp.value=""; return; }
+    contexto().then(function(ctx){
+      if(!ctx.catalogo.length) throw new Error("No pude leer el catálogo de unidades para cruzar el cronograma.");
+      PENDIENTE={ res:limpiar(lib,ctx), entrada:lib.filas.length };
+      window.__CRONO=PENDIENTE;
+      return recalcular();
+    }).then(function(){
+      m.className="msg ok"; m.textContent="Archivo limpio. Revisa el resumen, confirma el año y guarda.";
+      $("filaAcciones").hidden=false; $("bGuardar").disabled=!puede; inp.value="";
+    }).catch(function(e){ m.className="msg err"; m.textContent=e.message; inp.value=""; });
+  };
+  rd.onerror=function(){ m.className="msg err"; m.textContent="No se pudo leer el archivo."; };
+  rd.readAsArrayBuffer(f);
+});
+$("fAnio").addEventListener("change",function(){ recalcular().catch(function(e){ $("cMsg").className="msg err"; $("cMsg").textContent=e.message; }); });
+$("bDescargar").addEventListener("click",function(){
+  if(!PENDIENTE) return;
+  XLSX.writeFile(libroLimpio(PENDIENTE.res),"Cronograma_mantenimientos_limpio_"+(+$("fAnio").value)+".xlsx");
+});
+function lotes(arr,n){ var o=[]; for(var i=0;i<arr.length;i+=n) o.push(arr.slice(i,i+n)); return o; }
+$("bGuardar").addEventListener("click",function(){
+  if(!PENDIENTE||!PENDIENTE.dif) return;
+  var dif=PENDIENTE.dif, anio=PENDIENTE.anio, b=this, m=$("cMsg");
+  if(!dif.insertar.length&&!dif.borrar.length){ m.className="msg ok"; m.textContent="El ERP ya tiene este cronograma; no hay cambios que guardar."; return; }
+  if(!confirm("¿Actualizar el cronograma "+anio+" en el ERP? Se agregan "+dif.insertar.length+" meses y se quitan "+dif.borrar.length+".")) return;
+  b.disabled=true; m.className="msg"; m.textContent="Guardando…";
+  /* Solo se tocan las filas que cambian (sin UPDATE): primero se quitan las que sobran y luego se agregan las nuevas. */
+  var porClave={}; dif.borrar.forEach(function(x){ var k=x.economico+"|"+x.servicio; (porClave[k]=porClave[k]||{e:x.economico,s:x.servicio,meses:[]}).meses.push(x.mes); });
+  var tareas=Object.keys(porClave).map(function(k){ return porClave[k]; });
+  var cadena=Promise.resolve();
+  tareas.forEach(function(t){
+    cadena=cadena.then(function(){ return ERP.rest("catalogo_cronograma_servicios?economico=eq."+encodeURIComponent(t.e)+"&servicio=eq."+encodeURIComponent(t.s)+"&anio=eq."+anio+"&mes=in.("+t.meses.join(",")+")",{ method:"DELETE", prefer:"return=minimal" }); });
+  });
+  lotes(dif.insertar,500).forEach(function(l){
+    cadena=cadena.then(function(){ return ERP.rest("catalogo_cronograma_servicios",{ method:"POST", body:l, prefer:"return=minimal" }); });
+  });
+  cadena.then(function(){
+    m.className="msg ok"; m.textContent="Listo: cronograma "+anio+" actualizado ("+dif.insertar.length+" meses agregados, "+dif.borrar.length+" quitados).";
+    infoActual(); return recalcular();
+  }).catch(function(e){ m.className="msg err"; m.textContent="No se pudo guardar: "+e.message+". Vuelve a subir el archivo para ver qué quedó pendiente."; }).then(function(){ b.disabled=!puede; });
+});
+})();
+</script>
+<script src="offline.js"></script>
+</body>
+</html>
