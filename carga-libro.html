@@ -44,6 +44,7 @@
       <input type="file" id="fArch" accept=".xlsx,.xlsm" hidden>
       <button class="btn" id="bElegir" type="button">Elegir el libro</button>
       <span id="nombre" class="sub"></span>
+      <label class="sub"><input type="checkbox" id="revisar"> Revisar antes de guardar</label>
     </div>
     <div class="msg" id="cMsg"></div>
     <div id="lista"></div>
@@ -63,30 +64,49 @@ function visible(doc,id){ var e=doc.getElementById(id); return !!e && !e.hidden;
 
 /* Cada módulo: página que ya sabe leer sus pestañas, el campo de archivo de esa página, las pestañas que necesita
    (cada entrada es una lista de nombres posibles) y cómo saber que ya terminó de leer el archivo. */
+function cls(d,id){ var e=d.getElementById(id); return e?e.className:""; }
+/* lectura terminada / lectura correcta / terminó de guardar (ok, err o aún nada) para cada tipo de página */
+var T_MSG={
+  listo:function(d){ return /ok|err/.test(cls(d,"cMsg")); },
+  leido:function(d){ return /\bok\b/.test(cls(d,"cMsg")); },
+  fin:function(d){ var t=txt(d,"cMsg"), c=cls(d,"cMsg"); if(/\bok\b/.test(c)&&/^(Listo|El ERP ya tiene)/.test(t)) return "ok"; if(/\berr\b/.test(c)||/No se pudo guardar|Pon la fecha|Elige el mes/.test(t)) return "err"; return null; },
+  texto:function(d){ return txt(d,"cMsg"); }
+};
+var T_STATUS={
+  listo:function(d){ return visible(d,"diffPreview") || /No se|No pude/.test(txt(d,"statusBox")); },
+  leido:function(d){ return visible(d,"diffPreview"); },
+  fin:function(d){ var c=cls(d,"statusBox"); if(/\bok\b/.test(c)) return "ok"; if(/\berr\b/.test(c)&&/Listo|Error|No se pudo|permiso/.test(txt(d,"statusBox"))&&!visible(d,"diffPreview")) return "err"; if(/\berr\b/.test(c)) return "err"; return null; },
+  texto:function(d){ return txt(d,"statusBox"); }
+};
+var T_CT={
+  listo:function(d){ return /leído|No se pudo|Falta/.test(txt(d,"fileMeta")); },
+  leido:function(d){ return /leído:/.test(txt(d,"fileMeta")) && !!d.getElementById("bGuardar2"); },
+  fin:function(d){ var t=txt(d,"fileMeta"); if(/^Listo\./.test(t)) return "ok"; if(/No se pudo guardar|Pon la fecha/.test(t)) return "err"; return null; },
+  texto:function(d){ return txt(d,"fileMeta"); }
+};
 var LIBROS={
   mantenimiento:{
     titulo:"Libro de mantenimiento (ERP_Mantenimiento.xlsx)",
-    desc:"Elige el libro una sola vez. Se abre un panel por cada sección que trae pestañas en el libro: revisa el resumen de cada una y pulsa Guardar en ese panel.",
     modulos:[
-      { t:"Unidades en piso", u:"piso-carga.html", i:"#fArch", needs:[["UnidadesPiso","UPiso"],["Cargas"]], listo:function(d){ return /ok|err/.test((d.getElementById("cMsg")||{}).className||""); } },
-      { t:"Carga de trabajo y Correctivos", u:"carga-mecanicos.html?modo=carga", i:"#fileInput", needs:[["Avisos","Operaciones"],["Ordenes","OM01OM02"],["MaterialOrden","OM01OM02mov"]], listo:function(d){ return /leído|No se pudo|Falta/.test(txt(d,"fileMeta")); } },
-      { t:"Preventivos", u:"preventivos-carga.html", i:"#fArch", needs:[["MMCV","Cuernavaca"],["MMCU","Cuautla"]], listo:function(d){ return /ok|err/.test((d.getElementById("cMsg")||{}).className||""); } },
-      { t:"Hojalatería y Pintura", u:"hojalateria.html?modo=carga", i:"#fileInput", needs:[["CronogramaHojalateria","Cronograma","CRONOGRAMA"],["Ordenes","Remo"],["MaterialOrden","Remomov"]], listo:function(d){ return visible(d,"diffPreview") || /No se|No pude/.test(txt(d,"statusBox")); } },
-      { t:"Control de refacciones faltantes", u:"faltantes.html?modo=carga", i:"#fArch", needs:[["Pedidos"],["Ingresos"]], listo:function(d){ return /ok|err/.test((d.getElementById("cMsg")||{}).className||""); } }
+      { t:"Unidades en piso", u:"piso-carga.html", i:"#fArch", btn:"#bGuardar", needs:[["UnidadesPiso","UPiso"],["Cargas"]], f:T_MSG },
+      { t:"Carga de trabajo y Correctivos", u:"carga-mecanicos.html?modo=carga", i:"#fileInput", btn:"#bGuardar2", needs:[["Avisos","Operaciones"],["Ordenes","OM01OM02"],["MaterialOrden","OM01OM02mov"]], f:T_CT },
+      { t:"Preventivos", u:"preventivos-carga.html", i:"#fArch", btn:"#bGuardar", needs:[["MMCV","Cuernavaca"],["MMCU","Cuautla"]], f:T_MSG },
+      { t:"Hojalatería y Pintura", u:"hojalateria.html?modo=carga", i:"#fileInput", btn:"#btnConfirm", needs:[["CronogramaHojalateria","Cronograma","CRONOGRAMA"],["Ordenes","Remo"],["MaterialOrden","Remomov"]], f:T_STATUS },
+      { t:"Control de refacciones faltantes", u:"faltantes.html?modo=carga", i:"#fArch", btn:"#bGuardar", needs:[["Pedidos"],["Ingresos"]], f:T_MSG }
     ]
   },
   catalogos:{
     titulo:"Libro de catálogos (ERP_Catalogos.xlsx)",
-    desc:"Elige el libro una sola vez. Se abre un panel por cada sección que trae pestañas en el libro: revisa el resumen de cada una y pulsa Guardar en ese panel.",
     modulos:[
-      { t:"Catálogo de refacciones", u:"catalogo-refacciones.html?modo=carga", i:"#fArch", needs:[["Indice"],["Stock"]], listo:function(d){ return /ok|err/.test((d.getElementById("cMsg")||{}).className||""); } },
-      { t:"Catálogo de unidades", u:"catalogo-maestro.html?modo=carga", i:"#fileInput", needs:[["Unidades","Morelos"]], listo:function(d){ return visible(d,"diffPreview") || /No se|No pude/.test(txt(d,"statusBox")); } },
-      { t:"Cronograma de mantenimientos", u:"cronograma-carga.html", i:"#fArch", needs:[["CUERNAVACA"],["CUAUTLA"],["COCOYOC"]], listo:function(d){ return /ok|err/.test((d.getElementById("cMsg")||{}).className||""); } }
+      { t:"Catálogo de refacciones", u:"catalogo-refacciones.html?modo=carga", i:"#fArch", btn:"#bGuardar", needs:[["Indice"],["Stock"]], f:T_MSG },
+      { t:"Catálogo de unidades", u:"catalogo-maestro.html?modo=carga", i:"#fileInput", btn:"#btnConfirm", needs:[["Unidades","Morelos"]], f:T_STATUS },
+      { t:"Cronograma de mantenimientos", u:"cronograma-carga.html", i:"#fArch", btn:"#bGuardar", needs:[["CUERNAVACA"],["CUAUTLA"],["COCOYOC"]], f:T_MSG }
     ]
   }
 };
 var params=new URLSearchParams(location.search), LIBRO=LIBROS[params.get("libro")]||LIBROS.mantenimiento;
-$("titulo").textContent=LIBRO.titulo; $("desc").textContent=LIBRO.desc;
+$("titulo").textContent=LIBRO.titulo;
+$("desc").textContent="Elige el libro una sola vez: se lee y se guarda todo lo que trae. Al final ves el resultado de cada sección. Si prefieres ver cada resumen antes de guardar, marca la casilla.";
 document.title=LIBRO.titulo;
 
 function tiene(nombres, hojas){ return nombres.some(function(n){ return hojas.indexOf(norm(n))>=0; }); }
@@ -96,25 +116,34 @@ function esperar(cond, ms, paso){
     (function vuelta(){ var r=false; try{ r=cond(); }catch(e){ r=false; } if(r) return ok(true); if(Date.now()-t0>ms) return ok(false); setTimeout(vuelta,paso||400); })();
   });
 }
-function cargarModulo(mod, file, host){
+function cargarModulo(mod, file, host, revisar, resultados){
   return new Promise(function(ok){
     var card=document.createElement("div"); card.className="card panel";
     card.innerHTML='<div class="row" style="justify-content:space-between"><h3>'+esc(mod.t)+'</h3><span class="estado">Abriendo…</span></div>';
     var fr=document.createElement("iframe"); fr.title=mod.t; card.appendChild(fr); host.appendChild(card);
     var est=card.querySelector(".estado");
+    function listo(clase,msg,estadoRes){ est.className="estado "+clase; est.textContent=msg; resultados.push({ t:mod.t, estado:estadoRes, msg:msg }); ok(); }
     fr.addEventListener("load",function(){
       var win=fr.contentWindow, doc=fr.contentDocument;
-      if(doc.documentElement.dataset) { var t=document.documentElement.dataset.theme; if(t) doc.documentElement.dataset.theme=t; }
+      win.confirm=function(){ return true; };     /* se confirma solo: ya elegiste el libro y, si quisiste, revisaste */
+      var t=document.documentElement.dataset.theme; if(t) doc.documentElement.dataset.theme=t;
       esperar(function(){ return !!doc.querySelector(mod.i) && !doc.querySelector(mod.i).disabled; }, 20000).then(function(h){
         var inp=doc.querySelector(mod.i);
-        if(!h||!inp){ est.className="estado err"; est.textContent="No pude abrir esta sección."; return ok(); }
+        if(!h||!inp) return listo("err","No pude abrir esta sección.","err");
         est.textContent="Leyendo el libro…";
         var dt=new win.DataTransfer(); dt.items.add(new win.File([file],file.name,{type:file.type}));
         inp.files=dt.files; inp.dispatchEvent(new win.Event("change",{bubbles:true}));
-        esperar(function(){ return mod.listo(doc); }, 300000, 500).then(function(fin){
-          est.className="estado "+(fin?"ok":"err");
-          est.textContent=fin?"Listo: revisa el resumen y pulsa Guardar en este panel.":"Tardó demasiado en leer el libro.";
-          ok();
+        esperar(function(){ return mod.f.listo(doc); }, 300000, 500).then(function(fin){
+          if(!fin) return listo("err","Tardó demasiado en leer el libro.","err");
+          if(!mod.f.leido(doc)) return listo("err","No se guardó: "+(mod.f.texto(doc)||"no se pudo leer").slice(0,200),"err");
+          if(revisar) return listo("ok","Listo: revisa el resumen y pulsa Guardar en este panel.","revisar");
+          var b=doc.querySelector(mod.btn);
+          if(!b||b.disabled) return listo("err","No se guardó: el botón de guardar no está disponible (¿tu usuario puede editar esta sección?).","err");
+          est.textContent="Guardando…"; b.click();
+          esperar(function(){ return mod.f.fin(doc)!==null; }, 300000, 500).then(function(fin2){
+            var r=fin2?mod.f.fin(doc):null, m=(mod.f.texto(doc)||"").slice(0,220);
+            if(r==="ok") listo("ok","Guardado. "+m,"ok"); else listo("err","No se guardó: "+(m||"tardó demasiado"),"err");
+          });
         });
       });
     });
@@ -141,8 +170,17 @@ $("fArch").addEventListener("change",function(){
     $("lista").innerHTML=h;
     $("cMsg").textContent="Abriendo las secciones, una por una…";
     var cadena=Promise.resolve();
-    aplican.forEach(function(a){ cadena=cadena.then(function(){ return cargarModulo(a.m,f,$("paneles")); }); });
-    cadena.then(function(){ $("cMsg").className="msg ok"; $("cMsg").textContent="Listo. Revisa cada panel y pulsa Guardar en los que quieras actualizar."; $("bElegir").disabled=false; inp.value=""; });
+    var revisar=$("revisar").checked, resultados=[];
+    aplican.forEach(function(a){ cadena=cadena.then(function(){ $("cMsg").textContent="Procesando: "+a.m.t+"…"; return cargarModulo(a.m,f,$("paneles"),revisar,resultados); }); });
+    cadena.then(function(){
+      var malas=resultados.filter(function(r){ return r.estado==="err"; });
+      var h='<ul>'+resultados.map(function(r){ return '<li><b>'+esc(r.t)+':</b> '+esc(r.msg)+'</li>'; }).join("")+'</ul>';
+      $("lista").insertAdjacentHTML("beforeend",'<div class="card" style="margin-top:8px"><h3>Resultado</h3>'+h+'</div>');
+      if(revisar){ $("cMsg").className="msg ok"; $("cMsg").textContent="Listo. Revisa cada panel y pulsa Guardar en los que quieras actualizar."; }
+      else if(malas.length){ $("cMsg").className="msg err"; $("cMsg").textContent="Terminó, pero "+malas.length+" sección(es) no se guardaron. Revisa el resultado."; }
+      else { $("cMsg").className="msg ok"; $("cMsg").textContent="Listo: se guardó todo el libro."; }
+      $("bElegir").disabled=false; inp.value="";
+    });
   };
   rd.onerror=function(){ $("cMsg").className="msg err"; $("cMsg").textContent="No se pudo leer el archivo."; $("bElegir").disabled=false; };
   rd.readAsArrayBuffer(f);
