@@ -875,6 +875,7 @@
       grid.appendChild(c); return c;
     }
     tarjeta("Catálogo de unidades", "Archivo Catalogo_Unidades.xlsx (pestañas Unidades, antes Morelos, y Dotaciones): altas, bajas, cambios y dotaciones.", "Subir archivo", function(){ abrirFrame("catalogo-maestro.html?modo=carga", "Catálogo de unidades"); });
+    tarjeta("Cronograma de mantenimientos", "Sube el archivo del cronograma tal como te llega (.xls o .xlsx). El ERP lo limpia solo (6 pestañas de CEDIS, bajas, rentados, periodicidad), te deja descargar el Excel limpio y guarda el cronograma del año.", "Subir archivo", function(){ abrirFrame("cronograma-carga.html", "Cronograma de mantenimientos"); });
     tarjeta("Hojalatería y Pintura", "Elige juntos Cronograma_Hojalateria.xlsx (Cronograma) y Correctivos.xlsx (Ordenes y MaterialOrden). También sirve el archivo anterior con CRONOGRAMA, Remo y Remomov.", "Subir archivo", function(){ abrirFrame("hojalateria.html?modo=carga", "Hojalatería y Pintura"); });
     tarjeta("Control de refacciones faltantes", "Archivo Faltante_Refacciones.xlsx, con las pestañas Pedidos e Ingresos (la pestaña Salidas no se usa aquí).", "Subir archivo", function(){ abrirFrame("faltantes.html?modo=carga", "Control de refacciones faltantes"); });
 
