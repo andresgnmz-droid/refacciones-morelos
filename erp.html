@@ -393,7 +393,8 @@
     var kH = kpi("Avance hojalatería", "…", "Cronograma vigente", "mantenimiento/hojalateria");
     var kS = kpi("Unidades en piso", "…", "Corte vigente", "piso");
     var kU = kpi("Unidades activas", "…", "Catálogo maestro", "varios");
-    [kP, kH, kS, kU].forEach(function(k){ row.appendChild(k.node); });
+    var kG = kpi("Gasto de Reparto", "…", "Gastado contra presupuesto", "gastos");
+    [kG, kP, kH, kS, kU].forEach(function(k){ row.appendChild(k.node); });
     var estado = el("span", "pill", "Conectando…");
     function fail(e){ console.error(e); estado.textContent = "Sin conexión a datos"; estado.className = "pill warn"; }
 
@@ -410,6 +411,7 @@
         kP.set(den ? (Math.round(rea / den * 1000) / 10) + "%" : "—", per.slice(0,7) + " · " + rea + " de " + den);
       });
     }).catch(fail);
+    if(!kG.node.hidden) cargarGastoInicio(kG);
     json("hojalateria_cronograma?select=estatus&limit=1000").then(function(rows){
       var rea = rows.filter(function(x){ return (x.estatus || "").toUpperCase() === "REALIZADO"; }).length;
       kH.set(rows.length ? (Math.round(rea / rows.length * 1000) / 10) + "%" : "—", rea + " de " + rows.length + " unidades");
@@ -436,6 +438,40 @@
     cV.appendChild(el("p", "", "Catálogo de unidades, catálogo de refacciones, control de refacciones faltantes y carta petición."));
     var goV = el("button", "btn ghost", "Abrir Varios"); goV.style.alignSelf = "flex-start";
     goV.addEventListener("click", function(){ location.hash = "varios"; }); cV.appendChild(goV); g.appendChild(cV);
+  }
+
+  // Tarjeta de la portada: gastado contra presupuesto de Reparto (centros de coste que terminan en 0002).
+  // Si el último mes cargado está a medias, el corte es el mes anterior y el mes en curso se muestra aparte.
+  function cargarGastoInicio(kG){
+    function rpcGastos(anio){
+      return fetch(SB_URL + "/rest/v1/rpc/gastos_datos", { method:"POST", headers:ERP.headers(), body:JSON.stringify({ p_anio:anio }) })
+        .then(function(r){ if(!r.ok) throw new Error("gastos → " + r.status); return r.json(); });
+    }
+    var anio = new Date().getFullYear();
+    rpcGastos(anio).then(function(d){
+      return (!(d.real.length || d.plan.length) && d.anios.length && d.anios.indexOf(anio) < 0) ? rpcGastos(d.anios[0]) : d;
+    }).then(function(d){
+      var real = [0,0,0,0,0,0,0,0,0,0,0,0,0], plan = real.slice(), ult = 0, m;
+      d.real.forEach(function(r){ if(r[0].slice(-4) === "0002"){ real[r[2]] += r[3]; if(r[2] > ult) ult = r[2]; } });
+      d.plan.forEach(function(r){ if(r[0].slice(-4) === "0002") for(m = 1; m <= 12; m++) plan[m] += r[1 + m]; });
+      if(!ult){ kG.set("—", "Sin gastos cargados"); return; }
+      var hasta = ult, aparte = "", f = d.carga && d.carga.fecha_max ? String(d.carga.fecha_max).slice(0, 10) : "";
+      if(f){
+        var y = +f.slice(0, 4), mm = +f.slice(5, 7), dd = +f.slice(8, 10);
+        if(mm === ult && ult > 1 && dd < new Date(Date.UTC(y, mm, 0)).getUTCDate()){
+          hasta = ult - 1; aparte = "En " + NOMBRE_MES[ult - 1] + " van " + pesos(real[ult]) + " (al " + dd + ")";
+        }
+      }
+      var g = 0, p = 0; for(m = 1; m <= hasta; m++){ g += real[m]; p += plan[m]; }
+      var dif = g - p, bajo = dif <= 0;
+      kG.node.querySelector(".l").textContent = "Gasto de Reparto · a " + NOMBRE_MES[hasta - 1];
+      kG.set(pesos(g), p ? "Presupuesto " + pesos(p) : "Sin presupuesto cargado");
+      if(p){
+        var s2 = el("span", "s", "Desviación " + (dif > 0 ? "+" : "") + (Math.round(dif / p * 1000) / 10) + "% (" + (dif > 0 ? "+" : "-") + pesos(Math.abs(dif)) + ") · " + (bajo ? "por debajo" : "por encima"));
+        s2.style.color = bajo ? "var(--good)" : "var(--bad)"; s2.style.fontWeight = "600"; kG.node.appendChild(s2);
+      }
+      if(aparte) kG.node.appendChild(el("span", "s", aparte));
+    }).catch(function(e){ console.error(e); kG.set("—", "Sin datos de gastos"); });
   }
 
   /* ================= Mantenimiento ================= */
