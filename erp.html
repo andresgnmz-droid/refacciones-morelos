@@ -280,6 +280,7 @@
   var TABS = [
     { id:"inicio", t:"Inicio", visible:function(){ return true; } },
     { id:"mantenimiento", t:"Mantenimiento", visible:function(){ return MANT_ITEMS.some(function(it){ return ve(it.m); }); } },
+    { id:"gastos", t:"Gastos", src:"gastos.html", visible:function(){ return ve("gastos"); } },
     { id:"carga-trabajo", t:"Carga de trabajo", src:"carga-mecanicos.html", visible:function(){ return ve("carga_trabajo"); } },
     { id:"piso", t:"Unidades en piso", src:"unidades-piso.html", visible:function(){ return ve("piso"); } },
     { id:"varios", t:"Varios", visible:function(){ return ["combustible","llantas","catalogo_refacciones","control_refacciones","carta_peticion","catalogo_unidades","horas_extras"].some(ve); } },
@@ -888,6 +889,7 @@
     principal("En proceso", "Combustible, control de llantas y horas extras se agregarán aquí cuando estén definidos.", null, null, "En proceso");
     tarjeta("Catálogo de unidades", "Archivo Catalogo_Unidades.xlsx (pestañas Unidades, antes Morelos, y Dotaciones): altas, bajas, cambios y dotaciones.", "Subir archivo", function(){ abrirFrame("catalogo-maestro.html?modo=carga", "Catálogo de unidades"); });
     tarjeta("Cronograma de mantenimientos", "Sube ERP_Catalogos.xlsx (trae las 6 pestañas del cronograma tal como llegan) o el archivo del cronograma suelto (.xls o .xlsx). El ERP lo limpia solo (6 pestañas de CEDIS, bajas, rentados, periodicidad), te deja descargar el Excel limpio y guarda el cronograma del año.", "Subir archivo", function(){ abrirFrame("cronograma-carga.html", "Cronograma de mantenimientos"); });
+    tarjeta("Gastos", "Dos archivos de SAP en texto sin tabuladores: KSB1 (gasto real, partidas individuales) y KSBP (presupuesto por mes, versión 0). Cada carga reemplaza el año de los centros de coste que trae el archivo. Puedes cuadrar contra el informe de SAP antes de guardar.", "Subir archivos", function(){ abrirFrame("gastos.html?modo=carga", "Gastos"); });
     tarjeta("Hojalatería y Pintura", "Elige juntos Cronograma_Hojalateria.xlsx (Cronograma) y Correctivos.xlsx (Ordenes y MaterialOrden). También sirve el archivo anterior con CRONOGRAMA, Remo y Remomov.", "Subir archivo", function(){ abrirFrame("hojalateria.html?modo=carga", "Hojalatería y Pintura"); });
     tarjeta("Control de refacciones faltantes", "Archivo Faltante_Refacciones.xlsx, con las pestañas Pedidos e Ingresos (la pestaña Salidas no se usa aquí).", "Subir archivo", function(){ abrirFrame("faltantes.html?modo=carga", "Control de refacciones faltantes"); });
 

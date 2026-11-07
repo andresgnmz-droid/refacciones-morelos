@@ -1,0 +1,632 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gastos</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap">
+<script src="erp-auth.js"></script>
+<script src="gastos-lib.js"></script>
+<style>
+  :root{
+    --ink:#142433; --ink-soft:#48607A; --ink-faint:#7C93A6;
+    --bg:#EEF2F5; --surface:#FFFFFF; --surface-alt:#E4EAEF; --border:#D3DCE3;
+    --accent:#0E7C86; --accent-ink:#FFFFFF; --accent-soft:#DCEEF0;
+    --shadow:0 1px 2px rgba(20,36,51,.06),0 4px 14px rgba(20,36,51,.07);
+    --good:#0b8a0b; --warn:#b07400; --bad:#d63a39;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --ink:#E7EDF2; --ink-soft:#9AB0C2; --ink-faint:#7C93A6;
+      --bg:#0F1620; --surface:#182230; --surface-alt:#1F2C3C; --border:#2B3B4D;
+      --accent:#35B6C2; --accent-ink:#06232A; --accent-soft:#163238;
+      --shadow:0 1px 2px rgba(0,0,0,.3),0 4px 14px rgba(0,0,0,.35);
+      --good:#2fbf2f; --warn:#d99a1a; --bad:#e66767;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ink:#E7EDF2; --ink-soft:#9AB0C2; --ink-faint:#7C93A6;
+    --bg:#0F1620; --surface:#182230; --surface-alt:#1F2C3C; --border:#2B3B4D;
+    --accent:#35B6C2; --accent-ink:#06232A; --accent-soft:#163238;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 4px 14px rgba(0,0,0,.35);
+    --good:#2fbf2f; --warn:#d99a1a; --bad:#e66767;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:'Inter',system-ui,-apple-system,sans-serif;font-size:14px;}
+  h2,h3{font-family:'Barlow Semi Condensed',system-ui,sans-serif;font-weight:700;margin:0;letter-spacing:.2px;}
+  p{margin:0;}
+  button,input,select{font-family:inherit;}
+  button{cursor:pointer;}
+  [hidden]{display:none !important;}
+  .wrap{max-width:1100px;margin:0 auto;padding:20px 16px 48px;display:flex;flex-direction:column;gap:16px;}
+  .row{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;}
+  .grow{flex:1;}
+  .hero h2{font-size:26px;}
+  .hero p{font-size:14px;color:var(--ink-soft);line-height:1.5;margin-top:4px;max-width:80ch;}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px 18px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:10px;}
+  .card h3{font-size:17px;}
+  .card p,.card li{font-size:13.5px;color:var(--ink-soft);line-height:1.55;}
+  .f label{font-size:11px;font-weight:700;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px;}
+  .f input,.f select{width:100%;padding:9px 10px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--ink);font-size:13.5px;}
+  .filtros{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;align-items:end;}
+  .btn{border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);font-weight:600;font-size:13.5px;padding:10px 16px;border-radius:10px;}
+  .btn.ghost{background:transparent;color:var(--accent);}
+  .btn.sm{padding:7px 11px;font-size:12.5px;}
+  .btn:disabled{opacity:.5;cursor:not-allowed;}
+  .kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;}
+  .kpi{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:4px;box-shadow:var(--shadow);}
+  .kpi .l{font-size:11px;font-weight:600;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.5px;}
+  .kpi .v{font-family:'Barlow Semi Condensed',sans-serif;font-size:28px;font-weight:700;line-height:1.1;}
+  .kpi .s{font-size:12px;color:var(--ink-soft);}
+  .pos{color:var(--bad);} .neg{color:var(--good);}
+  .stabs{display:flex;gap:6px;flex-wrap:wrap;}
+  .stabs button{border:1px solid var(--border);background:var(--surface);color:var(--ink-soft);font-weight:600;font-size:13px;padding:8px 14px;border-radius:10px;}
+  .stabs button.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);}
+  .tbl{overflow:auto;border:1px solid var(--border);border-radius:14px;background:var(--surface);}
+  table{border-collapse:collapse;width:100%;font-size:13px;}
+  th{background:var(--surface-alt);text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--ink-faint);padding:9px 12px;white-space:nowrap;position:sticky;top:0;}
+  td{padding:8px 12px;border-top:1px solid var(--border);vertical-align:middle;}
+  td.n,th.n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;}
+  tr.tot td{font-weight:700;background:var(--surface-alt);}
+  tr.clic{cursor:pointer;} tr.clic:hover td{background:var(--accent-soft);}
+  .sub{color:var(--ink-faint);font-size:12px;}
+  .pill{display:inline-block;font-size:11px;font-weight:700;border-radius:999px;padding:3px 9px;background:var(--accent-soft);color:var(--accent);white-space:nowrap;}
+  .pill.warn{background:rgba(176,116,0,.15);color:var(--warn);}
+  .pill.bad{background:rgba(214,58,57,.15);color:var(--bad);}
+  .pill.ok{background:rgba(11,138,11,.14);color:var(--good);}
+  .msg{font-size:13px;line-height:1.5;}
+  .msg.err{color:var(--bad);} .msg.ok{color:var(--good);} .msg.warn{color:var(--warn);}
+  .aviso{border:1px solid var(--warn);background:rgba(176,116,0,.1);color:var(--ink);border-radius:10px;padding:8px 12px;font-size:13px;line-height:1.5;}
+  .aviso.bad{border-color:var(--bad);background:rgba(214,58,57,.08);}
+  .aviso.ok{border-color:var(--good);background:rgba(11,138,11,.08);}
+  .pie{font-size:12px;color:var(--ink-faint);line-height:1.5;}
+  .leyenda{display:flex;gap:14px;font-size:12px;color:var(--ink-soft);align-items:center;flex-wrap:wrap;}
+  .leyenda i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px;}
+  svg .gl{stroke:var(--border);stroke-width:1;} svg .ax{fill:var(--ink-faint);font-size:11px;font-family:'Inter',sans-serif;}
+  svg .br{fill:var(--accent);} svg .bp{fill:var(--ink-faint);opacity:.5;}
+  .pag{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13px;color:var(--ink-soft);}
+  .vacio{text-align:center;padding:34px 16px;color:var(--ink-soft);line-height:1.6;}
+  .mini{display:grid;grid-template-columns:repeat(auto-fit,minmax(86px,1fr));gap:6px;}
+  .mini div{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:6px 8px;font-size:12px;}
+  .mini b{display:block;font-size:11px;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.4px;}
+</style>
+</head>
+<body>
+
+<div class="wrap" id="vista" hidden>
+  <div class="row hero">
+    <div>
+      <h2>Gastos</h2>
+      <p id="lead" data-publico="Gasto real contra presupuesto por centro de coste y clase de coste, mes a mes.">Gasto real (SAP KSB1) contra presupuesto (SAP KSBP, versión 0) por centro de coste, clase de coste y mes. Desviación = real menos presupuesto: positivo es gasto por encima del presupuesto. Los cargos y sus cancelaciones (negativos) se suman; el neto es el gasto.</p>
+    </div>
+    <div class="grow"></div>
+    <div class="f" id="fAnioBox" hidden><label for="fAnio">Año</label><select id="fAnio"></select></div>
+  </div>
+
+  <div class="card" id="cFiltros">
+    <div class="filtros">
+      <div class="f"><label for="fCeco">Centro de coste</label><select id="fCeco"></select></div>
+      <div class="f"><label for="fClase">Clase de coste</label><select id="fClase"></select></div>
+      <div class="f"><label for="fHasta">Acumulado hasta</label><select id="fHasta"></select></div>
+      <div class="f"><button class="btn ghost" id="bCsv" type="button" style="width:100%">Descargar Excel (CSV)</button></div>
+    </div>
+  </div>
+
+  <div class="kpi-row" id="kpis"></div>
+  <div class="stabs" id="tabs"></div>
+  <div id="cuerpo"></div>
+  <p class="pie" id="pie"></p>
+</div>
+
+<div class="wrap" id="carga" hidden></div>
+
+<script>
+(function(){
+"use strict";
+function $(i){ return document.getElementById(i); }
+function el(t, c, x){ var e = document.createElement(t); if(c) e.className = c; if(x != null) e.textContent = x; return e; }
+function esc(s){ return String(s == null ? "" : s).replace(/[&<>"]/g, function(c){ return { "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]; }); }
+
+var MES3 = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+var MESL = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+// El código del centro de coste empieza con el CEDIS y termina con el área (0002 = Reparto).
+var CEDIS = { MAX:"Axochiapan", MCC:"Cocoyoc", MCU:"Cuautla", MCV:"Cuernavaca", MJO:"Jojutla", MPU:"Puente de Ixtla" };
+var AREAS = { "0002":"Reparto" };
+function nombreCeco(c){
+  var ced = CEDIS[c.slice(0, 3)], suf = c.slice(-4), ar = AREAS[suf] || suf;
+  return ced ? ced + " · " + ar : c;
+}
+function etCeco(c){ var n = nombreCeco(c); return n === c ? c : n + " (" + c + ")"; }
+
+var fmt = new Intl.NumberFormat("es-MX", { minimumFractionDigits:2, maximumFractionDigits:2 });
+function num(n){ return fmt.format(Math.round(n * 100) / 100); }
+function pesos(n){ return (n < 0 ? "-" : "") + "$" + fmt.format(Math.abs(Math.round(n * 100) / 100)); }
+function pct(n){ return n == null ? "—" : (n > 0 ? "+" : "") + n.toFixed(1) + "%"; }
+function fechaTxt(iso){
+  if(!iso) return "—";
+  try{ return new Date(String(iso).slice(0, 10) + "T00:00:00Z").toLocaleDateString("es-MX", { day:"numeric", month:"short", year:"numeric", timeZone:"UTC" }); }
+  catch(e){ return iso; }
+}
+function claseDev(v){ return v > 0.005 ? "pos" : (v < -0.005 ? "neg" : ""); }
+
+var params = new URLSearchParams(location.search);
+
+/* =====================================================================================
+   VISTA: gasto real contra presupuesto
+   ===================================================================================== */
+var D = null;                        // respuesta de gastos_datos
+var S = { anio:null, ceco:"", clase:"", hasta:12, vista:"clase", q:"", pag:0, exportar:null };
+var VISTAS = [["clase", "Por clase de coste"], ["mes", "Mes a mes"], ["ceco", "Por centro de coste"], ["partidas", "Partidas"]];
+var PAG = 100;
+
+function cargarDatos(anio){
+  return ERP.rest("rpc/gastos_datos", { method:"POST", body:{ p_anio:anio } }).then(function(d){
+    if(!(d.real.length || d.plan.length) && d.anios.length && d.anios.indexOf(anio) < 0) return cargarDatos(d.anios[0]);
+    D = d; S.anio = anio;
+    return d;
+  });
+}
+
+function pasa(c, k){ return (!S.ceco || c === S.ceco) && (!S.clase || k === S.clase); }
+
+function ultimoMes(){ var u = 0; D.real.forEach(function(r){ if(r[2] > u) u = r[2]; }); return u; }
+
+// Serie por mes (posiciones 1 a 12) con los filtros de centro y clase
+function serie(tipo){
+  var a = [0,0,0,0,0,0,0,0,0,0,0,0,0], m;
+  if(tipo === "real") D.real.forEach(function(r){ if(pasa(r[0], r[1])) a[r[2]] += r[3]; });
+  else D.plan.forEach(function(r){ if(pasa(r[0], r[1])) for(m = 1; m <= 12; m++) a[m] += r[1 + m]; });
+  return a;
+}
+function suma(a, hasta){ var s = 0; for(var m = 1; m <= hasta; m++) s += a[m]; return s; }
+function dev(real, plan){ return { abs:real - plan, pct: plan ? (real - plan) / plan * 100 : null }; }
+
+function listaCecos(){
+  var s = {}; D.real.forEach(function(r){ s[r[0]] = 1; }); D.plan.forEach(function(r){ s[r[0]] = 1; });
+  return Object.keys(s).sort();
+}
+function listaClases(){
+  var s = {}; D.real.forEach(function(r){ s[r[1]] = 1; }); D.plan.forEach(function(r){ s[r[1]] = 1; });
+  return Object.keys(s).sort();
+}
+
+function pintarFiltros(){
+  var sc = $("fCeco"); sc.textContent = "";
+  var o = el("option", "", "Todos los centros de coste"); o.value = ""; sc.appendChild(o);
+  listaCecos().forEach(function(c){ var x = el("option", "", etCeco(c)); x.value = c; sc.appendChild(x); });
+  sc.value = S.ceco;
+  var sk = $("fClase"); sk.textContent = "";
+  o = el("option", "", "Todas las clases"); o.value = ""; sk.appendChild(o);
+  listaClases().forEach(function(k){ var x = el("option", "", k + " · " + (D.nombres[k] || "")); x.value = k; sk.appendChild(x); });
+  sk.value = S.clase;
+  var sh = $("fHasta"); sh.textContent = "";
+  for(var m = 1; m <= 12; m++){ var y = el("option", "", MESL[m - 1].charAt(0).toUpperCase() + MESL[m - 1].slice(1)); y.value = m; sh.appendChild(y); }
+  sh.value = S.hasta;
+  var sa = $("fAnio"); sa.textContent = "";
+  D.anios.forEach(function(a){ var z = el("option", "", a); z.value = a; sa.appendChild(z); });
+  sa.value = S.anio; $("fAnioBox").hidden = D.anios.length < 2;
+}
+
+function pintarKpis(){
+  var box = $("kpis"); box.textContent = "";
+  var r = serie("real"), p = serie("plan");
+  var real = suma(r, S.hasta), plan = suma(p, S.hasta), anual = suma(p, 12), d = dev(real, plan);
+  var nPart = 0; D.real.forEach(function(x){ if(pasa(x[0], x[1]) && x[2] <= S.hasta) nPart += x[4]; });
+  function k(l, v, s, cls){
+    var c = el("div", "kpi"); c.appendChild(el("div", "l", l));
+    var vv = el("div", "v" + (cls ? " " + cls : ""), v); c.appendChild(vv); c.appendChild(el("div", "s", s)); box.appendChild(c);
+  }
+  var hasta = "a " + MESL[S.hasta - 1];
+  k("Gastado " + hasta, pesos(real), nPart.toLocaleString("es-MX") + " partidas");
+  k("Presupuesto " + hasta, plan ? pesos(plan) : "—", plan ? "Anual: " + pesos(anual) : "Sin presupuesto cargado para esta selección");
+  if(plan){
+    k("Desviación", (d.abs > 0 ? "+" : "") + pesos(d.abs), (d.abs > 0 ? "Por encima del presupuesto" : (d.abs < 0 ? "Por debajo del presupuesto" : "Igual al presupuesto")) + " · " + pct(d.pct), claseDev(d.abs));
+    k("Avance del presupuesto anual", anual ? (real / anual * 100).toFixed(1) + "%" : "—", "Gastado " + pesos(real) + " de " + pesos(anual));
+  } else {
+    k("Desviación", "—", "Falta el presupuesto de esta selección");
+  }
+}
+
+function tabla(cols, filas, opts){
+  opts = opts || {};
+  var w = el("div", "tbl"), t = el("table"), th = el("thead"), tr = el("tr");
+  cols.forEach(function(c){ tr.appendChild(el("th", c.n ? "n" : "", c.t)); });
+  th.appendChild(tr); t.appendChild(th);
+  var tb = el("tbody");
+  filas.forEach(function(f){
+    var r = el("tr", (f.total ? "tot " : "") + (f.clic ? "clic" : ""));
+    if(f.clic){ r.title = f.titulo || ""; r.addEventListener("click", f.clic); }
+    f.celdas.forEach(function(c, i){
+      var td = el("td", cols[i].n ? "n" : "");
+      if(c && typeof c === "object"){ td.textContent = c.t; if(c.cls) td.className += " " + c.cls; } else td.textContent = c;
+      r.appendChild(td);
+    });
+    tb.appendChild(r);
+  });
+  t.appendChild(tb); w.appendChild(t); return w;
+}
+function celdaDev(real, plan){
+  var d = dev(real, plan);
+  return [plan ? { t:(d.abs > 0 ? "+" : "") + num(d.abs), cls:claseDev(d.abs) } : "—", plan ? { t:pct(d.pct), cls:claseDev(d.abs) } : "—"];
+}
+
+function vistaClase(root){
+  var acc = {};
+  function g(k){ return acc[k] || (acc[k] = { real:0, plan:0, anual:0 }); }
+  D.real.forEach(function(r){ if(pasa(r[0], r[1]) && r[2] <= S.hasta) g(r[1]).real += r[3]; });
+  D.plan.forEach(function(r){
+    if(!pasa(r[0], r[1])) return;
+    var x = g(r[1]);
+    for(var m = 1; m <= 12; m++){ x.anual += r[1 + m]; if(m <= S.hasta) x.plan += r[1 + m]; }
+  });
+  var claves = Object.keys(acc).sort(), tot = { real:0, plan:0, anual:0 };
+  var filas = claves.map(function(k){
+    var x = acc[k]; tot.real += x.real; tot.plan += x.plan; tot.anual += x.anual;
+    var dd = celdaDev(x.real, x.plan);
+    return { celdas:[k, D.nombres[k] || "", num(x.real), x.plan ? num(x.plan) : "—", dd[0], dd[1], x.anual ? num(x.anual) : "—"],
+             clic:function(){ S.clase = k; S.vista = "mes"; pintar(); }, titulo:"Ver esta clase mes a mes" };
+  });
+  var dt = celdaDev(tot.real, tot.plan);
+  filas.push({ total:true, celdas:["", "Total", num(tot.real), tot.plan ? num(tot.plan) : "—", dt[0], dt[1], tot.anual ? num(tot.anual) : "—"] });
+  var cols = [{ t:"Clase" }, { t:"Denominación" }, { t:"Gastado", n:1 }, { t:"Presupuesto", n:1 }, { t:"Desviación", n:1 }, { t:"Desv. %", n:1 }, { t:"Presupuesto anual", n:1 }];
+  root.appendChild(tabla(cols, filas));
+  root.appendChild(el("p", "sub", "Importes en pesos (MXN), acumulados de enero a " + MESL[S.hasta - 1] + ". Toca una clase para verla mes a mes."));
+  S.exportar = { nombre:"gastos_por_clase", filas:[["Clase", "Denominación", "Gastado", "Presupuesto", "Desviación", "Desv. %", "Presupuesto anual"]].concat(filas.map(function(f){
+    return f.celdas.map(function(c){ return c && typeof c === "object" ? c.t : c; });
+  })) };
+}
+
+function grafica(real, plan, ult){
+  var W = 720, H = 230, pl = 52, pr = 8, pt = 10, pb = 26, max = 0, m, g;
+  for(m = 1; m <= 12; m++) max = Math.max(max, plan[m], m <= ult ? real[m] : 0);
+  if(max <= 0) return null;
+  var iw = (W - pl - pr) / 12, bw = iw * 0.34, ih = H - pt - pb;
+  function ab(n){ return n >= 1e6 ? (n / 1e6).toFixed(1) + " M" : (n >= 1e3 ? Math.round(n / 1e3) + " k" : String(Math.round(n))); }
+  var s = '<svg viewBox="0 0 ' + W + " " + H + '" role="img" aria-label="Gastado y presupuesto por mes" style="width:100%;height:auto">';
+  for(g = 0; g <= 4; g++){
+    var y = pt + ih * (1 - g / 4);
+    s += '<line class="gl" x1="' + pl + '" x2="' + (W - pr) + '" y1="' + y + '" y2="' + y + '"/>';
+    s += '<text class="ax" x="' + (pl - 6) + '" y="' + (y + 4) + '" text-anchor="end">' + ab(max * g / 4) + "</text>";
+  }
+  for(m = 1; m <= 12; m++){
+    var x0 = pl + (m - 1) * iw + iw * 0.12;
+    var hp = Math.max(0, plan[m] / max * ih), hr = m <= ult ? Math.max(0, real[m] / max * ih) : 0;
+    s += '<rect class="bp" x="' + x0 + '" y="' + (pt + ih - hp) + '" width="' + bw + '" height="' + hp + '" rx="2"/>';
+    if(m <= ult) s += '<rect class="br" x="' + (x0 + bw + 2) + '" y="' + (pt + ih - hr) + '" width="' + bw + '" height="' + hr + '" rx="2"/>';
+    s += '<text class="ax" x="' + (pl + (m - 1) * iw + iw / 2) + '" y="' + (H - 8) + '" text-anchor="middle">' + MES3[m - 1] + "</text>";
+  }
+  return s + "</svg>";
+}
+
+function vistaMes(root){
+  var r = serie("real"), p = serie("plan"), ult = ultimoMes(), m;
+  var svg = grafica(r, p, ult);
+  if(svg){
+    var c = el("div", "card");
+    c.innerHTML = svg + '<div class="leyenda"><span><i style="background:var(--accent)"></i>Gastado</span><span><i style="background:var(--ink-faint);opacity:.5"></i>Presupuesto</span></div>';
+    root.appendChild(c);
+  }
+  var filas = [], aR = 0, aP = 0, tr = 0, tp = 0;
+  for(m = 1; m <= 12; m++){
+    var hayReal = m <= ult;
+    aR += hayReal ? r[m] : 0; aP += p[m]; tp += p[m]; tr += hayReal ? r[m] : 0;
+    var d1 = celdaDev(r[m], p[m]), d2 = celdaDev(aR, aP);
+    filas.push({ celdas:[MESL[m - 1].charAt(0).toUpperCase() + MESL[m - 1].slice(1),
+      hayReal ? num(r[m]) : "—", p[m] ? num(p[m]) : "—", hayReal ? d1[0] : "—", hayReal ? d1[1] : "—",
+      hayReal ? num(aR) : "—", p[m] || aP ? num(aP) : "—", hayReal ? d2[1] : "—"] });
+  }
+  var pu = suma(p, ult), dt = celdaDev(tr, pu);
+  filas.push({ total:true, celdas:["Total a " + (ult ? MESL[ult - 1] : "—"), num(tr), pu ? num(pu) : "—", dt[0], dt[1], "", "", ""] });
+  var cols = [{ t:"Mes" }, { t:"Gastado", n:1 }, { t:"Presupuesto", n:1 }, { t:"Desviación", n:1 }, { t:"Desv. %", n:1 }, { t:"Gastado acumulado", n:1 }, { t:"Presupuesto acumulado", n:1 }, { t:"Desv. % acum.", n:1 }];
+  root.appendChild(tabla(cols, filas));
+  root.appendChild(el("p", "sub", "Importes en pesos (MXN). El total compara el gastado con el presupuesto de enero al último mes con datos; el anual está en las tarjetas de arriba."));
+  S.exportar = { nombre:"gastos_mes_a_mes", filas:[cols.map(function(c){ return c.t; })].concat(filas.map(function(f){
+    return f.celdas.map(function(c){ return c && typeof c === "object" ? c.t : c; });
+  })) };
+}
+
+function vistaCeco(root){
+  var acc = {};
+  function g(c){ return acc[c] || (acc[c] = { real:0, plan:0, anual:0 }); }
+  D.real.forEach(function(r){ if((!S.clase || r[1] === S.clase) && r[2] <= S.hasta) g(r[0]).real += r[3]; });
+  D.plan.forEach(function(r){
+    if(S.clase && r[1] !== S.clase) return;
+    var x = g(r[0]);
+    for(var m = 1; m <= 12; m++){ x.anual += r[1 + m]; if(m <= S.hasta) x.plan += r[1 + m]; }
+  });
+  var tot = { real:0, plan:0, anual:0 };
+  var filas = Object.keys(acc).sort().map(function(c){
+    var x = acc[c]; tot.real += x.real; tot.plan += x.plan; tot.anual += x.anual;
+    var dd = celdaDev(x.real, x.plan);
+    return { celdas:[c, nombreCeco(c), num(x.real), x.plan ? num(x.plan) : "—", dd[0], dd[1], x.anual ? (x.real / x.anual * 100).toFixed(1) + "%" : "—"],
+             clic:function(){ S.ceco = c; S.vista = "clase"; pintar(); }, titulo:"Ver este centro de coste por clase" };
+  });
+  var dt = celdaDev(tot.real, tot.plan);
+  filas.push({ total:true, celdas:["", "Total", num(tot.real), tot.plan ? num(tot.plan) : "—", dt[0], dt[1], tot.anual ? (tot.real / tot.anual * 100).toFixed(1) + "%" : "—"] });
+  var cols = [{ t:"Centro de coste" }, { t:"CEDIS · área" }, { t:"Gastado", n:1 }, { t:"Presupuesto", n:1 }, { t:"Desviación", n:1 }, { t:"Desv. %", n:1 }, { t:"Avance del anual", n:1 }];
+  root.appendChild(tabla(cols, filas));
+  root.appendChild(el("p", "sub", "Importes en pesos (MXN), acumulados de enero a " + MESL[S.hasta - 1] + ". Toca un centro de coste para verlo por clase."));
+  S.exportar = { nombre:"gastos_por_centro_de_coste", filas:[cols.map(function(c){ return c.t; })].concat(filas.map(function(f){
+    return f.celdas.map(function(c){ return c && typeof c === "object" ? c.t : c; });
+  })) };
+}
+
+/* ---- Partidas (detalle) ---- */
+function qPartidas(extra){
+  var q = "gastos_real?select=fecha,ceco,clase,clase_den,orden,orden_den,valor&anio=eq." + S.anio + "&mes=lte." + S.hasta;
+  if(S.ceco) q += "&ceco=eq." + encodeURIComponent(S.ceco);
+  if(S.clase) q += "&clase=eq." + encodeURIComponent(S.clase);
+  var t = S.q.replace(/[,()*%\\]/g, " ").trim();
+  if(t){ var e = encodeURIComponent("*" + t + "*"); q += "&or=(orden_den.ilike." + e + ",orden.ilike." + e + ",clase_den.ilike." + e + ")"; }
+  return q + "&order=fecha.desc,id.desc" + (extra || "");
+}
+function pedir(q){
+  return fetch(ERP.URL + "/rest/v1/" + q, { headers:ERP.headers({ Prefer:"count=exact" }) }).then(function(r){
+    if(!r.ok) return r.text().then(function(t){ throw new Error("HTTP " + r.status + (t ? " · " + t.slice(0, 140) : "")); });
+    var cr = r.headers.get("Content-Range") || "", tot = parseInt(cr.split("/")[1], 10);
+    return r.json().then(function(rows){ return { rows:rows, total:isNaN(tot) ? rows.length : tot }; });
+  });
+}
+function vistaPartidas(root){
+  var barra = el("div", "row");
+  var f = el("div", "f grow"); f.appendChild(el("label", "", "Buscar (orden, descripción o clase)"));
+  var inp = el("input"); inp.type = "search"; inp.value = S.q; inp.placeholder = "Ej. REMOSAMIENTO, 41455687, FRENOS";
+  f.appendChild(inp); barra.appendChild(f);
+  var bb = el("button", "btn sm", "Buscar"); bb.type = "button"; barra.appendChild(bb);
+  root.appendChild(barra);
+  function ir(){ S.q = inp.value; S.pag = 0; pintar(); }
+  bb.addEventListener("click", ir); inp.addEventListener("keydown", function(e){ if(e.key === "Enter") ir(); });
+  var zona = el("div"); root.appendChild(zona); zona.appendChild(el("p", "sub", "Cargando partidas…"));
+  pedir(qPartidas("&limit=" + PAG + "&offset=" + (S.pag * PAG))).then(function(res){
+    zona.textContent = "";
+    var filas = res.rows.map(function(r){
+      return { celdas:[fechaTxt(r.fecha), r.ceco, r.clase + " · " + (r.clase_den || ""), r.orden || "", r.orden_den || "", { t:num(r.valor), cls: r.valor < 0 ? "neg" : "" }] };
+    });
+    if(!filas.length){ zona.appendChild(el("div", "vacio", "No hay partidas con estos filtros.")); return; }
+    zona.appendChild(tabla([{ t:"Fecha" }, { t:"Centro" }, { t:"Clase de coste" }, { t:"Orden" }, { t:"Descripción de la orden" }, { t:"Importe", n:1 }], filas));
+    var pg = el("div", "pag"), ini = S.pag * PAG + 1, fin = S.pag * PAG + res.rows.length;
+    pg.appendChild(el("span", "", "Partidas " + ini.toLocaleString("es-MX") + " a " + fin.toLocaleString("es-MX") + " de " + res.total.toLocaleString("es-MX") + " · ordenadas de la más reciente a la más antigua"));
+    var a = el("button", "btn ghost sm", "Anterior"); a.type = "button"; a.disabled = S.pag === 0;
+    a.addEventListener("click", function(){ S.pag--; pintar(); }); pg.appendChild(a);
+    var s = el("button", "btn ghost sm", "Siguiente"); s.type = "button"; s.disabled = fin >= res.total;
+    s.addEventListener("click", function(){ S.pag++; pintar(); }); pg.appendChild(s);
+    zona.appendChild(pg);
+    zona.appendChild(el("p", "sub", "Los importes negativos son cancelaciones o abonos; ya vienen restados en los totales de las otras vistas."));
+  }).catch(function(e){ zona.textContent = ""; zona.appendChild(el("p", "msg err", "No se pudieron leer las partidas: " + e.message)); });
+  S.exportar = { partidas:true };
+}
+
+function pintarPie(){
+  var c = D.carga;
+  $("pie").textContent = c
+    ? "Información de SAP al " + fechaTxt(c.fecha_max) + " (carga del " + fechaTxt(c.creada) + ")."
+    : "";
+}
+
+function pintar(){
+  pintarKpis();
+  var tabs = $("tabs"); tabs.textContent = "";
+  VISTAS.forEach(function(v){
+    var b = el("button", S.vista === v[0] ? "on" : "", v[1]); b.type = "button";
+    b.addEventListener("click", function(){ S.vista = v[0]; S.pag = 0; pintar(); });
+    tabs.appendChild(b);
+  });
+  var cu = $("cuerpo"); cu.textContent = ""; S.exportar = null;
+  if(S.vista === "clase") vistaClase(cu);
+  else if(S.vista === "mes") vistaMes(cu);
+  else if(S.vista === "ceco") vistaCeco(cu);
+  else vistaPartidas(cu);
+  var sinPlan = !D.plan.some(function(r){ return pasa(r[0], r[1]); });
+  if(sinPlan && D.real.length) cu.insertBefore(el("div", "aviso", "Esta selección todavía no tiene presupuesto cargado, por eso no se muestran desviaciones."), cu.firstChild);
+}
+
+function csv(filas, nombre){
+  var txt = filas.map(function(f){
+    return f.map(function(c){ c = String(c == null ? "" : c); return /[",\n;]/.test(c) ? '"' + c.replace(/"/g, '""') + '"' : c; }).join(",");
+  }).join("\r\n");
+  var blob = new Blob(["﻿" + txt], { type:"text/csv;charset=utf-8" });
+  var a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = nombre + "_" + S.anio + ".csv";
+  document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 500);
+}
+function descargar(){
+  var x = S.exportar; if(!x) return;
+  if(!x.partidas){ csv(x.filas, x.nombre); return; }
+  var b = $("bCsv"); b.disabled = true; b.textContent = "Preparando…";
+  var todas = [["Fecha", "Centro", "Clase", "Denominación clase", "Orden", "Descripción de la orden", "Importe"]];
+  function pag(off){
+    return pedir(qPartidas("&limit=1000&offset=" + off)).then(function(res){
+      res.rows.forEach(function(r){ todas.push([r.fecha, r.ceco, r.clase, r.clase_den || "", r.orden || "", r.orden_den || "", r.valor]); });
+      if(res.rows.length === 1000 && off < 49000) return pag(off + 1000);
+    });
+  }
+  pag(0).then(function(){ csv(todas, "gastos_partidas"); }).catch(function(e){ $("pie").textContent = "No se pudo descargar: " + e.message; })
+    .then(function(){ b.disabled = false; b.textContent = "Descargar Excel (CSV)"; });
+}
+
+function arrancarVista(){
+  var vista = $("vista"); vista.hidden = false;
+  if(ERP.nivel("gastos") === "oculto"){
+    vista.textContent = ""; var c = el("div", "card"); c.appendChild(el("h3", "", "Sin acceso")); c.appendChild(el("p", "", "Tu usuario no tiene acceso a Gastos. Pídeselo al administrador.")); vista.appendChild(c); return;
+  }
+  cargarDatos(new Date().getFullYear()).then(function(){
+    if(!(D.real.length || D.plan.length)){
+      var c = el("div", "card vacio"); c.textContent = "Todavía no hay datos de gastos cargados." + (ERP.puede("gastos") ? " Súbelos desde Ajustes › Gastos." : "");
+      $("cFiltros").hidden = true; $("kpis").hidden = true; $("tabs").hidden = true; $("cuerpo").appendChild(c); return;
+    }
+    var u = ultimoMes(); S.hasta = u || 12;
+    pintarFiltros(); pintarPie(); pintar();
+    $("fCeco").addEventListener("change", function(){ S.ceco = this.value; S.pag = 0; pintar(); });
+    $("fClase").addEventListener("change", function(){ S.clase = this.value; S.pag = 0; pintar(); });
+    $("fHasta").addEventListener("change", function(){ S.hasta = +this.value; S.pag = 0; pintar(); });
+    $("fAnio").addEventListener("change", function(){
+      var a = +this.value; cargarDatos(a).then(function(){ S.ceco = ""; S.clase = ""; S.hasta = ultimoMes() || 12; S.pag = 0; pintarFiltros(); pintarPie(); pintar(); })
+        .catch(function(e){ $("cuerpo").textContent = "No se pudo leer el año: " + e.message; });
+    });
+    $("bCsv").addEventListener("click", descargar);
+  }).catch(function(e){
+    var c = el("p", "msg err", "No se pudieron leer los gastos: " + e.message); $("vista").insertBefore(c, $("cFiltros"));
+  });
+}
+
+/* =====================================================================================
+   CARGA (Ajustes › Gastos): sube los archivos de SAP y los guarda
+   ===================================================================================== */
+var L = { real:null, plan:null, errores:[] };
+
+function arrancarCarga(){
+  var root = $("carga"); root.hidden = false; root.textContent = "";
+  if(!ERP.puede("gastos")){
+    var c = el("div", "card"); c.appendChild(el("h3", "", "Sin permiso")); c.appendChild(el("p", "", "Solo quien puede editar Gastos puede cargar archivos de SAP.")); root.appendChild(c); return;
+  }
+  var h = el("div", "card");
+  h.innerHTML =
+    "<h3>Cargar gastos y presupuesto desde SAP</h3>" +
+    "<p>Elige juntos (o por separado) los dos archivos. En SAP, con la lista en pantalla: <b>Lista › Exportar › Fichero local › Texto sin tabuladores</b>.</p>" +
+    "<ul><li><b>Gasto real:</b> KSB1, con el layout de siempre (fecha de contabilización, orden, valor, centro de coste), del 01.01 al último día del mes cerrado, con el máximo de resultados en 50,000.</li>" +
+    "<li><b>Presupuesto:</b> KSBP, versión 0, periodos 1 a 12, con el layout que trae el valor de cada mes (Val./MI).</li></ul>" +
+    "<p>Cada carga reemplaza el año de los centros de coste que trae el archivo; no toca los demás.</p>";
+  var fila = el("div", "row"); fila.style.alignItems = "center";
+  var inp = el("input"); inp.type = "file"; inp.multiple = true; inp.accept = ".xls,.txt,.csv,.tsv"; inp.hidden = true;
+  var bel = el("button", "btn", "Elegir archivos de SAP"); bel.type = "button";
+  bel.addEventListener("click", function(){ inp.click(); });
+  fila.appendChild(bel); fila.appendChild(inp); h.appendChild(fila);
+  root.appendChild(h);
+  var zona = el("div"); zona.id = "zonaCarga"; zona.style.display = "flex"; zona.style.flexDirection = "column"; zona.style.gap = "16px"; root.appendChild(zona);
+  inp.addEventListener("change", function(){
+    var fs = Array.prototype.slice.call(inp.files || []);
+    if(!fs.length) return;
+    L = { real:null, plan:null, errores:[] };
+    Promise.all(fs.map(function(f){
+      return f.arrayBuffer().then(function(buf){
+        try{ var r = GASTOS_LIB.leer(GASTOS_LIB.decodificar(buf)); r.nombre = f.name; return r; }
+        catch(e){ return { error:e.message, nombre:f.name }; }
+      });
+    })).then(function(rs){
+      rs.forEach(function(r){
+        if(r.error) L.errores.push(r);
+        else if(r.tipo === "real"){ if(L.real) L.errores.push({ nombre:r.nombre, error:"Hay dos archivos de gasto real; se usa el último (" + r.nombre + ")." }); L.real = r; }
+        else { if(L.plan) L.errores.push({ nombre:r.nombre, error:"Hay dos archivos de presupuesto; se usa el último (" + r.nombre + ")." }); L.plan = r; }
+      });
+      inp.value = "";
+      pintarCarga(zona);
+    });
+  });
+}
+
+function filaDato(l, v){ return "<tr><td>" + esc(l) + "</td><td class='n'>" + v + "</td></tr>"; }
+function porCeco(cecos){
+  return Object.keys(cecos).sort().map(function(c){ return "<div><b>" + esc(c) + "</b>" + cecos[c].toLocaleString("es-MX") + "</div>"; }).join("");
+}
+
+function pintarCarga(zona){
+  zona.textContent = "";
+  L.errores.forEach(function(e){ var d = el("div", "aviso bad"); d.textContent = e.nombre + ": " + e.error; zona.appendChild(d); });
+  if(!L.real && !L.plan) return;
+
+  var criticos = false;
+  if(L.real){
+    var r = L.real.resumen, c = el("div", "card");
+    var meses = Object.keys(r.porMes).sort(function(a, b){ return a - b; }).map(function(m){ return "<div><b>" + MES3[m - 1] + "</b>" + num(r.porMes[m]) + "</div>"; }).join("");
+    c.innerHTML = "<h3>Gasto real <span class='pill'>KSB1</span></h3><p class='sub'>" + esc(L.real.nombre) + "</p>" +
+      "<table><tbody>" + filaDato("Partidas", r.n.toLocaleString("es-MX")) + filaDato("Total", pesos(r.total)) +
+      filaDato("Fechas de contabilización", fechaTxt(r.fmin) + " a " + fechaTxt(r.fmax)) + "</tbody></table>" +
+      "<p class='sub'>Partidas por centro de coste</p><div class='mini'>" + porCeco(r.cecos) + "</div>" +
+      "<p class='sub'>Total por mes (neto de cancelaciones)</p><div class='mini'>" + meses + "</div>";
+    zona.appendChild(c);
+    L.real.avisos.forEach(function(a){ if(/exactamente/.test(a)) criticos = true; var d = el("div", "aviso"); d.textContent = a; zona.appendChild(d); });
+  }
+  if(L.plan){
+    var p = L.plan.resumen, c2 = el("div", "card");
+    var mp = p.porMes.map(function(v, i){ return "<div><b>" + MES3[i] + "</b>" + num(v) + "</div>"; }).join("");
+    c2.innerHTML = "<h3>Presupuesto <span class='pill'>KSBP</span></h3><p class='sub'>" + esc(L.plan.nombre) + "</p>" +
+      "<table><tbody>" + filaDato("Renglones (centro × clase)", p.n.toLocaleString("es-MX")) + filaDato("Presupuesto anual", pesos(p.totalAnual)) +
+      filaDato("Año", esc(p.anios.join(", ") || "—")) + "</tbody></table>" +
+      "<p class='sub'>Renglones por centro de coste</p><div class='mini'>" + porCeco(p.cecos) + "</div>" +
+      "<p class='sub'>Presupuesto por mes</p><div class='mini'>" + mp + "</div>";
+    zona.appendChild(c2);
+    L.plan.avisos.forEach(function(a){ if(/exactamente/.test(a)) criticos = true; var d = el("div", "aviso"); d.textContent = a; zona.appendChild(d); });
+  }
+  if(L.real && L.plan){
+    var cr = Object.keys(L.real.resumen.cecos), cp = Object.keys(L.plan.resumen.cecos);
+    var faltaPlan = cr.filter(function(c){ return cp.indexOf(c) < 0; }), faltaReal = cp.filter(function(c){ return cr.indexOf(c) < 0; });
+    if(faltaPlan.length){ criticos = true; var d1 = el("div", "aviso"); d1.textContent = "El gasto trae centros de coste que el presupuesto no trae: " + faltaPlan.join(", ") + "."; zona.appendChild(d1); }
+    if(faltaReal.length){ var d2 = el("div", "aviso"); d2.textContent = "El presupuesto trae centros de coste que el gasto no trae: " + faltaReal.join(", ") + "."; zona.appendChild(d2); }
+  }
+
+  // Cuadre contra el informe de SAP (opcional)
+  var hastaDef = L.real && L.real.resumen.fmax ? +L.real.resumen.fmax.slice(5, 7) : 12;
+  var anioDef = (L.real && L.real.resumen.anio) || (L.plan && +L.plan.resumen.anios[0]) || new Date().getFullYear();
+  var cq = el("div", "card");
+  cq.innerHTML = "<h3>Cuadre contra el informe de SAP <span class='sub'>(recomendado)</span></h3>" +
+    "<p>Escribe los totales del informe Real/Plan/Desviación de SAP (S_ALR_87013611) para el mismo periodo. Si coinciden al centavo, la carga está completa.</p>" +
+    "<div class='filtros'>" +
+    "<div class='f'><label for='qAnio'>Año</label><input id='qAnio' type='number' min='2020' max='2100' value='" + anioDef + "'></div>" +
+    "<div class='f'><label for='qHasta'>Hasta el periodo (mes)</label><input id='qHasta' type='number' min='1' max='12' value='" + hastaDef + "'></div>" +
+    (L.real ? "<div class='f'><label for='qReal'>Cst.reales del informe</label><input id='qReal' inputmode='decimal' placeholder='6,780,864.82'></div>" : "") +
+    (L.plan ? "<div class='f'><label for='qPlan'>Cst.plan del informe</label><input id='qPlan' inputmode='decimal' placeholder='7,117,978.29'></div>" : "") +
+    "</div><div id='qRes'></div>";
+  zona.appendChild(cq);
+
+  var gc = el("div", "card");
+  gc.innerHTML = "<div class='f'><label for='qNota'>Nota de la carga (opcional)</label><input id='qNota' placeholder='Ej. Cierre de octubre'></div>" +
+    "<label id='qForzarBox' class='sub' hidden style='display:flex;gap:8px;align-items:flex-start'><input type='checkbox' id='qForzar' style='margin-top:3px'> <span id='qForzarTxt'></span></label>" +
+    "<div class='row' style='align-items:center'><button class='btn' id='bGuardar' type='button'>Guardar en el ERP</button><span class='msg' id='gMsg'></span></div>";
+  zona.appendChild(gc);
+
+  var mismatch = false;
+  function revisar(){
+    var res = $("qRes"); res.textContent = ""; mismatch = false;
+    var h = Math.max(1, Math.min(12, +$("qHasta").value || 12)), lineas = [];
+    if(L.real && $("qReal") && $("qReal").value.trim()){
+      var x = GASTOS_LIB.numero($("qReal").value), d = GASTOS_LIB.redondea(L.real.resumen.total - x);
+      if(isNaN(x)) lineas.push(["bad", "No entendí el total del gasto real."]);
+      else if(Math.abs(d) < 0.005) lineas.push(["ok", "Gasto real cuadra: " + pesos(L.real.resumen.total) + " = informe de SAP."]);
+      else { mismatch = true; lineas.push(["bad", "Gasto real NO cuadra: el archivo trae " + pesos(L.real.resumen.total) + " y el informe " + pesos(x) + " (diferencia " + pesos(d) + ")."]); }
+    }
+    if(L.plan && $("qPlan") && $("qPlan").value.trim()){
+      var y = GASTOS_LIB.numero($("qPlan").value), pa = 0; for(var m = 0; m < h; m++) pa += L.plan.resumen.porMes[m];
+      pa = GASTOS_LIB.redondea(pa); var d2 = GASTOS_LIB.redondea(pa - y);
+      if(isNaN(y)) lineas.push(["bad", "No entendí el total del presupuesto."]);
+      else if(Math.abs(d2) < 0.005) lineas.push(["ok", "Presupuesto cuadra: " + pesos(pa) + " de enero a " + MESL[h - 1] + " = informe de SAP."]);
+      else { mismatch = true; lineas.push(["bad", "Presupuesto NO cuadra: el archivo suma " + pesos(pa) + " de enero a " + MESL[h - 1] + " y el informe " + pesos(y) + " (diferencia " + pesos(d2) + ")."]); }
+    }
+    lineas.forEach(function(l){ var d = el("div", "aviso " + l[0]); d.textContent = l[1]; res.appendChild(d); });
+    var requiere = mismatch || criticos;
+    $("qForzarBox").hidden = !requiere;
+    $("qForzarTxt").textContent = mismatch ? "Los totales no cuadran con SAP; quiero guardar de todos modos." : "El archivo puede estar incompleto; quiero guardar de todos modos.";
+    $("bGuardar").disabled = requiere && !$("qForzar").checked;
+  }
+  ["qAnio", "qHasta", "qReal", "qPlan"].forEach(function(i){ if($(i)) $(i).addEventListener("input", revisar); });
+  $("qForzar").addEventListener("change", revisar);
+  revisar();
+
+  $("bGuardar").addEventListener("click", function(){
+    var b = this, m = $("gMsg"), anio = +$("qAnio").value;
+    if(!(anio >= 2020 && anio <= 2100)){ m.className = "msg err"; m.textContent = "Revisa el año."; return; }
+    b.disabled = true; m.className = "msg"; m.textContent = "Guardando…";
+    ERP.rest("rpc/gastos_cargar", { method:"POST", body:{
+      p_anio:anio, p_real:L.real ? L.real.filas : [], p_plan:L.plan ? L.plan.filas : [], p_nota:$("qNota").value.trim() || null
+    } }).then(function(r){
+      var ok = true, txt = [];
+      if(L.real){
+        var igual = r.n_real === L.real.resumen.n && Math.abs(r.total_real - L.real.resumen.total) < 0.01; ok = ok && igual;
+        txt.push(r.n_real.toLocaleString("es-MX") + " partidas por " + pesos(r.total_real));
+      }
+      if(L.plan){
+        var igual2 = r.n_plan === L.plan.resumen.n && Math.abs(r.total_plan_anual - L.plan.resumen.totalAnual) < 0.01; ok = ok && igual2;
+        txt.push("presupuesto de " + r.n_plan + " renglones (anual " + pesos(r.total_plan_anual) + ")");
+      }
+      m.className = ok ? "msg ok" : "msg err";
+      m.textContent = (ok ? "Guardado y verificado: " : "Guardado, pero lo guardado no coincide con el archivo: ") + txt.join(" · ") + ".";
+    }).catch(function(e){
+      b.disabled = false; m.className = "msg err"; m.textContent = "No se pudo guardar: " + e.message;
+    });
+  });
+}
+
+/* ---- arranque ---- */
+if(params.get("modo") === "carga") arrancarCarga(); else arrancarVista();
+})();
+</script>
+</body>
+</html>
