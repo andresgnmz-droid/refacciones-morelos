@@ -62,7 +62,8 @@
   }
 
   // Devuelve { tipo:"real"|"plan", filas:[...], resumen:{...}, avisos:[...] }  (lanza Error si no es un archivo reconocible)
-  function leer(texto){
+  function leer(texto, opc){
+    opc = opc || {};
     var lineas = String(texto).split(/\r?\n/);
     var iCab = -1, i;
     for(i = 0; i < lineas.length; i++){
@@ -128,7 +129,8 @@
     var iValor = buscaCol(cab, "valor"), iFecha = buscaCol(cab, "fecha");
     if(iValor < 0 || iFecha < 0) throw new Error("Faltan columnas: se necesitan el valor (Val./MI) y la fecha de contabilización (Fe.contab.). Revisa el layout en SAP.");
     var iDenR = buscaCol(cab, "clase_den"), iArea = buscaCol(cab, "area"), iOrd = buscaCol(cab, "orden"), iOrdDen = buscaCol(cab, "orden_den"),
-        iReg = buscaCol(cab, "reg"), iUsu = buscaCol(cab, "usuario");
+        iReg = buscaCol(cab, "reg"), iUsu = buscaCol(cab, "usuario"),
+        iDnm = cab.indexOf("denominacion"), iQty = cab.indexOf("ctd.reg.");
     var filas = [], sinFecha = 0, sinValor = 0, cecosR = {}, porMes = {}, anioC = {}, total = 0, fmin = null, fmax = null, rmax = null;
     datos.forEach(function(p){
       var v = numero(p[iValor]), f = fechaISO(p[iFecha]);
@@ -137,6 +139,7 @@
       var c = celda(p, iCeco);
       filas.push({ c: c, k: celda(p, iClase), kd: celda(p, iDenR), a: celda(p, iArea), o: celda(p, iOrd), od: celda(p, iOrdDen),
                    f: f, v: redondea(v), u: celda(p, iUsu), r: fechaISO(celda(p, iReg)) || "" });
+      if(opc.extra){ var fl = filas[filas.length - 1]; fl.d = celda(p, iDnm); var q = numero(celda(p, iQty)); fl.q = isNaN(q) ? 0 : q; }
       cecosR[c] = (cecosR[c] || 0) + 1;
       var mm = +f.slice(5, 7); porMes[mm] = redondea((porMes[mm] || 0) + v);
       anioC[f.slice(0, 4)] = (anioC[f.slice(0, 4)] || 0) + 1;

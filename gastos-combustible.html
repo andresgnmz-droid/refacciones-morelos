@@ -1,0 +1,460 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gasto de combustible</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap">
+<script src="erp-auth.js"></script>
+<script src="gastos-lib.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --ink:#142433; --ink-soft:#48607A; --ink-faint:#7C93A6;
+    --bg:#EEF2F5; --surface:#FFFFFF; --surface-alt:#E4EAEF; --border:#D3DCE3;
+    --accent:#0E7C86; --accent-ink:#FFFFFF; --accent-soft:#DCEEF0;
+    --shadow:0 1px 2px rgba(20,36,51,.06),0 4px 14px rgba(20,36,51,.07);
+    --good:#0b8a0b; --warn:#b07400; --bad:#d63a39;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --ink:#E7EDF2; --ink-soft:#9AB0C2; --ink-faint:#7C93A6;
+      --bg:#0F1620; --surface:#182230; --surface-alt:#1F2C3C; --border:#2B3B4D;
+      --accent:#35B6C2; --accent-ink:#06232A; --accent-soft:#163238;
+      --shadow:0 1px 2px rgba(0,0,0,.3),0 4px 14px rgba(0,0,0,.35);
+      --good:#2fbf2f; --warn:#d99a1a; --bad:#e66767;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ink:#E7EDF2; --ink-soft:#9AB0C2; --ink-faint:#7C93A6;
+    --bg:#0F1620; --surface:#182230; --surface-alt:#1F2C3C; --border:#2B3B4D;
+    --accent:#35B6C2; --accent-ink:#06232A; --accent-soft:#163238;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 4px 14px rgba(0,0,0,.35);
+    --good:#2fbf2f; --warn:#d99a1a; --bad:#e66767;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:'Inter',system-ui,-apple-system,sans-serif;font-size:14px;}
+  h2,h3{font-family:'Barlow Semi Condensed',system-ui,sans-serif;font-weight:700;margin:0;letter-spacing:.2px;}
+  p{margin:0;}
+  button,input,select{font-family:inherit;}
+  button{cursor:pointer;}
+  [hidden]{display:none !important;}
+  .wrap{max-width:1100px;margin:0 auto;padding:20px 16px 48px;display:flex;flex-direction:column;gap:16px;}
+  .row{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;}
+  .grow{flex:1;}
+  .hero h2{font-size:26px;}
+  .hero p{font-size:14px;color:var(--ink-soft);line-height:1.5;margin-top:4px;max-width:80ch;}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px 18px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:10px;}
+  .card h3{font-size:17px;}
+  .card p,.card li{font-size:13.5px;color:var(--ink-soft);line-height:1.55;}
+  .f label{font-size:11px;font-weight:700;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px;}
+  .f input,.f select{width:100%;padding:9px 10px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--ink);font-size:13.5px;}
+  .filtros{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;align-items:end;}
+  .btn{border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);font-weight:600;font-size:13.5px;padding:10px 16px;border-radius:10px;}
+  .btn.ghost{background:transparent;color:var(--accent);}
+  .btn.sm{padding:7px 11px;font-size:12.5px;}
+  .btn:disabled{opacity:.5;cursor:not-allowed;}
+  .kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;}
+  .kpi{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:4px;box-shadow:var(--shadow);}
+  .kpi .l{font-size:11px;font-weight:600;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.5px;}
+  .kpi .v{font-family:'Barlow Semi Condensed',sans-serif;font-size:28px;font-weight:700;line-height:1.1;}
+  .kpi .s{font-size:12px;color:var(--ink-soft);}
+  .pos{color:var(--bad);} .neg{color:var(--good);}
+  .stabs{display:flex;gap:6px;flex-wrap:wrap;}
+  .stabs button{border:1px solid var(--border);background:var(--surface);color:var(--ink-soft);font-weight:600;font-size:13px;padding:8px 14px;border-radius:10px;}
+  .stabs button.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);}
+  .tbl{overflow:auto;border:1px solid var(--border);border-radius:14px;background:var(--surface);}
+  table{border-collapse:collapse;width:100%;font-size:13px;}
+  th{background:var(--surface-alt);text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--ink-faint);padding:9px 12px;white-space:nowrap;position:sticky;top:0;}
+  td{padding:8px 12px;border-top:1px solid var(--border);vertical-align:middle;}
+  td.n,th.n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;}
+  tr.tot td{font-weight:700;background:var(--surface-alt);}
+  tr.clic{cursor:pointer;} tr.clic:hover td{background:var(--accent-soft);}
+  .sub{color:var(--ink-faint);font-size:12px;}
+  .pill{display:inline-block;font-size:11px;font-weight:700;border-radius:999px;padding:3px 9px;background:var(--accent-soft);color:var(--accent);white-space:nowrap;}
+  .pill.warn{background:rgba(176,116,0,.15);color:var(--warn);}
+  .pill.bad{background:rgba(214,58,57,.15);color:var(--bad);}
+  .pill.ok{background:rgba(11,138,11,.14);color:var(--good);}
+  .msg{font-size:13px;line-height:1.5;}
+  .msg.err{color:var(--bad);} .msg.ok{color:var(--good);} .msg.warn{color:var(--warn);}
+  .aviso{border:1px solid var(--warn);background:rgba(176,116,0,.1);color:var(--ink);border-radius:10px;padding:8px 12px;font-size:13px;line-height:1.5;}
+  .aviso.bad{border-color:var(--bad);background:rgba(214,58,57,.08);}
+  .aviso.ok{border-color:var(--good);background:rgba(11,138,11,.08);}
+  .pie{font-size:12px;color:var(--ink-faint);line-height:1.5;}
+  .leyenda{display:flex;gap:14px;font-size:12px;color:var(--ink-soft);align-items:center;flex-wrap:wrap;}
+  .leyenda i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px;}
+  svg .gl{stroke:var(--border);stroke-width:1;} svg .ax{fill:var(--ink-faint);font-size:11px;font-family:'Inter',sans-serif;}
+  svg .br{fill:var(--accent);} svg .bp{fill:var(--ink-faint);opacity:.5;}
+  .pag{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13px;color:var(--ink-soft);}
+  .vacio{text-align:center;padding:34px 16px;color:var(--ink-soft);line-height:1.6;}
+  .mini{display:grid;grid-template-columns:repeat(auto-fit,minmax(86px,1fr));gap:6px;}
+  .mini div{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:6px 8px;font-size:12px;}
+  .mini b{display:block;font-size:11px;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.4px;}
+</style>
+</head>
+<body>
+
+<div class="wrap" id="vista" hidden>
+  <div class="row hero">
+    <div>
+      <h2>Gasto de combustible</h2>
+      <p>Gasto real (SAP KSB1) contra presupuesto (SAP KSBP) de diésel, gasolina y gas LP, por CEDIS y mes de contabilización. El diésel de ruta se compara contra el presupuesto de ruta de cada CEDIS. La <b>gasolina cargada a centros de gas LP</b> se muestra aparte y no entra en la comparación contra presupuesto. Desviación = real menos presupuesto: positivo es gasto por encima.</p>
+    </div>
+    <div class="grow"></div>
+    <div class="f"><label for="fAnio">Año</label><select id="fAnio"></select></div>
+  </div>
+  <div class="card" id="cFiltros">
+    <div class="filtros">
+      <div class="f"><label for="fCedis">CEDIS</label><select id="fCedis"></select></div>
+      <div class="f"><label for="fHasta">Acumulado hasta</label><select id="fHasta"></select></div>
+    </div>
+  </div>
+  <div class="kpi-row" id="kpis"></div>
+  <div class="stabs" id="tabs"></div>
+  <div id="cuerpo"></div>
+  <p class="pie" id="pie"></p>
+</div>
+
+<div class="wrap" id="carga" hidden></div>
+
+<script>
+(function(){
+"use strict";
+function $(i){ return document.getElementById(i); }
+function el(t, c, x){ var e = document.createElement(t); if(c) e.className = c; if(x != null) e.textContent = x; return e; }
+function esc(s){ return String(s == null ? "" : s).replace(/[&<>"]/g, function(c){ return { "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]; }); }
+var MES3 = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+var MESL = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+var CEDIS = { MAX:"Axochiapan", MCC:"Cocoyoc", MCU:"Cuautla", MCV:"Cuernavaca", MJO:"Jojutla", MPU:"Puente de Ixtla" };
+var CLASES = { "6011006":"Diésel", "6011002":"Gas LP", "6011001":"Gasolina" };
+var ORDEN_CLASES = ["6011006", "6011002", "6011001"];
+var fmt = new Intl.NumberFormat("es-MX", { minimumFractionDigits:2, maximumFractionDigits:2 });
+var fmt0 = new Intl.NumberFormat("es-MX", { maximumFractionDigits:0 });
+function pesos(n){ return (n < 0 ? "-" : "") + "$" + fmt.format(Math.abs(Math.round(n * 100) / 100)); }
+function lts(n){ return fmt0.format(Math.round(n)); }
+function pct(n){ return n == null ? "—" : (n > 0 ? "+" : "") + n.toFixed(1) + "%"; }
+function claseDev(v){ return v > 0.005 ? "pos" : (v < -0.005 ? "neg" : ""); }
+function nomCedis(p){ return CEDIS[p] || p; }
+var params = new URLSearchParams(location.search);
+
+/* Centro de coste del gasto -> renglón del presupuesto: el diésel de cada ruta (MCVR0026…) se presupuesta junto en XXXR9999. */
+function grupo(c){ return (c.charAt(3) === "R" && ["0990","0991","0992"].indexOf(c.slice(4)) < 0) ? c.slice(0, 4) + "9999" : c; }
+
+var D = null, PC = {}, DET = null;
+var S = { anio:null, cedis:"", hasta:12, vista:"comb", q:"" };
+var VISTAS = [["comb", "Por combustible"], ["cedis", "Por CEDIS"], ["mes", "Mes a mes"], ["aparte", "Gasolina en gas LP"], ["unidad", "Por unidad"]];
+
+function cargarDatos(anio){
+  return ERP.rest("rpc/combustible_datos", { method:"POST", body:{ p_anio:anio } }).then(function(d){
+    if(!(d.real.length || d.plan.length) && d.anios.length && d.anios.indexOf(anio) < 0) return cargarDatos(d.anios[0]);
+    D = d; S.anio = anio; DET = null; PC = {};
+    d.plan.forEach(function(p){ (PC[p[0]] = PC[p[0]] || {})[p[1]] = 1; });
+    return d;
+  });
+}
+// Gasolina cargada a un centro que solo presupuesta gas LP
+function esAparte(ceco, clase){ var g = PC[grupo(ceco)]; return clase === "6011001" && !!g && !!g["6011002"] && !g["6011001"]; }
+function ultimoMes(){ var u = 0; D.real.forEach(function(r){ if(r[2] > u) u = r[2]; }); return u; }
+function mesDefecto(){
+  var u = ultimoMes(), f = D.carga && D.carga.fecha_max ? String(D.carga.fecha_max).slice(0, 10) : "";
+  if(f){ var y = +f.slice(0, 4), m = +f.slice(5, 7), d = +f.slice(8, 10); if(m === u && u > 1 && d < new Date(Date.UTC(y, m, 0)).getUTCDate()) return u - 1; }
+  return u || 12;
+}
+
+function agregar(){
+  var A = { comb:{}, cedis:{}, mes:[], ap:{ v:0, l:0, n:0, mes:[], ced:{} }, real:0, plan:0, lit:0, anual:0 }, m;
+  for(m = 0; m <= 12; m++){ A.mes.push({ real:0, plan:0 }); A.ap.mes.push(0); }
+  function g(o, k){ return o[k] || (o[k] = { real:0, plan:0, lit:0, anual:0 }); }
+  D.real.forEach(function(r){
+    var c = r[0], k = r[1], mm = r[2], ced = c.slice(0, 3);
+    if(mm > S.hasta || (S.cedis && ced !== S.cedis)) return;
+    if(esAparte(c, k)){
+      A.ap.v += r[3]; A.ap.l += r[4]; A.ap.n += r[5]; A.ap.mes[mm] += r[3];
+      var a = A.ap.ced[ced] || (A.ap.ced[ced] = { v:0, l:0, mes:[0,0,0,0,0,0,0,0,0,0,0,0,0] }); a.v += r[3]; a.l += r[4]; a.mes[mm] += r[3];
+      return;
+    }
+    g(A.comb, k).real += r[3]; g(A.comb, k).lit += r[4]; g(A.cedis, ced).real += r[3]; g(A.cedis, ced).lit += r[4];
+    A.mes[mm].real += r[3]; A.real += r[3]; A.lit += r[4];
+  });
+  D.plan.forEach(function(p){
+    var ced = p[0].slice(0, 3); if(S.cedis && ced !== S.cedis) return;
+    for(m = 1; m <= 12; m++){
+      var v = p[1 + m]; g(A.comb, p[1]).anual += v; g(A.cedis, ced).anual += v; A.anual += v;
+      if(m <= S.hasta){ g(A.comb, p[1]).plan += v; g(A.cedis, ced).plan += v; A.mes[m].plan += v; A.plan += v; }
+    }
+  });
+  return A;
+}
+
+function pintarFiltros(){
+  var fa = $("fAnio"); fa.textContent = "";
+  D.anios.forEach(function(a){ var o = el("option", "", a); o.value = a; if(a === S.anio) o.selected = true; fa.appendChild(o); });
+  var fc = $("fCedis"); fc.textContent = ""; var o0 = el("option", "", "Todos los CEDIS"); o0.value = ""; fc.appendChild(o0);
+  Object.keys(CEDIS).forEach(function(k){ var o = el("option", "", CEDIS[k]); o.value = k; if(k === S.cedis) o.selected = true; fc.appendChild(o); });
+  var fh = $("fHasta"); fh.textContent = "";
+  for(var m = 1; m <= 12; m++){ var o = el("option", "", MESL[m - 1]); o.value = m; if(m === S.hasta) o.selected = true; fh.appendChild(o); }
+}
+function kpi(l, v, s, cls){ var k = el("div", "kpi"); k.appendChild(el("span", "l", l)); var vv = el("span", "v", v); if(cls) vv.className += " v " + cls; k.appendChild(vv); k.appendChild(el("span", "s", s)); return k; }
+function pintarKpis(A){
+  var box = $("kpis"); box.textContent = "";
+  var d = A.real - A.plan;
+  box.appendChild(kpi("Gastado a " + MESL[S.hasta - 1], pesos(A.real), A.plan ? "Presupuesto " + pesos(A.plan) : "Sin presupuesto cargado"));
+  box.appendChild(kpi("Desviación", A.plan ? pct(d / A.plan * 100) : "—", A.plan ? (d > 0 ? "+" : "-") + pesos(Math.abs(d)) + (d > 0 ? " por encima" : " por debajo") : "", A.plan ? claseDev(d) : ""));
+  box.appendChild(kpi("Presupuesto anual", pesos(A.anual), "Año " + S.anio));
+  box.appendChild(kpi("Litros", lts(A.lit), A.lit ? "Promedio " + pesos(A.real / A.lit) + " por litro" : ""));
+  box.appendChild(kpi("Gasolina en centros de gas LP", pesos(A.ap.v), lts(A.ap.l) + " L · aparte, sin presupuesto"));
+}
+function tabla(cols, filas, tot){
+  var t = "<div class='tbl'><table><thead><tr>" + cols.map(function(c){ return "<th" + (c[1] ? " class='n'" : "") + ">" + esc(c[0]) + "</th>"; }).join("") + "</tr></thead><tbody>";
+  filas.forEach(function(f){ t += "<tr>" + f.map(function(x, i){ return "<td" + (cols[i][1] ? " class='n'" : "") + ">" + x + "</td>"; }).join("") + "</tr>"; });
+  if(tot) t += "<tr class='tot'>" + tot.map(function(x, i){ return "<td" + (cols[i][1] ? " class='n'" : "") + ">" + x + "</td>"; }).join("") + "</tr>";
+  return t + "</tbody></table></div>";
+}
+function celdaDev(real, plan){ if(!plan) return "<span class='sub'>—</span>"; var d = real - plan; return "<span class='" + claseDev(d) + "'>" + (d > 0 ? "+" : "") + pesos(d) + " (" + pct(d / plan * 100) + ")</span>"; }
+var COLS_RP = function(p){ return [[p], ["Real", 1], ["Presupuesto", 1], ["Desviación", 1], ["Litros", 1], ["$/L", 1], ["Presup. anual", 1]]; };
+function filaRP(nombre, o){ return [esc(nombre), pesos(o.real), pesos(o.plan), celdaDev(o.real, o.plan), lts(o.lit), o.lit ? "$" + fmt.format(o.real / o.lit) : "—", pesos(o.anual)]; }
+function totalRP(A){ return ["Total", pesos(A.real), pesos(A.plan), celdaDev(A.real, A.plan), lts(A.lit), A.lit ? "$" + fmt.format(A.real / A.lit) : "—", pesos(A.anual)]; }
+
+function vistaComb(root, A){
+  var ks = ORDEN_CLASES.filter(function(k){ return A.comb[k]; });
+  root.innerHTML = tabla(COLS_RP("Combustible"), ks.map(function(k){ return filaRP(CLASES[k] || k, A.comb[k]); }), totalRP(A));
+}
+function vistaCedis(root, A){
+  var ks = Object.keys(A.cedis).sort();
+  root.innerHTML = tabla(COLS_RP("CEDIS"), ks.map(function(k){ return filaRP(nomCedis(k), A.cedis[k]); }), totalRP(A));
+}
+function grafica(A){
+  var W = 760, H = 220, pl = 52, pb = 26, pt = 10, n = 12, bw = (W - pl) / n, max = 0, m;
+  for(m = 1; m <= 12; m++) max = Math.max(max, A.mes[m].real, A.mes[m].plan);
+  if(!max) return "";
+  function ab(v){ return v >= 1e6 ? (v / 1e6).toFixed(1) + " M" : (v >= 1e3 ? Math.round(v / 1e3) + " k" : String(Math.round(v))); }
+  function y(v){ return pt + (H - pt - pb) * (1 - v / max); }
+  var s = "<svg viewBox='0 0 " + W + " " + H + "' width='100%' role='img' aria-label='Gasto por mes contra presupuesto'>";
+  for(var i = 0; i <= 4; i++){ var v = max * i / 4; s += "<line class='gl' x1='" + pl + "' x2='" + W + "' y1='" + y(v) + "' y2='" + y(v) + "'/><text class='ax' x='" + (pl - 6) + "' y='" + (y(v) + 4) + "' text-anchor='end'>" + ab(v) + "</text>"; }
+  for(m = 1; m <= 12; m++){
+    var x = pl + (m - 1) * bw, r = A.mes[m].real, p = A.mes[m].plan;
+    if(p) s += "<rect class='bp' x='" + (x + bw * .1) + "' y='" + y(p) + "' width='" + (bw * .8) + "' height='" + (H - pb - y(p)) + "'/>";
+    if(r) s += "<rect class='br' x='" + (x + bw * .25) + "' y='" + y(r) + "' width='" + (bw * .5) + "' height='" + (H - pb - y(r)) + "'/>";
+    s += "<text class='ax' x='" + (x + bw / 2) + "' y='" + (H - 8) + "' text-anchor='middle'>" + MES3[m - 1] + "</text>";
+  }
+  return s + "</svg><div class='leyenda'><span><i style='background:var(--accent)'></i>Real</span><span><i style='background:var(--ink-faint);opacity:.5'></i>Presupuesto</span></div>";
+}
+function vistaMes(root, A){
+  var filas = [], r = 0, p = 0;
+  for(var m = 1; m <= 12; m++){
+    var o = A.mes[m]; if(!o.real && !o.plan && !A.ap.mes[m]) continue;
+    r += o.real; p += o.plan;
+    filas.push([MESL[m - 1], o.real ? pesos(o.real) : "—", pesos(o.plan), m <= S.hasta ? celdaDev(o.real, o.plan) : "—", A.ap.mes[m] ? pesos(A.ap.mes[m]) : "—"]);
+  }
+  var c = el("div", "card"); c.innerHTML = grafica(A);
+  root.appendChild(c);
+  var d = document.createElement("div"); d.innerHTML = tabla([["Mes"], ["Real", 1], ["Presupuesto", 1], ["Desviación", 1], ["Gasolina en gas LP (aparte)", 1]], filas, ["Acumulado", pesos(r), pesos(p), celdaDev(r, p), pesos(A.ap.v)]);
+  root.appendChild(d.firstChild);
+}
+
+/* ---- detalle por partida/unidad (se baja solo cuando se necesita) ---- */
+function bajarDetalle(){
+  if(DET) return Promise.resolve(DET);
+  var out = [], paso = 1000;
+  function pag(off){
+    var h = ERP.headers(); h.Range = off + "-" + (off + paso - 1); h["Range-Unit"] = "items";
+    return fetch(ERP.URL + "/rest/v1/combustible_real?anio=eq." + S.anio + "&resumen=eq.false&select=ceco,clase,economico,operador,fuente_unidad,mes,litros,valor,fecha&order=id", { headers:h })
+      .then(function(r){ if(!r.ok) throw new Error("detalle → " + r.status); return r.json(); })
+      .then(function(rows){ out = out.concat(rows); return rows.length === paso ? pag(off + paso) : out; });
+  }
+  return pag(0).then(function(rows){ DET = rows; return rows; });
+}
+function vistaAparte(root, A){
+  var ced = Object.keys(A.ap.ced).sort();
+  var c = el("div", "aviso");
+  c.innerHTML = "<b>Gasolina cargada a centros de gas LP.</b> En el presupuesto estos centros solo traen gas LP; la gasolina que se les carga se contabiliza aparte para justificarla mes a mes. Casi siempre es una unidad a gasolina dada de alta como gas LP (se ve por sus cargas recurrentes); las cargas de arranque de unidades nuevas son de 10 L.";
+  root.appendChild(c);
+  var filas = [], tv = 0, tl = 0, colt = ced.map(function(k){ return 0; });
+  for(var m = 1; m <= S.hasta; m++){
+    if(!A.ap.mes[m]) continue;
+    filas.push([MESL[m - 1]].concat(ced.map(function(k, i){ var v = A.ap.ced[k].mes[m]; colt[i] += v; return v ? pesos(v) : "—"; })).concat([pesos(A.ap.mes[m])]));
+  }
+  var cols = [["Mes"]].concat(ced.map(function(k){ return [nomCedis(k), 1]; })).concat([["Total", 1]]);
+  var t = document.createElement("div"); t.innerHTML = tabla(cols, filas, ["Total"].concat(colt.map(pesos)).concat([pesos(A.ap.v)])); root.appendChild(t.firstChild);
+  var z = el("div", "card"); z.appendChild(el("h3", "", "Por unidad")); var cz = el("div"); z.appendChild(cz); root.appendChild(z);
+  cz.appendChild(el("p", "", "Leyendo detalle…"));
+  bajarDetalle().then(function(rows){
+    var us = {};
+    rows.forEach(function(r){
+      if(r.mes > S.hasta || r.clase !== "6011001" || !esAparte(r.ceco, r.clase) || (S.cedis && r.ceco.slice(0, 3) !== S.cedis)) return;
+      var k = r.economico || ("(sin unidad) " + r.ceco), u = us[k] || (us[k] = { e:k, ceco:r.ceco, l:0, v:0, n:0, meses:{}, fu:r.fuente_unidad });
+      u.l += r.litros; u.v += r.valor; u.n++; u.meses[r.mes] = 1;
+    });
+    var lista = Object.keys(us).map(function(k){ return us[k]; }).sort(function(a, b){ return b.v - a.v; });
+    cz.textContent = "";
+    if(!lista.length){ cz.appendChild(el("p", "", "No hay detalle por unidad en este corte.")); return; }
+    var f = lista.map(function(u){
+      var nm = Object.keys(u.meses).length, rec = u.n >= 6 && nm >= 3;
+      return [esc(u.e), esc(nomCedis(u.ceco.slice(0, 3)) + " · " + u.ceco), pesos(u.v), lts(u.l), String(u.n), nm + " mes" + (nm === 1 ? "" : "es"), rec ? "<span class='pill warn'>Uso recurrente</span>" : "<span class='pill'>Cargas sueltas</span>"];
+    });
+    var tot = lista.reduce(function(a, u){ a.v += u.v; a.l += u.l; a.n += u.n; return a; }, { v:0, l:0, n:0 });
+    var hh = document.createElement("div"); hh.innerHTML = tabla([["Unidad"], ["Centro de coste"], ["Gastado", 1], ["Litros", 1], ["Cargas", 1], ["Meses", 1], ["Lectura"]], f, ["Total", "", pesos(tot.v), lts(tot.l), String(tot.n), "", ""]);
+    cz.appendChild(hh.firstChild);
+    if(rows.every(function(r){ return r.resumen === false; }) && !rows.some(function(r){ return r.economico && r.fuente_unidad === "Cargas"; }))
+      cz.appendChild(el("p", "pie", "La unidad sale del texto de la denominación en SAP. Al subir los archivos desde Ajustes el ERP la confirma contra el archivo Cargas."));
+  }).catch(function(e){ cz.textContent = "No se pudo leer el detalle: " + e.message; });
+}
+function vistaUnidad(root, A){
+  if(!D.detalle){ root.appendChild(Object.assign(el("div", "card vacio"), { textContent:"Todavía no hay detalle por unidad. Súbelo desde Ajustes › Gasto de combustible." })); return; }
+  var barra = el("div", "row"); var f = el("div", "f grow"); f.innerHTML = "<label for='qU'>Buscar unidad</label><input id='qU' type='search' placeholder='Ej. MCV1309'>"; barra.appendChild(f); root.appendChild(barra);
+  var zona = el("div"); root.appendChild(zona); zona.appendChild(el("p", "", "Leyendo detalle…"));
+  bajarDetalle().then(function(rows){
+    var us = {};
+    rows.forEach(function(r){
+      if(r.mes > S.hasta || !r.economico || (S.cedis && r.ceco.slice(0, 3) !== S.cedis)) return;
+      var u = us[r.economico] || (us[r.economico] = { e:r.economico, ced:r.ceco.slice(0, 3), v:0, l:0, n:0, cl:{} }); u.v += r.valor; u.l += r.litros; u.n++; u.cl[CLASES[r.clase] || r.clase] = 1;
+    });
+    var lista = Object.keys(us).map(function(k){ return us[k]; }).sort(function(a, b){ return b.v - a.v; });
+    function dib(){
+      var q = $("qU").value.trim().toUpperCase(), l = lista.filter(function(u){ return !q || u.e.indexOf(q) >= 0; });
+      zona.innerHTML = tabla([["Unidad"], ["CEDIS"], ["Combustible"], ["Gastado", 1], ["Litros", 1], ["$/L", 1], ["Cargas", 1]],
+        l.slice(0, 300).map(function(u){ return [esc(u.e), esc(nomCedis(u.ced)), esc(Object.keys(u.cl).join(", ")), pesos(u.v), lts(u.l), u.l ? "$" + fmt.format(u.v / u.l) : "—", String(u.n)]; }));
+      if(l.length > 300) zona.appendChild(el("p", "pie", "Se muestran las 300 con más gasto; afina con el buscador."));
+    }
+    $("qU").addEventListener("input", dib); dib();
+  }).catch(function(e){ zona.textContent = "No se pudo leer el detalle: " + e.message; });
+}
+
+function pintarPie(){
+  var c = D.carga, p = $("pie");
+  if(!c){ p.textContent = ""; return; }
+  var f = c.fecha_max ? String(c.fecha_max).slice(0, 10).split("-").reverse().join("/") : "—";
+  p.textContent = "Último movimiento cargado: " + f + (D.detalle ? "" : " · Totales por mes y centro (el detalle por unidad llega al subir los archivos de SAP)") + ". El mes es el de la fecha de contabilización.";
+}
+function pintar(){
+  var A = agregar(); pintarKpis(A);
+  var t = $("tabs"); t.textContent = "";
+  VISTAS.forEach(function(v){ var b = el("button", S.vista === v[0] ? "on" : "", v[1]); b.type = "button"; b.addEventListener("click", function(){ S.vista = v[0]; pintar(); }); t.appendChild(b); });
+  var root = $("cuerpo"); root.textContent = "";
+  ({ comb:vistaComb, cedis:vistaCedis, mes:vistaMes, aparte:vistaAparte, unidad:vistaUnidad })[S.vista](root, A);
+}
+function arrancarVista(){
+  var vista = $("vista"); vista.hidden = false;
+  if(ERP.nivel("gasto_combustible") === "oculto"){
+    vista.textContent = ""; var c = el("div", "card"); c.appendChild(el("h3", "", "Sin acceso")); c.appendChild(el("p", "", "Tu usuario no tiene acceso a Gasto de combustible. Pídeselo al administrador.")); vista.appendChild(c); return;
+  }
+  cargarDatos(new Date().getFullYear()).then(function(){
+    if(!(D.real.length || D.plan.length)){ $("cFiltros").hidden = true; $("kpis").hidden = true; $("tabs").hidden = true; $("cuerpo").appendChild(Object.assign(el("div", "card vacio"), { textContent:"Todavía no hay datos cargados." + (ERP.puede("gasto_combustible") ? " Súbelos desde Ajustes › Gasto de combustible." : "") })); return; }
+    S.hasta = mesDefecto(); pintarFiltros(); pintarPie(); pintar();
+    $("fCedis").addEventListener("change", function(){ S.cedis = this.value; pintar(); });
+    $("fHasta").addEventListener("change", function(){ S.hasta = +this.value; pintar(); });
+    $("fAnio").addEventListener("change", function(){ var a = +this.value; cargarDatos(a).then(function(){ S.hasta = mesDefecto(); pintarFiltros(); pintarPie(); pintar(); }); });
+  }).catch(function(e){ vista.insertBefore(el("p", "msg err", "No se pudo leer el gasto de combustible: " + e.message), $("cFiltros")); });
+}
+
+/* =====================================================================================
+   CARGA (Ajustes › Gasto de combustible)
+   ===================================================================================== */
+var L = { reales:[], planes:[], cargas:[], errores:[], nombres:[] };
+function ecoTexto(d){ var m = /eco[.\s-]*(\d{3,4})/i.exec(d || ""); return m ? m[1] : null; }
+function leerCargas(buf){
+  var wb = XLSX.read(buf, { type:"array", cellDates:true }), ws = wb.Sheets[wb.SheetNames[0]], rows = XLSX.utils.sheet_to_json(ws, { raw:true, defval:null }), out = [], bad = 0;
+  function key(o, nombre){ var ks = Object.keys(o); for(var i = 0; i < ks.length; i++) if(ks[i].normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().indexOf(nombre) === 0) return ks[i]; return null; }
+  if(!rows.length) throw new Error("El archivo de cargas está vacío.");
+  var kF = key(rows[0], "fecha"), kE = key(rows[0], "equipo"), kU = key(rows[0], "unidadcar"), kD = key(rows[0], "diferencia"), kA = key(rows[0], "indicador");
+  if(!kF || !kE || !kU || !kD) throw new Error("No reconozco el archivo de cargas (faltan Fecha, Equipo, UnidadCaracterística o Diferencia val. cont.).");
+  rows.forEach(function(r){
+    if(String(r[kU]).toLowerCase() !== "l" || (kA && r[kA]) || !r[kE] || !(r[kF] instanceof Date)) return;
+    var q = Number(r[kD]); if(!(q > 0)){ bad++; return; }
+    var d = r[kF], f = d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2);
+    out.push({ p:String(r[kE]).slice(0, 3), e:String(r[kE]), f:f, l:q });
+  });
+  return out;
+}
+function armarFilas(){
+  var idx = {};
+  L.cargas.forEach(function(c){ var k = c.p + "|" + c.f + "|" + c.l.toFixed(3); (idx[k] = idx[k] || []).push(c.e); });
+  var st = { cargas:0, texto:0, sin:0 };
+  var filas = L.reales.map(function(r){
+    var p = r.c.slice(0, 3), n = ecoTexto(r.d), cand = idx[p + "|" + r.f + "|" + Math.abs(r.q).toFixed(3)] || [], e = null, fu = null;
+    cand = cand.filter(function(x, i){ return cand.indexOf(x) === i; });
+    if(cand.length && n && cand.indexOf(p + n) >= 0){ e = p + n; fu = "Cargas"; }
+    else if(cand.length === 1){ e = cand[0]; fu = "Cargas"; }
+    else if(n){ e = p + n; fu = "denominación"; }
+    if(fu === "Cargas") st.cargas++; else if(fu) st.texto++; else st.sin++;
+    var op = (r.d || "").replace(/eco[.\s-]*\d{3,4}/i, "").trim();
+    return { c:r.c, k:r.k, kd:r.kd, a:r.a, e:e, op:op || null, fu:fu, l:r.q, v:r.v, f:r.f, r:r.r, u:r.u };
+  });
+  return { filas:filas, st:st };
+}
+function arrancarCarga(){
+  var root = $("carga"); root.hidden = false; root.textContent = "";
+  if(!ERP.puede("gasto_combustible")){ var c = el("div", "card"); c.appendChild(el("h3", "", "Sin permiso")); c.appendChild(el("p", "", "Solo quien puede editar Gasto de combustible puede cargar archivos.")); root.appendChild(c); return; }
+  var h = el("div", "card");
+  h.innerHTML = "<h3>Cargar gasto y presupuesto de combustible</h3>" +
+    "<p>Elige juntos los archivos de SAP (Salida dinámica de lista, .XLS): <b>los dos de gasto</b> (centros de reparto y centros de tráfico, ventas y administración) y <b>los de presupuesto</b>. Opcional pero recomendado: el archivo <b>Cargas.xlsx</b> que alimenta el ERP, para saber a qué unidad se cargó cada combustible en los centros genéricos (XXXR0990, XXXR0991…).</p>" +
+    "<p>Cada carga reemplaza el año de los centros de coste que trae. Los totales de la carga inicial se sustituyen por el detalle, así que sube <b>los dos archivos de gasto</b> juntos.</p>";
+  var fila = el("div", "row"); fila.style.alignItems = "center";
+  var inp = el("input"); inp.type = "file"; inp.multiple = true; inp.accept = ".xls,.txt,.csv,.tsv,.xlsx"; inp.hidden = true;
+  var bel = el("button", "btn", "Elegir archivos"); bel.type = "button"; bel.addEventListener("click", function(){ inp.click(); });
+  fila.appendChild(bel); fila.appendChild(inp); h.appendChild(fila); root.appendChild(h);
+  var zona = el("div"); zona.style.display = "flex"; zona.style.flexDirection = "column"; zona.style.gap = "16px"; root.appendChild(zona);
+  inp.addEventListener("change", function(){
+    var fs = Array.prototype.slice.call(inp.files || []); if(!fs.length) return;
+    L = { reales:[], planes:[], cargas:[], errores:[], nombres:[], resumenes:[] };
+    Promise.all(fs.map(function(f){
+      return f.arrayBuffer().then(function(buf){
+        try{
+          var b = new Uint8Array(buf);
+          if(b[0] === 0x50 && b[1] === 0x4B){ var cg = leerCargas(buf); return { nombre:f.name, cargas:cg }; }
+          var r = GASTOS_LIB.leer(GASTOS_LIB.decodificar(buf), { extra:true }); r.nombre = f.name; return r;
+        }catch(e){ return { error:e.message, nombre:f.name }; }
+      });
+    })).then(function(rs){
+      rs.forEach(function(r){
+        if(r.error){ L.errores.push(r); return; }
+        L.nombres.push(r.nombre);
+        if(r.cargas){ L.cargas = L.cargas.concat(r.cargas); return; }
+        L.resumenes.push(r);
+        if(r.tipo === "real") L.reales = L.reales.concat(r.filas); else L.planes.push(r);
+      });
+      inp.value = ""; pintarCarga(zona);
+    });
+  });
+}
+function pintarCarga(zona){
+  zona.textContent = "";
+  L.errores.forEach(function(e){ var d = el("div", "aviso bad"); d.textContent = e.nombre + ": " + e.error; zona.appendChild(d); });
+  var plan = {}, planFilas = [];
+  L.planes.forEach(function(p){ p.filas.forEach(function(f){ var id = f.c + "|" + f.k; if(plan[id]){ plan[id].m = plan[id].m.map(function(v, j){ return GASTOS_LIB.redondea(v + f.m[j]); }); } else { plan[id] = { c:f.c, k:f.k, kd:f.kd, m:f.m.slice() }; planFilas.push(plan[id]); } }); });
+  if(!L.reales.length && !planFilas.length) return;
+  var ar = L.reales.length ? armarFilas() : { filas:[], st:{ cargas:0, texto:0, sin:0 } };
+  var tot = ar.filas.reduce(function(a, f){ a.v += f.v; a.l += f.l; return a; }, { v:0, l:0 });
+  var anios = {}; ar.filas.forEach(function(f){ anios[f.f.slice(0, 4)] = (anios[f.f.slice(0, 4)] || 0) + 1; });
+  var anio = +Object.keys(anios).sort(function(a, b){ return anios[b] - anios[a]; })[0] || new Date().getFullYear();
+  var fmax = ar.filas.reduce(function(a, f){ return f.f > a ? f.f : a; }, "");
+  var card = el("div", "card"); card.appendChild(el("h3", "", "Lo que trae la carga"));
+  var tb = "<div class='tbl'><table><tbody>";
+  function fd(l, v){ tb += "<tr><td>" + esc(l) + "</td><td class='n'>" + v + "</td></tr>"; }
+  if(ar.filas.length){ fd("Partidas de gasto", ar.filas.length.toLocaleString("es-MX")); fd("Importe neto", pesos(tot.v)); fd("Litros", lts(tot.l)); fd("Último movimiento", fmax.split("-").reverse().join("/")); fd("Unidad identificada con Cargas", ar.st.cargas.toLocaleString("es-MX")); fd("Unidad tomada del texto de SAP", ar.st.texto.toLocaleString("es-MX")); fd("Sin unidad (centros por flota)", ar.st.sin.toLocaleString("es-MX")); }
+  if(planFilas.length){ var ta = planFilas.reduce(function(a, f){ return a + f.m.reduce(function(x, y){ return x + y; }, 0); }, 0); fd("Renglones de presupuesto", planFilas.length); fd("Presupuesto anual", pesos(GASTOS_LIB.redondea(ta))); }
+  card.innerHTML += tb + "</tbody></table></div>"; zona.appendChild(card);
+  var avisos = []; L.resumenes.forEach(function(r){ r.avisos.forEach(function(a){ avisos.push(r.nombre + ": " + a); }); });
+  if(ar.filas.length && !L.cargas.length) avisos.push("No elegiste Cargas.xlsx: la unidad se toma solo del texto de la denominación de SAP.");
+  var cedCub = {}; ar.filas.forEach(function(f){ cedCub[grupo(f.c)] = 1; });
+  var faltan = {}; if(D) D.real.forEach(function(r){ var g = grupo(r[0]); if(!cedCub[g]) faltan[g] = 1; });
+  if(ar.filas.length && Object.keys(faltan).length) avisos.push("Faltan centros que hoy tienen gasto (" + Object.keys(faltan).slice(0, 8).join(", ") + (Object.keys(faltan).length > 8 ? "…" : "") + "). Al guardar se quita su total inicial y quedarían sin gasto: sube también el otro archivo de gasto.");
+  avisos.forEach(function(a){ var d = el("div", "aviso"); d.textContent = a; zona.appendChild(d); });
+  var fila = el("div", "row"); fila.style.alignItems = "center";
+  var fa = el("div", "f"); fa.innerHTML = "<label>Año</label><input id='qAnio' type='number' value='" + anio + "' style='width:100px'>"; fila.appendChild(fa);
+  var b = el("button", "btn", "Guardar en el ERP"); b.type = "button"; fila.appendChild(b);
+  var m = el("p", "msg"); fila.appendChild(m); zona.appendChild(fila);
+  b.addEventListener("click", function(){
+    var a = +$("qAnio").value; b.disabled = true; m.className = "msg"; m.textContent = "Guardando…";
+    ERP.rest("rpc/combustible_cargar", { method:"POST", body:{ p_anio:a, p_real:ar.filas, p_plan:planFilas, p_archivos:L.nombres, p_nota:null } }).then(function(r){
+      var ok = (!ar.filas.length || (r.n_real === ar.filas.length && Math.abs(r.total_real - tot.v) < 0.01)) && (!planFilas.length || r.n_plan === planFilas.length);
+      m.className = ok ? "msg ok" : "msg err";
+      m.textContent = (ok ? "Guardado y verificado: " : "Guardado, pero no coincide con el archivo: ") + (ar.filas.length ? r.n_real.toLocaleString("es-MX") + " partidas por " + pesos(r.total_real) : "") + (planFilas.length ? " · presupuesto de " + r.n_plan + " renglones" : "") + ".";
+    }).catch(function(e){ b.disabled = false; m.className = "msg err"; m.textContent = "No se pudo guardar: " + e.message; });
+  });
+}
+if(params.get("modo") === "carga"){ cargarDatos(new Date().getFullYear()).catch(function(){}).then(arrancarCarga); } else arrancarVista();
+})();
+</script>
+</body>
+</html>

@@ -283,7 +283,7 @@
     { id:"gastos", t:"Gastos", src:"gastos.html", visible:function(){ return ve("gastos"); } },
     { id:"carga-trabajo", t:"Carga de trabajo", src:"carga-mecanicos.html", visible:function(){ return ve("carga_trabajo"); } },
     { id:"piso", t:"Unidades en piso", src:"unidades-piso.html", visible:function(){ return ve("piso"); } },
-    { id:"varios", t:"Varios", visible:function(){ return ["combustible","llantas","catalogo_refacciones","control_refacciones","carta_peticion","catalogo_unidades","horas_extras"].some(ve); } },
+    { id:"varios", t:"Varios", visible:function(){ return ["combustible","gasto_combustible","llantas","catalogo_refacciones","control_refacciones","carta_peticion","catalogo_unidades","horas_extras"].some(ve); } },
     { id:"historial", t:"Histórico y respaldo", src:"historial.html", visible:function(){ return ve("historial"); } },
     { id:"ajustes", t:"Ajustes", visible:function(){ return nivel("ajustes") === "editar"; } }
   ];
@@ -294,6 +294,7 @@
     { id:"hojalateria", t:"Hojalatería y Pintura", src:"hojalateria.html", m:"hojalateria" }
   ];
   var VARIOS_ITEMS = [
+    { id:"gasto-combustible", t:"Gasto de combustible", src:"gastos-combustible.html", m:"gasto_combustible", d:"Gasto real de diésel, gasolina y gas LP contra presupuesto, por CEDIS y mes; la gasolina cargada a centros de gas LP va aparte." },
     { id:"combustible", t:"Combustible", src:"rendimientos.html", m:"combustible", activo:false, d:"Rendimientos y cargas de combustible de la flota." },
     { id:"llantas", t:"Control de llantas", m:"llantas", activo:false, d:"Revisión mensual de profundidad de llantas, cámara y alarma de las unidades de reparto." },
     { id:"catalogo-refacciones", t:"Catálogo de refacciones", src:"catalogo-refacciones.html", m:"catalogo_refacciones", d:"Material por CEDIS (existencia, bloqueo, entradas y salidas) y semáforo de material sin salir." },
@@ -394,7 +395,8 @@
     var kS = kpi("Unidades en piso", "…", "Corte vigente", "piso");
     var kU = kpi("Unidades activas", "…", "Catálogo maestro", "varios");
     var kG = kpi("Gasto de mantenimiento", "…", "Gastado contra presupuesto", "gastos");
-    [kG, kP, kH, kS, kU].forEach(function(k){ row.appendChild(k.node); });
+    var kC = kpi("Gasto de combustible", "…", "Gastado contra presupuesto", "varios/gasto-combustible");
+    [kG, kC, kP, kH, kS, kU].forEach(function(k){ row.appendChild(k.node); });
     var estado = el("span", "pill", "Conectando…");
     function fail(e){ console.error(e); estado.textContent = "Sin conexión a datos"; estado.className = "pill warn"; }
 
@@ -412,6 +414,7 @@
       });
     }).catch(fail);
     if(!kG.node.hidden) cargarGastoInicio(kG);
+    if(!kC.node.hidden) cargarCombustibleInicio(kC);
     json("hojalateria_cronograma?select=estatus&limit=1000").then(function(rows){
       var rea = rows.filter(function(x){ return (x.estatus || "").toUpperCase() === "REALIZADO"; }).length;
       kH.set(rows.length ? (Math.round(rea / rows.length * 1000) / 10) + "%" : "—", rea + " de " + rows.length + " unidades");
@@ -477,6 +480,44 @@
       }
       if(aparte) kG.node.appendChild(el("span", "s", aparte));
     }).catch(function(e){ console.error(e); kG.set("—", "Sin datos de gastos"); });
+  }
+
+  // Tarjeta de la portada: combustible gastado contra presupuesto. La gasolina cargada a centros que solo presupuestan gas LP va aparte.
+  function cargarCombustibleInicio(kC){
+    function grupo(c){ return (c.charAt(3) === "R" && ["0990","0991","0992"].indexOf(c.slice(4)) < 0) ? c.slice(0, 4) + "9999" : c; }
+    function rpc(anio){
+      return fetch(SB_URL + "/rest/v1/rpc/combustible_datos", { method:"POST", headers:ERP.headers(), body:JSON.stringify({ p_anio:anio }) })
+        .then(function(r){ if(!r.ok) throw new Error("combustible → " + r.status); return r.json(); });
+    }
+    var anio = new Date().getFullYear();
+    rpc(anio).then(function(d){
+      return (!(d.real.length || d.plan.length) && d.anios.length && d.anios.indexOf(anio) < 0) ? rpc(d.anios[0]) : d;
+    }).then(function(d){
+      var pc = {}, ult = 0, m;
+      d.plan.forEach(function(p){ (pc[p[0]] = pc[p[0]] || {})[p[1]] = 1; });
+      d.real.forEach(function(r){ if(r[2] > ult) ult = r[2]; });
+      if(!ult){ kC.set("—", "Sin gasto cargado"); return; }
+      var hasta = ult, aparte = "", f = d.carga && d.carga.fecha_max ? String(d.carga.fecha_max).slice(0, 10) : "";
+      if(f){
+        var y = +f.slice(0, 4), mm = +f.slice(5, 7), dd = +f.slice(8, 10);
+        if(mm === ult && ult > 1 && dd < new Date(Date.UTC(y, mm, 0)).getUTCDate()){ hasta = ult - 1; aparte = "En " + NOMBRE_MES[ult - 1] + " van al " + dd; }
+      }
+      var g = 0, p = 0, ap = 0, enCurso = 0;
+      d.real.forEach(function(r){
+        var gp = pc[grupo(r[0])], esAp = r[1] === "6011001" && gp && gp["6011002"] && !gp["6011001"];
+        if(r[2] <= hasta){ if(esAp) ap += r[3]; else g += r[3]; } else if(!esAp) enCurso += r[3];
+      });
+      d.plan.forEach(function(r){ for(m = 1; m <= hasta; m++) p += r[1 + m]; });
+      var dif = g - p, bajo = dif <= 0;
+      kC.node.querySelector(".l").textContent = "Gasto de combustible · a " + NOMBRE_MES[hasta - 1];
+      kC.set(pesos(g), p ? "Presupuesto " + pesos(p) : "Sin presupuesto cargado");
+      if(p){
+        var s2 = el("span", "s", "Desviación " + (dif > 0 ? "+" : "") + (Math.round(dif / p * 1000) / 10) + "% (" + (dif > 0 ? "+" : "-") + pesos(Math.abs(dif)) + ") · " + (bajo ? "por debajo" : "por encima"));
+        s2.style.color = bajo ? "var(--good)" : "var(--bad)"; s2.style.fontWeight = "600"; kC.node.appendChild(s2);
+      }
+      if(ap) kC.node.appendChild(el("span", "s", "Gasolina en centros de gas LP (aparte): " + pesos(ap)));
+      if(aparte) kC.node.appendChild(el("span", "s", aparte + ": " + pesos(enCurso)));
+    }).catch(function(e){ console.error(e); kC.set("—", "Sin datos de combustible"); });
   }
 
   /* ================= Mantenimiento ================= */
@@ -928,6 +969,7 @@
     principal("Libro de mantenimiento", "Archivo ERP_Mantenimiento.xlsx. Se sube una sola vez y alimenta: Unidades en piso, Carga de trabajo y Correctivos, Preventivos, Hojalatería y Pintura, y Control de refacciones faltantes. Revisas el resumen de cada sección y guardas.", "Subir libro", function(){ abrirFrame("carga-libro.html?libro=mantenimiento", "Libro de mantenimiento"); });
     principal("Libro de catálogos", "Archivo ERP_Catalogos.xlsx. Se sube una sola vez y alimenta: Catálogo de refacciones, Catálogo de unidades y Cronograma de mantenimientos (el ERP lo limpia solo). Revisas el resumen de cada sección y guardas.", "Subir libro", function(){ abrirFrame("carga-libro.html?libro=catalogos", "Libro de catálogos"); });
     principal("Gastos", "Dos archivos de SAP en texto sin tabuladores: KSB1 (gasto real, partidas individuales) y KSBP (presupuesto por mes, versión 0). Cada carga reemplaza el año de los centros de coste que trae el archivo. Puedes cuadrar contra el informe de SAP antes de guardar.", "Subir archivos", function(){ abrirFrame("gastos.html?modo=carga", "Gastos"); });
+    principal("Gasto de combustible", "Los archivos de SAP del gasto (los dos: reparto, y tráfico, ventas y administración) y del presupuesto, más Cargas.xlsx para identificar la unidad de cada carga. Reemplaza el año de los centros que trae.", "Subir archivos", function(){ abrirFrame("gastos-combustible.html?modo=carga", "Gasto de combustible"); });
     principal("En proceso", "Combustible, control de llantas y horas extras se agregarán aquí cuando estén definidos.", null, null, "En proceso");
     tarjeta("Catálogo de unidades", "Archivo Catalogo_Unidades.xlsx (pestañas Unidades, antes Morelos, y Dotaciones): altas, bajas, cambios y dotaciones.", "Subir archivo", function(){ abrirFrame("catalogo-maestro.html?modo=carga", "Catálogo de unidades"); });
     tarjeta("Cronograma de mantenimientos", "Sube ERP_Catalogos.xlsx (trae las 6 pestañas del cronograma tal como llegan) o el archivo del cronograma suelto (.xls o .xlsx). El ERP lo limpia solo (6 pestañas de CEDIS, bajas, rentados, periodicidad), te deja descargar el Excel limpio y guarda el cronograma del año.", "Subir archivo", function(){ abrirFrame("cronograma-carga.html", "Cronograma de mantenimientos"); });
