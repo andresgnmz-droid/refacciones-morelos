@@ -129,7 +129,7 @@
     if(iValor < 0 || iFecha < 0) throw new Error("Faltan columnas: se necesitan el valor (Val./MI) y la fecha de contabilización (Fe.contab.). Revisa el layout en SAP.");
     var iDenR = buscaCol(cab, "clase_den"), iArea = buscaCol(cab, "area"), iOrd = buscaCol(cab, "orden"), iOrdDen = buscaCol(cab, "orden_den"),
         iReg = buscaCol(cab, "reg"), iUsu = buscaCol(cab, "usuario");
-    var filas = [], sinFecha = 0, sinValor = 0, cecosR = {}, porMes = {}, anioC = {}, total = 0, fmin = null, fmax = null;
+    var filas = [], sinFecha = 0, sinValor = 0, cecosR = {}, porMes = {}, anioC = {}, total = 0, fmin = null, fmax = null, rmax = null;
     datos.forEach(function(p){
       var v = numero(p[iValor]), f = fechaISO(p[iFecha]);
       if(isNaN(v)){ sinValor++; return; }
@@ -143,6 +143,7 @@
       total += v;
       if(!fmin || f < fmin) fmin = f;
       if(!fmax || f > fmax) fmax = f;
+      var rr = fechaISO(celda(p, iReg)); if(rr && (!rmax || rr > rmax)) rmax = rr;
     });
     if(sinValor) avisos.push(sinValor + " renglones con importe ilegible se omitieron.");
     if(sinFecha) avisos.push(sinFecha + " renglones sin fecha de contabilización válida se omitieron.");
@@ -151,7 +152,7 @@
     if(Object.keys(anioC).length > 1) avisos.push("El archivo mezcla fechas de más de un año (" + Object.keys(anioC).join(", ") + "). Corre KSB1 con un solo año.");
     return {
       tipo: "real", filas: filas, avisos: avisos,
-      resumen: { n: filas.length, total: redondea(total), fmin: fmin, fmax: fmax, cecos: cecosR, porMes: porMes, anio: anioMayor ? +anioMayor : null }
+      resumen: { n: filas.length, total: redondea(total), fmin: fmin, fmax: fmax, rmax: rmax, cecos: cecosR, porMes: porMes, anio: anioMayor ? +anioMayor : null }
     };
   }
 

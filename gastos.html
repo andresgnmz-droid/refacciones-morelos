@@ -97,12 +97,13 @@
   <div class="row hero">
     <div>
       <h2>Gastos</h2>
-      <p id="lead" data-publico="Gasto real contra presupuesto por centro de coste y clase de coste, mes a mes.">Gasto real (SAP KSB1) contra presupuesto (SAP KSBP, versión 0) por centro de coste, clase de coste y mes. Desviación = real menos presupuesto: positivo es gasto por encima del presupuesto. Los cargos y sus cancelaciones (negativos) se suman; el neto es el gasto.</p>
+      <p id="lead" data-publico="Gasto real contra presupuesto por centro de coste y clase de coste, mes a mes.">Gasto real (SAP KSB1) contra presupuesto (SAP KSBP, versión 0) de mantenimiento, por área, centro de coste, clase de coste y mes. Desviación = real menos presupuesto: positivo es gasto por encima del presupuesto. Los cargos y sus cancelaciones (negativos) se suman; el neto es el gasto.</p>
     </div>
     <div class="grow"></div>
     <div class="f" id="fAnioBox" hidden><label for="fAnio">Año</label><select id="fAnio"></select></div>
   </div>
 
+  <div class="stabs" id="areas" style="margin-bottom:10px"></div>
   <div class="card" id="cFiltros">
     <div class="filtros">
       <div class="f"><label for="fCeco">Centro de coste</label><select id="fCeco"></select></div>
@@ -131,7 +132,11 @@ var MES3 = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","D
 var MESL = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
 // El código del centro de coste empieza con el CEDIS y termina con el área (0002 = Reparto).
 var CEDIS = { MAX:"Axochiapan", MCC:"Cocoyoc", MCU:"Cuautla", MCV:"Cuernavaca", MJO:"Jojutla", MPU:"Puente de Ixtla" };
-var AREAS = { "0002":"Reparto" };
+var AREAS = { "0002":"Reparto", "0011":"Autom. preventa", "0018":"Camionetas preventa", "0012":"Camionetas supervisión", "0006":"Motos",
+              "0007":"Montacargas", "0010":"Autom. administración", "0013":"Camionetas administración", "0004":"Camionetas" };
+var ORDEN_AREAS = ["0002", "0011", "0018", "0012", "0006", "0007", "0010", "0013", "0004"];
+function areaDe(c){ return c.slice(-4); }
+function nombreArea(a){ return AREAS[a] || a; }
 function nombreCeco(c){
   var ced = CEDIS[c.slice(0, 3)], suf = c.slice(-4), ar = AREAS[suf] || suf;
   return ced ? ced + " · " + ar : c;
@@ -155,8 +160,8 @@ var params = new URLSearchParams(location.search);
    VISTA: gasto real contra presupuesto
    ===================================================================================== */
 var D = null;                        // respuesta de gastos_datos
-var S = { anio:null, ceco:"", clase:"", hasta:12, vista:"clase", q:"", pag:0, exportar:null };
-var VISTAS = [["clase", "Por clase de coste"], ["mes", "Mes a mes"], ["ceco", "Por centro de coste"], ["partidas", "Partidas"]];
+var S = { anio:null, area:"", ceco:"", clase:"", hasta:12, vista:"area", q:"", pag:0, exportar:null };
+var VISTAS = [["area", "Por área"], ["clase", "Por clase de coste"], ["mes", "Mes a mes"], ["ceco", "Por centro de coste"], ["partidas", "Partidas"]];
 var PAG = 100;
 
 function cargarDatos(anio){
@@ -167,7 +172,7 @@ function cargarDatos(anio){
   });
 }
 
-function pasa(c, k){ return (!S.ceco || c === S.ceco) && (!S.clase || k === S.clase); }
+function pasa(c, k){ return (!S.area || areaDe(c) === S.area) && (!S.ceco || c === S.ceco) && (!S.clase || k === S.clase); }
 
 function ultimoMes(){ var u = 0; D.real.forEach(function(r){ if(r[2] > u) u = r[2]; }); return u; }
 // Mes de corte por defecto: el último mes completo (si el último está a medias, se muestra aparte).
@@ -191,7 +196,14 @@ function dev(real, plan){ return { abs:real - plan, pct: plan ? (real - plan) / 
 
 function listaCecos(){
   var s = {}; D.real.forEach(function(r){ s[r[0]] = 1; }); D.plan.forEach(function(r){ s[r[0]] = 1; });
-  return Object.keys(s).sort();
+  return Object.keys(s).filter(function(c){ return !S.area || areaDe(c) === S.area; }).sort();
+}
+function listaAreas(){
+  // Un área sin presupuesto y con gasto neto en cero (solo cargos y cancelaciones) no se muestra
+  var s = {}, t = {}; D.real.forEach(function(r){ var a = areaDe(r[0]); t[a] = (t[a] || 0) + r[3]; s[a] = s[a] || Math.abs(t[a]) > 0.005; s[a] = Math.abs(t[a]) > 0.005; });
+  D.plan.forEach(function(r){ s[areaDe(r[0])] = 1; });
+  var k = Object.keys(s).filter(function(a){ return s[a]; });
+  return ORDEN_AREAS.filter(function(a){ return s[a]; }).concat(k.filter(function(a){ return ORDEN_AREAS.indexOf(a) < 0; }).sort());
 }
 function listaClases(){
   var s = {}; D.real.forEach(function(r){ s[r[1]] = 1; }); D.plan.forEach(function(r){ s[r[1]] = 1; });
@@ -200,7 +212,7 @@ function listaClases(){
 
 function pintarFiltros(){
   var sc = $("fCeco"); sc.textContent = "";
-  var o = el("option", "", "Todos los centros de coste"); o.value = ""; sc.appendChild(o);
+  var o = el("option", "", S.area ? "Todos los CEDIS de " + nombreArea(S.area) : "Todos los centros de coste"); o.value = ""; sc.appendChild(o);
   listaCecos().forEach(function(c){ var x = el("option", "", etCeco(c)); x.value = c; sc.appendChild(x); });
   sc.value = S.ceco;
   var sk = $("fClase"); sk.textContent = "";
@@ -217,6 +229,22 @@ function pintarFiltros(){
   var sa = $("fAnio"); sa.textContent = "";
   D.anios.forEach(function(a){ var z = el("option", "", a); z.value = a; sa.appendChild(z); });
   sa.value = S.anio; $("fAnioBox").hidden = D.anios.length < 2;
+}
+
+function pintarAreas(){
+  var box = $("areas"); box.textContent = "";
+  function b(txt, area){
+    var x = el("button", S.area === area ? "on" : "", txt); x.type = "button";
+    x.addEventListener("click", function(){
+      S.area = area; S.ceco = ""; S.pag = 0;
+      if(area && S.vista === "area") S.vista = "clase";
+      if(!area && S.vista === "ceco") S.vista = "area";
+      pintarFiltros(); pintar();
+    });
+    box.appendChild(x);
+  }
+  b("Total mantenimiento", "");
+  listaAreas().forEach(function(a){ b(nombreArea(a), a); });
 }
 
 function pintarKpis(){
@@ -341,12 +369,38 @@ function vistaMes(root){
   })) };
 }
 
+function vistaArea(root){
+  var acc = {};
+  function g(a){ return acc[a] || (acc[a] = { real:0, plan:0, anual:0 }); }
+  D.real.forEach(function(r){ if((!S.clase || r[1] === S.clase) && r[2] <= S.hasta) g(areaDe(r[0])).real += r[3]; });
+  D.plan.forEach(function(r){
+    if(S.clase && r[1] !== S.clase) return;
+    var x = g(areaDe(r[0]));
+    for(var m = 1; m <= 12; m++){ x.anual += r[1 + m]; if(m <= S.hasta) x.plan += r[1 + m]; }
+  });
+  var tot = { real:0, plan:0, anual:0 };
+  var filas = listaAreas().filter(function(a){ return acc[a]; }).map(function(a){
+    var x = acc[a]; tot.real += x.real; tot.plan += x.plan; tot.anual += x.anual;
+    var dd = celdaDev(x.real, x.plan);
+    return { celdas:[nombreArea(a), num(x.real), x.plan ? num(x.plan) : "—", dd[0], dd[1], x.anual ? num(x.anual) : "—", x.anual ? (x.real / x.anual * 100).toFixed(1) + "%" : "—"],
+             clic:function(){ S.area = a; S.ceco = ""; S.vista = "clase"; pintarFiltros(); pintar(); }, titulo:"Ver esta área" };
+  });
+  var dt = celdaDev(tot.real, tot.plan);
+  filas.push({ total:true, celdas:["Total mantenimiento", num(tot.real), tot.plan ? num(tot.plan) : "—", dt[0], dt[1], tot.anual ? num(tot.anual) : "—", tot.anual ? (tot.real / tot.anual * 100).toFixed(1) + "%" : "—"] });
+  var cols = [{ t:"Área" }, { t:"Gastado", n:1 }, { t:"Presupuesto", n:1 }, { t:"Desviación", n:1 }, { t:"Desv. %", n:1 }, { t:"Presupuesto anual", n:1 }, { t:"Avance del anual", n:1 }];
+  root.appendChild(tabla(cols, filas));
+  root.appendChild(el("p", "sub", "Importes en pesos (MXN), acumulados de enero a " + MESL[S.hasta - 1] + ". Toca un área para ver su detalle por CEDIS, clase y mes."));
+  S.exportar = { nombre:"gastos_por_area", filas:[cols.map(function(c){ return c.t; })].concat(filas.map(function(f){
+    return f.celdas.map(function(c){ return c && typeof c === "object" ? c.t : c; });
+  })) };
+}
+
 function vistaCeco(root){
   var acc = {};
   function g(c){ return acc[c] || (acc[c] = { real:0, plan:0, anual:0 }); }
-  D.real.forEach(function(r){ if((!S.clase || r[1] === S.clase) && r[2] <= S.hasta) g(r[0]).real += r[3]; });
+  D.real.forEach(function(r){ if((!S.area || areaDe(r[0]) === S.area) && (!S.clase || r[1] === S.clase) && r[2] <= S.hasta) g(r[0]).real += r[3]; });
   D.plan.forEach(function(r){
-    if(S.clase && r[1] !== S.clase) return;
+    if((S.area && areaDe(r[0]) !== S.area) || (S.clase && r[1] !== S.clase)) return;
     var x = g(r[0]);
     for(var m = 1; m <= 12; m++){ x.anual += r[1 + m]; if(m <= S.hasta) x.plan += r[1 + m]; }
   });
@@ -371,6 +425,7 @@ function vistaCeco(root){
 function qPartidas(extra){
   var q = "gastos_real?select=fecha,ceco,clase,clase_den,orden,orden_den,valor&anio=eq." + S.anio + "&mes=lte." + S.hasta;
   if(S.ceco) q += "&ceco=eq." + encodeURIComponent(S.ceco);
+  else if(S.area) q += "&ceco=like." + encodeURIComponent("*" + S.area);
   if(S.clase) q += "&clase=eq." + encodeURIComponent(S.clase);
   var t = S.q.replace(/[,()*%\\]/g, " ").trim();
   if(t){ var e = encodeURIComponent("*" + t + "*"); q += "&or=(orden_den.ilike." + e + ",orden.ilike." + e + ",clase_den.ilike." + e + ")"; }
@@ -421,14 +476,17 @@ function pintarPie(){
 
 function pintar(){
   pintarKpis();
+  pintarAreas();
   var tabs = $("tabs"); tabs.textContent = "";
   VISTAS.forEach(function(v){
+    if(v[0] === "area" && S.area) return;
     var b = el("button", S.vista === v[0] ? "on" : "", v[1]); b.type = "button";
     b.addEventListener("click", function(){ S.vista = v[0]; S.pag = 0; pintar(); });
     tabs.appendChild(b);
   });
   var cu = $("cuerpo"); cu.textContent = ""; S.exportar = null;
-  if(S.vista === "clase") vistaClase(cu);
+  if(S.vista === "area" && !S.area) vistaArea(cu);
+  else if(S.vista === "clase" || S.vista === "area") vistaClase(cu);
   else if(S.vista === "mes") vistaMes(cu);
   else if(S.vista === "ceco") vistaCeco(cu);
   else vistaPartidas(cu);
@@ -467,7 +525,7 @@ function arrancarVista(){
   cargarDatos(new Date().getFullYear()).then(function(){
     if(!(D.real.length || D.plan.length)){
       var c = el("div", "card vacio"); c.textContent = "Todavía no hay datos de gastos cargados." + (ERP.puede("gastos") ? " Súbelos desde Ajustes › Gastos." : "");
-      $("cFiltros").hidden = true; $("kpis").hidden = true; $("tabs").hidden = true; $("cuerpo").appendChild(c); return;
+      $("cFiltros").hidden = true; $("kpis").hidden = true; $("tabs").hidden = true; $("areas").hidden = true; $("cuerpo").appendChild(c); return;
     }
     S.hasta = mesDefecto();
     pintarFiltros(); pintarPie(); pintar();
@@ -475,7 +533,7 @@ function arrancarVista(){
     $("fClase").addEventListener("change", function(){ S.clase = this.value; S.pag = 0; pintar(); });
     $("fHasta").addEventListener("change", function(){ S.hasta = +this.value; S.pag = 0; pintar(); });
     $("fAnio").addEventListener("change", function(){
-      var a = +this.value; cargarDatos(a).then(function(){ S.ceco = ""; S.clase = ""; S.hasta = mesDefecto(); S.pag = 0; pintarFiltros(); pintarPie(); pintar(); })
+      var a = +this.value; cargarDatos(a).then(function(){ S.area = ""; S.vista = "area"; S.ceco = ""; S.clase = ""; S.hasta = mesDefecto(); S.pag = 0; pintarFiltros(); pintarPie(); pintar(); })
         .catch(function(e){ $("cuerpo").textContent = "No se pudo leer el año: " + e.message; });
     });
     $("bCsv").addEventListener("click", descargar);
