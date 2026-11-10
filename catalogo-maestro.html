@@ -104,6 +104,8 @@
   .sec{border-top:1px solid var(--border); padding-top:10px; display:flex; flex-direction:column; gap:8px; font-size:13.5px; line-height:1.5;}
   .sec h4{font-family:'Barlow Semi Condensed',sans-serif; font-size:14px; letter-spacing:.3px;}
   .sec.aviso{background:var(--surface-alt); border-radius:10px; border-top:none; padding:10px 12px;}
+  .sec.ficha .fsub{display:flex; flex-direction:column; gap:6px;} .sec.ficha h5{font-size:11.5px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; color:var(--accent);}
+  .sec.ficha .fnota{font-size:12px; color:var(--ink-faint); font-style:italic;}
   .dot-line{display:flex; gap:12px; align-items:center; flex-wrap:wrap;} .dot-comb{font-weight:600; min-width:130px;} .dot-lt{font-variant-numeric:tabular-nums; min-width:60px;}
   .dias{display:inline-flex; gap:3px;} .dia{width:24px; height:24px; border-radius:6px; display:inline-flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; background:var(--surface-alt); color:var(--ink-faint);} .dia.on{background:var(--accent); color:var(--accent-ink);}
   ul.ref{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px;} ul.ref li{display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; padding:7px 10px; background:var(--surface-alt); border-radius:8px; font-size:13px;} ul.ref li.warn{border-left:4px solid var(--warn);} .ref-st{color:var(--ink-soft);}
@@ -205,6 +207,9 @@
   }
   function loadExtras(){
     var tareas = [
+      rest("catalogo_unidades_ficha?select=*&order=economico&limit=1000").then(function(fi){
+        state.ficha = {}; fi.forEach(function(x){ state.ficha[x.economico] = x; });
+      }).catch(function(){ state.ficha = {}; }),
       rest("catalogo_dotaciones?select=*&order=economico").then(function(d){
         state.dotRows = d; state.dot = {};
         window.__DOT_EXISTENTES = {};
@@ -456,6 +461,7 @@
       f("Área", r.area) + f("CEDIS", r.bodega) + f("Combustible (catálogo)", r.combustible) + f("Placas", r.placas) +
       f("Serie", r.serie) + f("Ruta", r.ruta) + f("Centro de coste mtto.", r.centro_coste_mtto) + "</div>";
     h += "<div class=\"sec\"><h4>Dotación de combustible</h4>" + dotacionHtml(r.economico) + dotDifiere(r) + "</div>";
+    h += fichaHtml(r);
     if(cob.cubiertaPor.length){
       h += "<div class=\"sec aviso\"><h4>Cobertura</h4><p>Fuera de servicio" + (hoja && /TALLER/i.test(hoja.estatus||"") ? " (en taller de hojalatería)" : "") + ". Su dotación la cubre " +
         cob.cubiertaPor.map(function(c){ return "<strong>"+esc(c.eco)+"</strong> (misma dotación de "+esc(c.litros)+" L y centro de coste "+esc(c.cc)+")"; }).join(", ") + ".</p></div>";
@@ -470,6 +476,36 @@
     return h + "</div>";
   }
   function f(l,v){ return "<div class=\"f\"><span class=\"fl\">"+l+"</span><span class=\"fv\">"+sinInfo(v)+"</span></div>"; }
+
+  /* Ficha complementaria: datos del archivo "Información parque vehicular" (corte nov-2026).
+     Solo COMPLEMENTA la tarjeta: nunca reemplaza marca, modelo, serie, placas ni nada del catálogo. */
+  function fichaHtml(r){
+    var x = (state.ficha || {})[r.economico];
+    if(!x) return "";
+    function g(l, v){ return (v===null||v===undefined||String(v).trim()==="") ? "" : f(l, v); }
+    function sec(titulo, campos){
+      var c = campos.join("");
+      return c ? "<div class=\"fsub\"><h5>"+titulo+"</h5><div class=\"grid\">"+c+"</div></div>" : "";
+    }
+    var venc = "";
+    if(x.vence_contrato){
+      var d = ddIso(new Date().toISOString().slice(0,10), String(x.vence_contrato).slice(0,10));
+      venc = fechaCorta(x.vence_contrato) + (d < 0 ? " · vencido hace " + (-d) + " días" : d <= 90 ? " · vence en " + d + " días" : " · vigente");
+    }
+    var eco = x.eco_anterior && /^\d+$/.test(String(x.eco_anterior).trim()) ? "Eco. " + x.eco_anterior : x.eco_anterior;
+    var h =
+      sec("Vehículo", [g("Clase", x.tipo_unidad), g("Modelo / tipo", x.modelo_tipo), g("Económico anterior", eco), g("Motor", x.motor),
+        g("Gobernado (vel/rev)", x.gobernado), g("GPS", x.gps), g("Terreno de ruta", x.terreno), g("Carga autorizada", x.carga_kg ? x.carga_kg + " kg" : null)]) +
+      sec("Documentos", [g("Entidad de placas", x.entidad_placa), g("Terminación de placa", x.terminacion_placa),
+        g("Verificación 1.ª", x.verif_1), g("Verificación 2.ª", x.verif_2), g("Permiso de carga estatal", x.permiso_estatal),
+        g("Permiso de carga federal", x.permiso_federal), g("Póliza", x.poliza), g("Inciso", x.inciso)]) +
+      sec("Propiedad y arrendamiento", [g("Razón social", x.razon_social), g("Contrato", x.contrato), g("Vence contrato", venc)]) +
+      sec("Operación", [g("Usuario asignado", x.usuario), g("Causa de alta", x.causa_alta), g("Estatus en archivo", x.estatus_detalle),
+        g("Imagen gráfica", x.imagen_grafico), g("Observaciones", x.observaciones)]);
+    if(!h) return "";
+    return "<div class=\"sec ficha\"><h4>Ficha complementaria</h4>" + h +
+      "<p class=\"fnota\">Tomada del archivo de parque vehicular (corte nov-2026). Es solo informativa: no cambia los datos de arriba y puede estar desactualizada.</p></div>";
+  }
 
   function tarjetaVirtual(v){
     var h = "<div class=\"ucard virtual\"><div class=\"ucard-head\"><div><h3>"+esc(v.economico)+"</h3><p class=\"sub\">Económico virtual · "+esc(v.bodega||"")+"</p></div><div class=\"chips\"><span class=\"chip virt\">Económico virtual</span></div></div>" +
