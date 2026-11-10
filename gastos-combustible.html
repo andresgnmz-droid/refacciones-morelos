@@ -98,7 +98,7 @@
   <div class="row hero">
     <div>
       <h2>Gasto de combustible</h2>
-      <p>Gasto real (SAP KSB1) contra presupuesto (SAP KSBP) de diésel, gasolina y gas LP, por CEDIS y mes de contabilización. El diésel de ruta se compara contra el presupuesto de ruta de cada CEDIS. Se mide y compara en <b>litros</b> (el precio por litro no depende de nosotros); los pesos y el presupuesto van como referencia. La <b>gasolina cargada a centros de gas LP</b> se muestra aparte y no entra en la comparación contra presupuesto. Desviación = real menos presupuesto: positivo es gasto por encima.</p>
+      <p>Gasto real (SAP KSB1) contra presupuesto (SAP KSBP) de diésel, gasolina y gas LP, por CEDIS y mes de contabilización. El diésel de ruta se compara contra el presupuesto de ruta de cada CEDIS. Se mide y compara en <b>litros</b> contra el presupuesto en litros (el precio por litro no depende de nosotros); los pesos van como referencia. La <b>gasolina cargada a centros de gas LP</b> se muestra aparte y no entra en la comparación contra presupuesto. Desfase = real menos presupuesto: positivo es consumo por encima.</p>
     </div>
     <div class="grow"></div>
     <div class="f"><label for="fAnio">Año</label><select id="fAnio"></select></div>
@@ -162,9 +162,9 @@ function mesDefecto(){
 }
 
 function agregar(){
-  var A = { comb:{}, cedis:{}, mes:[], ap:{ v:0, l:0, n:0, mes:[], lm:[], ced:{} }, real:0, plan:0, lit:0, anual:0 }, m;
-  for(m = 0; m <= 12; m++){ A.mes.push({ real:0, plan:0, lit:0 }); A.ap.mes.push(0); A.ap.lm.push(0); }
-  function g(o, k){ return o[k] || (o[k] = { real:0, plan:0, lit:0, anual:0 }); }
+  var A = { comb:{}, cedis:{}, mes:[], ap:{ v:0, l:0, n:0, mes:[], lm:[], ced:{} }, real:0, plan:0, lit:0, anual:0, planL:0, anualL:0 }, m;
+  for(m = 0; m <= 12; m++){ A.mes.push({ real:0, plan:0, lit:0, planL:0 }); A.ap.mes.push(0); A.ap.lm.push(0); }
+  function g(o, k){ return o[k] || (o[k] = { real:0, plan:0, lit:0, anual:0, planL:0, anualL:0 }); }
   D.real.forEach(function(r){
     var c = r[0], k = r[1], mm = r[2], ced = c.slice(0, 3);
     if(mm > S.hasta || (S.cedis && ced !== S.cedis)) return;
@@ -183,6 +183,13 @@ function agregar(){
       if(m <= S.hasta){ g(A.comb, p[1]).plan += v; g(A.cedis, ced).plan += v; A.mes[m].plan += v; A.plan += v; }
     }
   });
+  (D.plan_l || []).forEach(function(p){
+    var ced = p[0].slice(0, 3); if(S.cedis && ced !== S.cedis) return;
+    for(m = 1; m <= 12; m++){
+      var v = p[1 + m]; g(A.comb, p[1]).anualL += v; g(A.cedis, ced).anualL += v; A.anualL += v;
+      if(m <= S.hasta){ g(A.comb, p[1]).planL += v; g(A.cedis, ced).planL += v; A.mes[m].planL += v; A.planL += v; }
+    }
+  });
   return A;
 }
 
@@ -195,12 +202,14 @@ function pintarFiltros(){
   for(var m = 1; m <= 12; m++){ var o = el("option", "", MESL[m - 1]); o.value = m; if(m === S.hasta) o.selected = true; fh.appendChild(o); }
 }
 function kpi(l, v, s, cls){ var k = el("div", "kpi"); k.appendChild(el("span", "l", l)); var vv = el("span", "v", v); if(cls) vv.className += " v " + cls; k.appendChild(vv); k.appendChild(el("span", "s", s)); return k; }
+function celdaDevL(real, plan){ if(!plan) return "<span class='sub'>—</span>"; var d = real - plan; return "<span class='" + claseDev(d) + "'><b>" + (d > 0 ? "+" : "") + lts(d) + "</b> (" + pct(d / plan * 100) + ")</span>"; }
 function pintarKpis(A){
   var box = $("kpis"); box.textContent = "";
-  var d = A.real - A.plan;
-  box.appendChild(kpi("Litros a " + MESL[S.hasta - 1], lts(A.lit) + " L", A.lit ? "Promedio " + lts(A.lit / S.hasta) + " L por mes" : ""));
-  box.appendChild(kpi("Litros de gasolina en gas LP (aparte)", lts(A.ap.l) + " L", pesos(A.ap.v) + " · sin presupuesto"));
-  box.appendChild(kpi("Gastado (pesos)", pesos(A.real), (A.lit ? "$" + fmt.format(A.real / A.lit) + " por litro · " : "") + (A.plan ? "presupuesto " + pesos(A.plan) : "sin presupuesto cargado")));
+  var d = A.real - A.plan, dl = A.lit - A.planL;
+  box.appendChild(kpi("Litros gastados a " + MESL[S.hasta - 1], lts(A.lit) + " L", A.planL ? "Presupuesto " + lts(A.planL) + " L" : "Sin presupuesto en litros"));
+  box.appendChild(kpi("Desfase en litros", A.planL ? pct(dl / A.planL * 100) : "—", A.planL ? (dl > 0 ? "+" : "") + lts(dl) + " L " + (dl > 0 ? "por encima del presupuesto" : "por debajo del presupuesto") : "", A.planL ? claseDev(dl) : ""));
+  box.appendChild(kpi("Gasolina en gas LP (aparte)", lts(A.ap.l) + " L", pesos(A.ap.v) + " · sin presupuesto"));
+  box.appendChild(kpi("Gastado (pesos)", pesos(A.real), (A.lit ? "$" + fmt.format(A.real / A.lit) + " por litro · " : "") + (A.plan ? "presupuesto " + pesos(A.plan) : "sin presupuesto")));
   box.appendChild(kpi("Desviación en pesos", A.plan ? pct(d / A.plan * 100) : "—", A.plan ? (d > 0 ? "+" : "-") + pesos(Math.abs(d)) + (d > 0 ? " sobre presupuesto" : " bajo presupuesto") : "", A.plan ? claseDev(d) : ""));
 }
 function tabla(cols, filas, tot){
@@ -210,9 +219,9 @@ function tabla(cols, filas, tot){
   return t + "</tbody></table></div>";
 }
 function celdaDev(real, plan){ if(!plan) return "<span class='sub'>—</span>"; var d = real - plan; return "<span class='" + claseDev(d) + "'>" + (d > 0 ? "+" : "") + pesos(d) + " (" + pct(d / plan * 100) + ")</span>"; }
-var COLS_RP = function(p){ return [[p], ["Litros", 1], ["% de litros", 1], ["$/L", 1], ["Gastado", 1], ["Presupuesto", 1], ["Desviación $", 1]]; };
-function filaRP(nombre, o, A){ return [esc(nombre), "<b>" + lts(o.lit) + "</b>", A.lit ? (o.lit / A.lit * 100).toFixed(1) + "%" : "—", o.lit ? "$" + fmt.format(o.real / o.lit) : "—", pesos(o.real), pesos(o.plan), celdaDev(o.real, o.plan)]; }
-function totalRP(A){ return ["Total", lts(A.lit), "100%", A.lit ? "$" + fmt.format(A.real / A.lit) : "—", pesos(A.real), pesos(A.plan), celdaDev(A.real, A.plan)]; }
+var COLS_RP = function(p){ return [[p], ["Litros gastados", 1], ["Litros presup.", 1], ["Desfase litros", 1], ["$/L", 1], ["Gastado", 1], ["Presupuesto", 1], ["Desviación $", 1]]; };
+function filaRP(nombre, o, A){ return [esc(nombre), "<b>" + lts(o.lit) + "</b>", o.planL ? lts(o.planL) : "—", celdaDevL(o.lit, o.planL), o.lit ? "$" + fmt.format(o.real / o.lit) : "—", pesos(o.real), pesos(o.plan), celdaDev(o.real, o.plan)]; }
+function totalRP(A){ return ["Total", lts(A.lit), lts(A.planL), celdaDevL(A.lit, A.planL), A.lit ? "$" + fmt.format(A.real / A.lit) : "—", pesos(A.real), pesos(A.plan), celdaDev(A.real, A.plan)]; }
 
 function vistaComb(root, A){
   var ks = ORDEN_CLASES.filter(function(k){ return A.comb[k]; });
@@ -224,31 +233,32 @@ function vistaCedis(root, A){
 }
 function grafica(A){
   var W = 760, H = 220, pl = 52, pb = 26, pt = 24, n = 12, bw = (W - pl) / n, max = 0, m;
-  for(m = 1; m <= 12; m++) max = Math.max(max, A.mes[m].lit);
+  for(m = 1; m <= 12; m++) max = Math.max(max, A.mes[m].lit, A.mes[m].planL);
   if(!max) return "";
   function ab(v){ return v >= 1e3 ? (v / 1e3).toFixed(0) + " mil" : String(Math.round(v)); }
   function y(v){ return pt + (H - pt - pb) * (1 - v / max); }
-  var s = "<svg viewBox='0 0 " + W + " " + H + "' width='100%' role='img' aria-label='Litros por mes'>";
+  var s = "<svg viewBox='0 0 " + W + " " + H + "' width='100%' role='img' aria-label='Litros por mes contra presupuesto'>";
   for(var i = 0; i <= 4; i++){ var v = max * i / 4; s += "<line class='gl' x1='" + pl + "' x2='" + W + "' y1='" + y(v) + "' y2='" + y(v) + "'/><text class='ax' x='" + (pl - 6) + "' y='" + (y(v) + 4) + "' text-anchor='end'>" + ab(v) + "</text>"; }
   for(m = 1; m <= 12; m++){
-    var x = pl + (m - 1) * bw, r = A.mes[m].lit;
-    if(r) s += "<rect class='br' x='" + (x + bw * .2) + "' y='" + y(r) + "' width='" + (bw * .6) + "' height='" + (H - pb - y(r)) + "'/><text class='ax' x='" + (x + bw / 2) + "' y='" + (y(r) - 3) + "' text-anchor='middle'>" + ab(r) + "</text>";
+    var x = pl + (m - 1) * bw, r = A.mes[m].lit, p = A.mes[m].planL;
+    if(p && m <= S.hasta) s += "<rect class='bp' x='" + (x + bw * .1) + "' y='" + y(p) + "' width='" + (bw * .8) + "' height='" + (H - pb - y(p)) + "'/>";
+    if(r) s += "<rect class='br' x='" + (x + bw * .25) + "' y='" + y(r) + "' width='" + (bw * .5) + "' height='" + (H - pb - y(r)) + "'/><text class='ax' x='" + (x + bw / 2) + "' y='" + (y(Math.max(r, p || 0)) - 3) + "' text-anchor='middle'>" + ab(r) + "</text>";
     s += "<text class='ax' x='" + (x + bw / 2) + "' y='" + (H - 8) + "' text-anchor='middle'>" + MES3[m - 1] + "</text>";
   }
-  return "<h3>Litros por mes</h3>" + s + "</svg>";
+  return "<h3>Litros por mes contra presupuesto</h3>" + s + "</svg><div class='leyenda'><span><i style='background:var(--accent)'></i>Litros gastados</span><span><i style='background:var(--ink-faint);opacity:.5'></i>Litros presupuestados</span></div>";
 }
 function vistaMes(root, A){
-  var filas = [], prev = null, tl = 0;
+  var filas = [], prev = null;
   for(var m = 1; m <= 12; m++){
     var o = A.mes[m]; if(!o.lit && !o.plan && !A.ap.lm[m]) continue;
     var cam = (prev && o.lit && m <= S.hasta) ? (o.lit - prev) / prev * 100 : null;
-    if(o.lit && m <= S.hasta) prev = o.lit; tl += o.lit;
-    filas.push([MESL[m - 1], o.lit ? "<b>" + lts(o.lit) + "</b>" : "—", cam == null ? "—" : "<span class='sub'>" + pct(cam) + "</span>", o.lit ? "$" + fmt.format(o.real / o.lit) : "—", o.real ? pesos(o.real) : "—", pesos(o.plan), m <= S.hasta ? celdaDev(o.real, o.plan) : "—", A.ap.lm[m] ? lts(A.ap.lm[m]) : "—"]);
+    if(o.lit && m <= S.hasta) prev = o.lit;
+    filas.push([MESL[m - 1], o.lit ? "<b>" + lts(o.lit) + "</b>" : "—", o.planL && m <= S.hasta ? lts(o.planL) : "—", m <= S.hasta ? celdaDevL(o.lit, o.planL) : "—", cam == null ? "—" : "<span class='sub'>" + pct(cam) + "</span>", o.lit ? "$" + fmt.format(o.real / o.lit) : "—", o.real ? pesos(o.real) : "—", m <= S.hasta ? pesos(o.plan) : "—", m <= S.hasta ? celdaDev(o.real, o.plan) : "—", A.ap.lm[m] ? lts(A.ap.lm[m]) : "—"]);
   }
   var c = el("div", "card"); c.innerHTML = grafica(A); root.appendChild(c);
-  var d = document.createElement("div"); d.innerHTML = tabla([["Mes"], ["Litros", 1], ["vs mes anterior", 1], ["$/L", 1], ["Gastado", 1], ["Presupuesto", 1], ["Desviación $", 1], ["Gasolina en gas LP (L)", 1]], filas, ["Acumulado", lts(A.lit), "", A.lit ? "$" + fmt.format(A.real / A.lit) : "—", pesos(A.real), pesos(A.plan), celdaDev(A.real, A.plan), lts(A.ap.l)]);
+  var d = document.createElement("div"); d.innerHTML = tabla([["Mes"], ["Litros gastados", 1], ["Litros presup.", 1], ["Desfase litros", 1], ["vs mes anterior", 1], ["$/L", 1], ["Gastado", 1], ["Presupuesto", 1], ["Desviación $", 1], ["Gasolina en gas LP (L)", 1]], filas, ["Acumulado", lts(A.lit), lts(A.planL), celdaDevL(A.lit, A.planL), "", A.lit ? "$" + fmt.format(A.real / A.lit) : "—", pesos(A.real), pesos(A.plan), celdaDev(A.real, A.plan), lts(A.ap.l)]);
   root.appendChild(d.firstChild);
-  root.appendChild(el("p", "pie", "El presupuesto de SAP viene en pesos, no en litros; por eso el comparativo contra presupuesto es en pesos y los litros se comparan entre meses, CEDIS y combustibles."));
+  root.appendChild(el("p", "pie", "Desfase = real menos presupuesto: positivo es consumo por encima de lo presupuestado. Los litros presupuestados vienen del archivo de gastos de combustible (centros con presupuesto en SAP); la gasolina en centros de gas LP no tiene presupuesto."));
 }
 
 /* ---- detalle por partida/unidad (se baja solo cuando se necesita) ---- */
@@ -352,8 +362,8 @@ function arrancarVista(){
    ===================================================================================== */
 var L = { reales:[], planes:[], cargas:[], errores:[], nombres:[] };
 function ecoTexto(d){ var m = /eco[.\s-]*(\d{3,4})/i.exec(d || ""); return m ? m[1] : null; }
-function leerCargas(buf){
-  var wb = XLSX.read(buf, { type:"array", cellDates:true }), ws = wb.Sheets[wb.SheetNames[0]], rows = XLSX.utils.sheet_to_json(ws, { raw:true, defval:null }), out = [], bad = 0;
+function leerCargas(wb){
+  var ws = wb.Sheets[wb.SheetNames[0]], rows = XLSX.utils.sheet_to_json(ws, { raw:true, defval:null }), out = [], bad = 0;
   function key(o, nombre){ var ks = Object.keys(o); for(var i = 0; i < ks.length; i++) if(ks[i].normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().indexOf(nombre) === 0) return ks[i]; return null; }
   if(!rows.length) throw new Error("El archivo de cargas está vacío.");
   var kF = key(rows[0], "fecha"), kE = key(rows[0], "equipo"), kU = key(rows[0], "unidadcar"), kD = key(rows[0], "diferencia"), kA = key(rows[0], "indicador");
@@ -365,6 +375,60 @@ function leerCargas(buf){
     out.push({ p:String(r[kE]).slice(0, 3), e:String(r[kE]), f:f, l:q });
   });
   return out;
+}
+
+var MESES_ES = ["ENERO","FEBRERO","MARZO","ABRIL","MAYO","JUNIO","JULIO","AGOSTO","SEPTIEMBRE","OCTUBRE","NOVIEMBRE","DICIEMBRE"];
+var PREF = { "CUERNAVACA":"MCV", "CUAUTLA":"MCU", "JOJUTLA":"MJO", "PUENTE DE IXTLA":"MPU", "AXOCHIAPAN":"MAX", "COCOYOC":"MCC" };
+function mesDeHoja(n){
+  n = String(n).toUpperCase().trim(); var i, y = null, mm = /(20\d\d)\s*$/.exec(n) || /\b(\d\d)\s*$/.exec(n);
+  if(mm) y = mm[1].length === 2 ? 2000 + +mm[1] : +mm[1];
+  for(i = 0; i < 12; i++) if(n.indexOf(MESES_ES[i]) === 0) return y ? { m:i + 1, y:y } : null;
+  return null;
+}
+// Bloque del archivo de gastos de combustible (cada uno trae el nombre del CEDIS y el rubro) -> centro de coste y clase de SAP
+function reglaBloque(ced, lab){
+  var p = PREF[String(ced).toUpperCase().trim()], l = String(lab || "").toUpperCase().trim(); if(!p) return null;
+  if(l.indexOf("DIÉSEL CAMION") === 0) return [p + "V0001", "6011006"];
+  if(l.indexOf("DIÉSEL") === 0) return [p + "R9999", "6011006"];
+  if(l === "GAS L.P. AUTOS") return [p + "R0990", "6011002"];
+  if(l === "GAS L.P. CAMIO") return [p + "V0001", "6011002"];
+  if(l === "GAS L.P. CAM PR") return [p + "R0992", "6011002"];
+  if(l === "MONTACARGAS") return [p + "T0001", "6011002"];
+  if(l === "MOTOCICLETAS") return [p + "R0991", "6011001"];
+  if(l === "MAGNA CAM") return [p + "V0001", "6011001"];
+  if((l === "MAGANA AUTOS" || l === "MAGNA AUTOS") && p === "MCV") return ["MCVA0003", "6011001"];
+  return null; // gasolina en centros de gas LP, etc.: no tiene presupuesto
+}
+function leerPlanLitros(wb){
+  var mapa = {}, avisos = [], hojas = 0, anios = {};
+  var ocultas = {}; ((wb.Workbook && wb.Workbook.Sheets) || []).forEach(function(h){ if(h.Hidden) ocultas[h.name] = 1; });
+  var pesosPlan = {}; if(D) D.plan.forEach(function(r){ pesosPlan[r[0] + "|" + r[1]] = r.slice(2); });
+  wb.SheetNames.forEach(function(nom){
+    var h = mesDeHoja(nom); if(!h || ocultas[nom]) return;
+    hojas++; anios[h.y] = (anios[h.y] || 0) + 1;
+    var rows = XLSX.utils.sheet_to_json(wb.Sheets[nom], { header:1, raw:true, defval:null });
+    rows.forEach(function(row, r){
+      row.forEach(function(v, c){
+        if(v !== "LITROS" || c < 1) return;
+        var ced = row[c - 1], lab = rows[r + 1] ? rows[r + 1][c - 1] : null, pl = row[c + 2], pv = rows[r + 1] ? rows[r + 1][c + 2] : null;
+        if(typeof pl !== "number") return;
+        var k = reglaBloque(ced, lab); if(!k) return;
+        if(typeof pv === "number" && pv > 0 && pl > pv){ var t = pl; pl = pv; pv = t; avisos.push(nom + ": " + ced + " · " + lab + " traía litros y costo invertidos (" + t + " y " + pl + "); se tomó " + pl + " L."); }
+        var id = k[0] + "|" + k[1], e = mapa[id] || (mapa[id] = { c:k[0], k:k[1], m:[0,0,0,0,0,0,0,0,0,0,0,0] });
+        e.m[h.m - 1] = pl;
+        var pp = pesosPlan[id];
+        if(pp && typeof pv === "number" && Math.abs(pp[h.m - 1] - pv) > 1.5) avisos.push(nom + ": " + ced + " · " + lab + " tiene presupuesto de $" + fmt.format(pv) + " en el archivo y $" + fmt.format(pp[h.m - 1]) + " en el ERP.");
+      });
+    });
+  });
+  if(!hojas) throw new Error("No encuentro hojas de meses (ENERO 2026, FEBRERO 2026…) visibles en este archivo.");
+  var ys = Object.keys(anios).sort(function(a, b){ return anios[b] - anios[a]; });
+  return { filas:Object.keys(mapa).map(function(k){ return mapa[k]; }), avisos:avisos, hojas:hojas, anio:+ys[0] };
+}
+function leerXlsx(buf){
+  var wb = XLSX.read(buf, { type:"array", cellDates:true });
+  if(wb.SheetNames.some(function(n){ return !!mesDeHoja(n); })) return { planL:leerPlanLitros(wb) };
+  return { cargas:leerCargas(wb) };
 }
 function armarFilas(){
   var idx = {};
@@ -387,7 +451,7 @@ function arrancarCarga(){
   if(!ERP.puede("gasto_combustible")){ var c = el("div", "card"); c.appendChild(el("h3", "", "Sin permiso")); c.appendChild(el("p", "", "Solo quien puede editar Gasto de combustible puede cargar archivos.")); root.appendChild(c); return; }
   var h = el("div", "card");
   h.innerHTML = "<h3>Cargar gasto y presupuesto de combustible</h3>" +
-    "<p>Elige juntos los archivos de SAP (Salida dinámica de lista, .XLS): <b>los dos de gasto</b> (centros de reparto y centros de tráfico, ventas y administración) y <b>los de presupuesto</b>. Opcional pero recomendado: el archivo <b>Cargas.xlsx</b> que alimenta el ERP, para saber a qué unidad se cargó cada combustible en los centros genéricos (XXXR0990, XXXR0991…).</p>" +
+    "<p>Elige juntos los archivos de SAP (Salida dinámica de lista, .XLS): <b>los dos de gasto</b> (centros de reparto y centros de tráfico, ventas y administración) y <b>los de presupuesto</b>. También puedes elegir el archivo de <b>gastos de combustible</b> (GASTOS_COMBUSTIBLE.xlsx, hojas Enero 2026 a Diciembre 2026): de ahí salen los <b>litros presupuestados</b>. Opcional pero recomendado: el archivo <b>Cargas.xlsx</b> que alimenta el ERP, para saber a qué unidad se cargó cada combustible en los centros genéricos (XXXR0990, XXXR0991…).</p>" +
     "<p>Cada carga reemplaza el año de los centros de coste que trae. Los totales de la carga inicial se sustituyen por el detalle, así que sube <b>los dos archivos de gasto</b> juntos.</p>";
   var fila = el("div", "row"); fila.style.alignItems = "center";
   var inp = el("input"); inp.type = "file"; inp.multiple = true; inp.accept = ".xls,.txt,.csv,.tsv,.xlsx"; inp.hidden = true;
@@ -396,12 +460,12 @@ function arrancarCarga(){
   var zona = el("div"); zona.style.display = "flex"; zona.style.flexDirection = "column"; zona.style.gap = "16px"; root.appendChild(zona);
   inp.addEventListener("change", function(){
     var fs = Array.prototype.slice.call(inp.files || []); if(!fs.length) return;
-    L = { reales:[], planes:[], cargas:[], errores:[], nombres:[], resumenes:[] };
+    L = { reales:[], planes:[], cargas:[], errores:[], nombres:[], resumenes:[], planL:null };
     Promise.all(fs.map(function(f){
       return f.arrayBuffer().then(function(buf){
         try{
           var b = new Uint8Array(buf);
-          if(b[0] === 0x50 && b[1] === 0x4B){ var cg = leerCargas(buf); return { nombre:f.name, cargas:cg }; }
+          if(b[0] === 0x50 && b[1] === 0x4B){ var xr = leerXlsx(buf); xr.nombre = f.name; return xr; }
           var r = GASTOS_LIB.leer(GASTOS_LIB.decodificar(buf), { extra:true }); r.nombre = f.name; return r;
         }catch(e){ return { error:e.message, nombre:f.name }; }
       });
@@ -410,6 +474,7 @@ function arrancarCarga(){
         if(r.error){ L.errores.push(r); return; }
         L.nombres.push(r.nombre);
         if(r.cargas){ L.cargas = L.cargas.concat(r.cargas); return; }
+        if(r.planL){ L.planL = r.planL; return; }
         L.resumenes.push(r);
         if(r.tipo === "real") L.reales = L.reales.concat(r.filas); else L.planes.push(r);
       });
@@ -422,23 +487,25 @@ function pintarCarga(zona){
   L.errores.forEach(function(e){ var d = el("div", "aviso bad"); d.textContent = e.nombre + ": " + e.error; zona.appendChild(d); });
   var plan = {}, planFilas = [];
   L.planes.forEach(function(p){ p.filas.forEach(function(f){ var id = f.c + "|" + f.k; if(plan[id]){ plan[id].m = plan[id].m.map(function(v, j){ return GASTOS_LIB.redondea(v + f.m[j]); }); } else { plan[id] = { c:f.c, k:f.k, kd:f.kd, m:f.m.slice() }; planFilas.push(plan[id]); } }); });
-  if(!L.reales.length && !planFilas.length) return;
+  if(!L.reales.length && !planFilas.length && !L.planL) return;
   var ar = L.reales.length ? armarFilas() : { filas:[], st:{ cargas:0, texto:0, sin:0 } };
   var tot = ar.filas.reduce(function(a, f){ a.v += f.v; a.l += f.l; return a; }, { v:0, l:0 });
   var anios = {}; ar.filas.forEach(function(f){ anios[f.f.slice(0, 4)] = (anios[f.f.slice(0, 4)] || 0) + 1; });
-  var anio = +Object.keys(anios).sort(function(a, b){ return anios[b] - anios[a]; })[0] || new Date().getFullYear();
+  var anio = +Object.keys(anios).sort(function(a, b){ return anios[b] - anios[a]; })[0] || (L.planL && L.planL.anio) || new Date().getFullYear();
   var fmax = ar.filas.reduce(function(a, f){ return f.f > a ? f.f : a; }, "");
   var card = el("div", "card"); card.appendChild(el("h3", "", "Lo que trae la carga"));
   var tb = "<div class='tbl'><table><tbody>";
   function fd(l, v){ tb += "<tr><td>" + esc(l) + "</td><td class='n'>" + v + "</td></tr>"; }
   if(ar.filas.length){ fd("Partidas de gasto", ar.filas.length.toLocaleString("es-MX")); fd("Importe neto", pesos(tot.v)); fd("Litros", lts(tot.l)); fd("Último movimiento", fmax.split("-").reverse().join("/")); fd("Unidad identificada con Cargas", ar.st.cargas.toLocaleString("es-MX")); fd("Unidad tomada del texto de SAP", ar.st.texto.toLocaleString("es-MX")); fd("Sin unidad (centros por flota)", ar.st.sin.toLocaleString("es-MX")); }
   if(planFilas.length){ var ta = planFilas.reduce(function(a, f){ return a + f.m.reduce(function(x, y){ return x + y; }, 0); }, 0); fd("Renglones de presupuesto", planFilas.length); fd("Presupuesto anual", pesos(GASTOS_LIB.redondea(ta))); }
+  if(L.planL){ var tl = L.planL.filas.reduce(function(a, f){ return a + f.m.reduce(function(x, y){ return x + y; }, 0); }, 0); fd("Presupuesto en litros: renglones", L.planL.filas.length); fd("Presupuesto en litros: anual", lts(tl) + " L"); }
   card.innerHTML += tb + "</tbody></table></div>"; zona.appendChild(card);
   var avisos = []; L.resumenes.forEach(function(r){ r.avisos.forEach(function(a){ avisos.push(r.nombre + ": " + a); }); });
   if(ar.filas.length && !L.cargas.length) avisos.push("No elegiste Cargas.xlsx: la unidad se toma solo del texto de la denominación de SAP.");
   var cedCub = {}; ar.filas.forEach(function(f){ cedCub[grupo(f.c)] = 1; });
   var faltan = {}; if(D) D.real.forEach(function(r){ var g = grupo(r[0]); if(!cedCub[g]) faltan[g] = 1; });
   if(ar.filas.length && Object.keys(faltan).length) avisos.push("Faltan centros que hoy tienen gasto (" + Object.keys(faltan).slice(0, 8).join(", ") + (Object.keys(faltan).length > 8 ? "…" : "") + "). Al guardar se quita su total inicial y quedarían sin gasto: sube también el otro archivo de gasto.");
+  if(L.planL) L.planL.avisos.forEach(function(a){ avisos.push(a); });
   avisos.forEach(function(a){ var d = el("div", "aviso"); d.textContent = a; zona.appendChild(d); });
   var fila = el("div", "row"); fila.style.alignItems = "center";
   var fa = el("div", "f"); fa.innerHTML = "<label>Año</label><input id='qAnio' type='number' value='" + anio + "' style='width:100px'>"; fila.appendChild(fa);
@@ -446,10 +513,25 @@ function pintarCarga(zona){
   var m = el("p", "msg"); fila.appendChild(m); zona.appendChild(fila);
   b.addEventListener("click", function(){
     var a = +$("qAnio").value; b.disabled = true; m.className = "msg"; m.textContent = "Guardando…";
-    ERP.rest("rpc/combustible_cargar", { method:"POST", body:{ p_anio:a, p_real:ar.filas, p_plan:planFilas, p_archivos:L.nombres, p_nota:null } }).then(function(r){
-      var ok = (!ar.filas.length || (r.n_real === ar.filas.length && Math.abs(r.total_real - tot.v) < 0.01)) && (!planFilas.length || r.n_plan === planFilas.length);
-      m.className = ok ? "msg ok" : "msg err";
-      m.textContent = (ok ? "Guardado y verificado: " : "Guardado, pero no coincide con el archivo: ") + (ar.filas.length ? r.n_real.toLocaleString("es-MX") + " partidas por " + pesos(r.total_real) : "") + (planFilas.length ? " · presupuesto de " + r.n_plan + " renglones" : "") + ".";
+    var pasos = Promise.resolve(null);
+    if(ar.filas.length || planFilas.length) pasos = ERP.rest("rpc/combustible_cargar", { method:"POST", body:{ p_anio:a, p_real:ar.filas, p_plan:planFilas, p_archivos:L.nombres, p_nota:null } });
+    pasos.then(function(r){
+      var txt = [], ok = true;
+      if(r){
+        ok = (!ar.filas.length || (r.n_real === ar.filas.length && Math.abs(r.total_real - tot.v) < 0.01)) && (!planFilas.length || r.n_plan === planFilas.length);
+        if(ar.filas.length) txt.push(r.n_real.toLocaleString("es-MX") + " partidas por " + pesos(r.total_real));
+        if(planFilas.length) txt.push("presupuesto de " + r.n_plan + " renglones");
+      }
+      if(!L.planL) return { ok:ok, txt:txt };
+      return ERP.rest("rpc/combustible_cargar_litros", { method:"POST", body:{ p_anio:a, p_plan:L.planL.filas, p_archivos:L.nombres, p_nota:null } }).then(function(r2){
+        var tl = L.planL.filas.reduce(function(x, f){ return x + f.m.reduce(function(u, v){ return u + v; }, 0); }, 0);
+        var ok2 = r2.n_plan === L.planL.filas.length && Math.abs(r2.litros_anual - tl) < 0.01;
+        txt.push("presupuesto en litros de " + r2.n_plan + " renglones (" + lts(r2.litros_anual) + " L al año)");
+        return { ok:ok && ok2, txt:txt };
+      });
+    }).then(function(x){
+      m.className = x.ok ? "msg ok" : "msg err";
+      m.textContent = (x.ok ? "Guardado y verificado: " : "Guardado, pero no coincide con el archivo: ") + x.txt.join(" · ") + ".";
     }).catch(function(e){ b.disabled = false; m.className = "msg err"; m.textContent = "No se pudo guardar: " + e.message; });
   });
 }
