@@ -98,7 +98,7 @@
   <div class="row hero">
     <div>
       <h2>Gasto de combustible</h2>
-      <p>Gasto real (SAP KSB1) contra presupuesto (SAP KSBP) de diésel, gasolina y gas LP, por CEDIS y mes de contabilización. El diésel de ruta se compara contra el presupuesto de ruta de cada CEDIS. La <b>gasolina cargada a centros de gas LP</b> se muestra aparte y no entra en la comparación contra presupuesto. Desviación = real menos presupuesto: positivo es gasto por encima.</p>
+      <p>Gasto real (SAP KSB1) contra presupuesto (SAP KSBP) de diésel, gasolina y gas LP, por CEDIS y mes de contabilización. El diésel de ruta se compara contra el presupuesto de ruta de cada CEDIS. Se mide y compara en <b>litros</b> (el precio por litro no depende de nosotros); los pesos y el presupuesto van como referencia. La <b>gasolina cargada a centros de gas LP</b> se muestra aparte y no entra en la comparación contra presupuesto. Desviación = real menos presupuesto: positivo es gasto por encima.</p>
     </div>
     <div class="grow"></div>
     <div class="f"><label for="fAnio">Año</label><select id="fAnio"></select></div>
@@ -162,19 +162,19 @@ function mesDefecto(){
 }
 
 function agregar(){
-  var A = { comb:{}, cedis:{}, mes:[], ap:{ v:0, l:0, n:0, mes:[], ced:{} }, real:0, plan:0, lit:0, anual:0 }, m;
-  for(m = 0; m <= 12; m++){ A.mes.push({ real:0, plan:0 }); A.ap.mes.push(0); }
+  var A = { comb:{}, cedis:{}, mes:[], ap:{ v:0, l:0, n:0, mes:[], lm:[], ced:{} }, real:0, plan:0, lit:0, anual:0 }, m;
+  for(m = 0; m <= 12; m++){ A.mes.push({ real:0, plan:0, lit:0 }); A.ap.mes.push(0); A.ap.lm.push(0); }
   function g(o, k){ return o[k] || (o[k] = { real:0, plan:0, lit:0, anual:0 }); }
   D.real.forEach(function(r){
     var c = r[0], k = r[1], mm = r[2], ced = c.slice(0, 3);
     if(mm > S.hasta || (S.cedis && ced !== S.cedis)) return;
     if(esAparte(c, k)){
-      A.ap.v += r[3]; A.ap.l += r[4]; A.ap.n += r[5]; A.ap.mes[mm] += r[3];
-      var a = A.ap.ced[ced] || (A.ap.ced[ced] = { v:0, l:0, mes:[0,0,0,0,0,0,0,0,0,0,0,0,0] }); a.v += r[3]; a.l += r[4]; a.mes[mm] += r[3];
+      A.ap.v += r[3]; A.ap.l += r[4]; A.ap.n += r[5]; A.ap.mes[mm] += r[3]; A.ap.lm[mm] += r[4];
+      var a = A.ap.ced[ced] || (A.ap.ced[ced] = { v:0, l:0, mes:[0,0,0,0,0,0,0,0,0,0,0,0,0], lm:[0,0,0,0,0,0,0,0,0,0,0,0,0] }); a.v += r[3]; a.l += r[4]; a.mes[mm] += r[3]; a.lm[mm] += r[4];
       return;
     }
     g(A.comb, k).real += r[3]; g(A.comb, k).lit += r[4]; g(A.cedis, ced).real += r[3]; g(A.cedis, ced).lit += r[4];
-    A.mes[mm].real += r[3]; A.real += r[3]; A.lit += r[4];
+    A.mes[mm].real += r[3]; A.mes[mm].lit += r[4]; A.real += r[3]; A.lit += r[4];
   });
   D.plan.forEach(function(p){
     var ced = p[0].slice(0, 3); if(S.cedis && ced !== S.cedis) return;
@@ -198,11 +198,10 @@ function kpi(l, v, s, cls){ var k = el("div", "kpi"); k.appendChild(el("span", "
 function pintarKpis(A){
   var box = $("kpis"); box.textContent = "";
   var d = A.real - A.plan;
-  box.appendChild(kpi("Gastado a " + MESL[S.hasta - 1], pesos(A.real), A.plan ? "Presupuesto " + pesos(A.plan) : "Sin presupuesto cargado"));
-  box.appendChild(kpi("Desviación", A.plan ? pct(d / A.plan * 100) : "—", A.plan ? (d > 0 ? "+" : "-") + pesos(Math.abs(d)) + (d > 0 ? " por encima" : " por debajo") : "", A.plan ? claseDev(d) : ""));
-  box.appendChild(kpi("Presupuesto anual", pesos(A.anual), "Año " + S.anio));
-  box.appendChild(kpi("Litros", lts(A.lit), A.lit ? "Promedio " + pesos(A.real / A.lit) + " por litro" : ""));
-  box.appendChild(kpi("Gasolina en centros de gas LP", pesos(A.ap.v), lts(A.ap.l) + " L · aparte, sin presupuesto"));
+  box.appendChild(kpi("Litros a " + MESL[S.hasta - 1], lts(A.lit) + " L", A.lit ? "Promedio " + lts(A.lit / S.hasta) + " L por mes" : ""));
+  box.appendChild(kpi("Litros de gasolina en gas LP (aparte)", lts(A.ap.l) + " L", pesos(A.ap.v) + " · sin presupuesto"));
+  box.appendChild(kpi("Gastado (pesos)", pesos(A.real), (A.lit ? "$" + fmt.format(A.real / A.lit) + " por litro · " : "") + (A.plan ? "presupuesto " + pesos(A.plan) : "sin presupuesto cargado")));
+  box.appendChild(kpi("Desviación en pesos", A.plan ? pct(d / A.plan * 100) : "—", A.plan ? (d > 0 ? "+" : "-") + pesos(Math.abs(d)) + (d > 0 ? " sobre presupuesto" : " bajo presupuesto") : "", A.plan ? claseDev(d) : ""));
 }
 function tabla(cols, filas, tot){
   var t = "<div class='tbl'><table><thead><tr>" + cols.map(function(c){ return "<th" + (c[1] ? " class='n'" : "") + ">" + esc(c[0]) + "</th>"; }).join("") + "</tr></thead><tbody>";
@@ -211,45 +210,45 @@ function tabla(cols, filas, tot){
   return t + "</tbody></table></div>";
 }
 function celdaDev(real, plan){ if(!plan) return "<span class='sub'>—</span>"; var d = real - plan; return "<span class='" + claseDev(d) + "'>" + (d > 0 ? "+" : "") + pesos(d) + " (" + pct(d / plan * 100) + ")</span>"; }
-var COLS_RP = function(p){ return [[p], ["Real", 1], ["Presupuesto", 1], ["Desviación", 1], ["Litros", 1], ["$/L", 1], ["Presup. anual", 1]]; };
-function filaRP(nombre, o){ return [esc(nombre), pesos(o.real), pesos(o.plan), celdaDev(o.real, o.plan), lts(o.lit), o.lit ? "$" + fmt.format(o.real / o.lit) : "—", pesos(o.anual)]; }
-function totalRP(A){ return ["Total", pesos(A.real), pesos(A.plan), celdaDev(A.real, A.plan), lts(A.lit), A.lit ? "$" + fmt.format(A.real / A.lit) : "—", pesos(A.anual)]; }
+var COLS_RP = function(p){ return [[p], ["Litros", 1], ["% de litros", 1], ["$/L", 1], ["Gastado", 1], ["Presupuesto", 1], ["Desviación $", 1]]; };
+function filaRP(nombre, o, A){ return [esc(nombre), "<b>" + lts(o.lit) + "</b>", A.lit ? (o.lit / A.lit * 100).toFixed(1) + "%" : "—", o.lit ? "$" + fmt.format(o.real / o.lit) : "—", pesos(o.real), pesos(o.plan), celdaDev(o.real, o.plan)]; }
+function totalRP(A){ return ["Total", lts(A.lit), "100%", A.lit ? "$" + fmt.format(A.real / A.lit) : "—", pesos(A.real), pesos(A.plan), celdaDev(A.real, A.plan)]; }
 
 function vistaComb(root, A){
   var ks = ORDEN_CLASES.filter(function(k){ return A.comb[k]; });
-  root.innerHTML = tabla(COLS_RP("Combustible"), ks.map(function(k){ return filaRP(CLASES[k] || k, A.comb[k]); }), totalRP(A));
+  root.innerHTML = tabla(COLS_RP("Combustible"), ks.map(function(k){ return filaRP(CLASES[k] || k, A.comb[k], A); }), totalRP(A));
 }
 function vistaCedis(root, A){
   var ks = Object.keys(A.cedis).sort();
-  root.innerHTML = tabla(COLS_RP("CEDIS"), ks.map(function(k){ return filaRP(nomCedis(k), A.cedis[k]); }), totalRP(A));
+  root.innerHTML = tabla(COLS_RP("CEDIS"), ks.map(function(k){ return filaRP(nomCedis(k), A.cedis[k], A); }), totalRP(A));
 }
 function grafica(A){
-  var W = 760, H = 220, pl = 52, pb = 26, pt = 10, n = 12, bw = (W - pl) / n, max = 0, m;
-  for(m = 1; m <= 12; m++) max = Math.max(max, A.mes[m].real, A.mes[m].plan);
+  var W = 760, H = 220, pl = 52, pb = 26, pt = 24, n = 12, bw = (W - pl) / n, max = 0, m;
+  for(m = 1; m <= 12; m++) max = Math.max(max, A.mes[m].lit);
   if(!max) return "";
-  function ab(v){ return v >= 1e6 ? (v / 1e6).toFixed(1) + " M" : (v >= 1e3 ? Math.round(v / 1e3) + " k" : String(Math.round(v))); }
+  function ab(v){ return v >= 1e3 ? (v / 1e3).toFixed(0) + " mil" : String(Math.round(v)); }
   function y(v){ return pt + (H - pt - pb) * (1 - v / max); }
-  var s = "<svg viewBox='0 0 " + W + " " + H + "' width='100%' role='img' aria-label='Gasto por mes contra presupuesto'>";
+  var s = "<svg viewBox='0 0 " + W + " " + H + "' width='100%' role='img' aria-label='Litros por mes'>";
   for(var i = 0; i <= 4; i++){ var v = max * i / 4; s += "<line class='gl' x1='" + pl + "' x2='" + W + "' y1='" + y(v) + "' y2='" + y(v) + "'/><text class='ax' x='" + (pl - 6) + "' y='" + (y(v) + 4) + "' text-anchor='end'>" + ab(v) + "</text>"; }
   for(m = 1; m <= 12; m++){
-    var x = pl + (m - 1) * bw, r = A.mes[m].real, p = A.mes[m].plan;
-    if(p) s += "<rect class='bp' x='" + (x + bw * .1) + "' y='" + y(p) + "' width='" + (bw * .8) + "' height='" + (H - pb - y(p)) + "'/>";
-    if(r) s += "<rect class='br' x='" + (x + bw * .25) + "' y='" + y(r) + "' width='" + (bw * .5) + "' height='" + (H - pb - y(r)) + "'/>";
+    var x = pl + (m - 1) * bw, r = A.mes[m].lit;
+    if(r) s += "<rect class='br' x='" + (x + bw * .2) + "' y='" + y(r) + "' width='" + (bw * .6) + "' height='" + (H - pb - y(r)) + "'/><text class='ax' x='" + (x + bw / 2) + "' y='" + (y(r) - 3) + "' text-anchor='middle'>" + ab(r) + "</text>";
     s += "<text class='ax' x='" + (x + bw / 2) + "' y='" + (H - 8) + "' text-anchor='middle'>" + MES3[m - 1] + "</text>";
   }
-  return s + "</svg><div class='leyenda'><span><i style='background:var(--accent)'></i>Real</span><span><i style='background:var(--ink-faint);opacity:.5'></i>Presupuesto</span></div>";
+  return "<h3>Litros por mes</h3>" + s + "</svg>";
 }
 function vistaMes(root, A){
-  var filas = [], r = 0, p = 0;
+  var filas = [], prev = null, tl = 0;
   for(var m = 1; m <= 12; m++){
-    var o = A.mes[m]; if(!o.real && !o.plan && !A.ap.mes[m]) continue;
-    r += o.real; p += o.plan;
-    filas.push([MESL[m - 1], o.real ? pesos(o.real) : "—", pesos(o.plan), m <= S.hasta ? celdaDev(o.real, o.plan) : "—", A.ap.mes[m] ? pesos(A.ap.mes[m]) : "—"]);
+    var o = A.mes[m]; if(!o.lit && !o.plan && !A.ap.lm[m]) continue;
+    var cam = (prev && o.lit && m <= S.hasta) ? (o.lit - prev) / prev * 100 : null;
+    if(o.lit && m <= S.hasta) prev = o.lit; tl += o.lit;
+    filas.push([MESL[m - 1], o.lit ? "<b>" + lts(o.lit) + "</b>" : "—", cam == null ? "—" : "<span class='sub'>" + pct(cam) + "</span>", o.lit ? "$" + fmt.format(o.real / o.lit) : "—", o.real ? pesos(o.real) : "—", pesos(o.plan), m <= S.hasta ? celdaDev(o.real, o.plan) : "—", A.ap.lm[m] ? lts(A.ap.lm[m]) : "—"]);
   }
-  var c = el("div", "card"); c.innerHTML = grafica(A);
-  root.appendChild(c);
-  var d = document.createElement("div"); d.innerHTML = tabla([["Mes"], ["Real", 1], ["Presupuesto", 1], ["Desviación", 1], ["Gasolina en gas LP (aparte)", 1]], filas, ["Acumulado", pesos(r), pesos(p), celdaDev(r, p), pesos(A.ap.v)]);
+  var c = el("div", "card"); c.innerHTML = grafica(A); root.appendChild(c);
+  var d = document.createElement("div"); d.innerHTML = tabla([["Mes"], ["Litros", 1], ["vs mes anterior", 1], ["$/L", 1], ["Gastado", 1], ["Presupuesto", 1], ["Desviación $", 1], ["Gasolina en gas LP (L)", 1]], filas, ["Acumulado", lts(A.lit), "", A.lit ? "$" + fmt.format(A.real / A.lit) : "—", pesos(A.real), pesos(A.plan), celdaDev(A.real, A.plan), lts(A.ap.l)]);
   root.appendChild(d.firstChild);
+  root.appendChild(el("p", "pie", "El presupuesto de SAP viene en pesos, no en litros; por eso el comparativo contra presupuesto es en pesos y los litros se comparan entre meses, CEDIS y combustibles."));
 }
 
 /* ---- detalle por partida/unidad (se baja solo cuando se necesita) ---- */
@@ -271,11 +270,11 @@ function vistaAparte(root, A){
   root.appendChild(c);
   var filas = [], tv = 0, tl = 0, colt = ced.map(function(k){ return 0; });
   for(var m = 1; m <= S.hasta; m++){
-    if(!A.ap.mes[m]) continue;
-    filas.push([MESL[m - 1]].concat(ced.map(function(k, i){ var v = A.ap.ced[k].mes[m]; colt[i] += v; return v ? pesos(v) : "—"; })).concat([pesos(A.ap.mes[m])]));
+    if(!A.ap.lm[m]) continue;
+    filas.push([MESL[m - 1]].concat(ced.map(function(k, i){ var v = A.ap.ced[k].lm[m]; colt[i] += v; return v ? lts(v) : "—"; })).concat([lts(A.ap.lm[m])]));
   }
-  var cols = [["Mes"]].concat(ced.map(function(k){ return [nomCedis(k), 1]; })).concat([["Total", 1]]);
-  var t = document.createElement("div"); t.innerHTML = tabla(cols, filas, ["Total"].concat(colt.map(pesos)).concat([pesos(A.ap.v)])); root.appendChild(t.firstChild);
+  var cols = [["Litros por mes"]].concat(ced.map(function(k){ return [nomCedis(k), 1]; })).concat([["Total", 1]]);
+  var t = document.createElement("div"); t.innerHTML = tabla(cols, filas, ["Total (L)"].concat(colt.map(lts)).concat([lts(A.ap.l)])); root.appendChild(t.firstChild);
   var z = el("div", "card"); z.appendChild(el("h3", "", "Por unidad")); var cz = el("div"); z.appendChild(cz); root.appendChild(z);
   cz.appendChild(el("p", "", "Leyendo detalle…"));
   bajarDetalle().then(function(rows){
@@ -285,15 +284,15 @@ function vistaAparte(root, A){
       var k = r.economico || ("(sin unidad) " + r.ceco), u = us[k] || (us[k] = { e:k, ceco:r.ceco, l:0, v:0, n:0, meses:{}, fu:r.fuente_unidad });
       u.l += r.litros; u.v += r.valor; u.n++; u.meses[r.mes] = 1;
     });
-    var lista = Object.keys(us).map(function(k){ return us[k]; }).sort(function(a, b){ return b.v - a.v; });
+    var lista = Object.keys(us).map(function(k){ return us[k]; }).sort(function(a, b){ return b.l - a.l; });
     cz.textContent = "";
     if(!lista.length){ cz.appendChild(el("p", "", "No hay detalle por unidad en este corte.")); return; }
     var f = lista.map(function(u){
       var nm = Object.keys(u.meses).length, rec = u.n >= 6 && nm >= 3;
-      return [esc(u.e), esc(nomCedis(u.ceco.slice(0, 3)) + " · " + u.ceco), pesos(u.v), lts(u.l), String(u.n), nm + " mes" + (nm === 1 ? "" : "es"), rec ? "<span class='pill warn'>Uso recurrente</span>" : "<span class='pill'>Cargas sueltas</span>"];
+      return [esc(u.e), esc(nomCedis(u.ceco.slice(0, 3)) + " · " + u.ceco), "<b>" + lts(u.l) + "</b>", pesos(u.v), String(u.n), nm + " mes" + (nm === 1 ? "" : "es"), rec ? "<span class='pill warn'>Uso recurrente</span>" : "<span class='pill'>Cargas sueltas</span>"];
     });
     var tot = lista.reduce(function(a, u){ a.v += u.v; a.l += u.l; a.n += u.n; return a; }, { v:0, l:0, n:0 });
-    var hh = document.createElement("div"); hh.innerHTML = tabla([["Unidad"], ["Centro de coste"], ["Gastado", 1], ["Litros", 1], ["Cargas", 1], ["Meses", 1], ["Lectura"]], f, ["Total", "", pesos(tot.v), lts(tot.l), String(tot.n), "", ""]);
+    var hh = document.createElement("div"); hh.innerHTML = tabla([["Unidad"], ["Centro de coste"], ["Litros", 1], ["Gastado", 1], ["Cargas", 1], ["Meses", 1], ["Lectura"]], f, ["Total", "", lts(tot.l), pesos(tot.v), String(tot.n), "", ""]);
     cz.appendChild(hh.firstChild);
     if(rows.every(function(r){ return r.resumen === false; }) && !rows.some(function(r){ return r.economico && r.fuente_unidad === "Cargas"; }))
       cz.appendChild(el("p", "pie", "La unidad sale del texto de la denominación en SAP. Al subir los archivos desde Ajustes el ERP la confirma contra el archivo Cargas."));
@@ -309,12 +308,12 @@ function vistaUnidad(root, A){
       if(r.mes > S.hasta || !r.economico || (S.cedis && r.ceco.slice(0, 3) !== S.cedis)) return;
       var u = us[r.economico] || (us[r.economico] = { e:r.economico, ced:r.ceco.slice(0, 3), v:0, l:0, n:0, cl:{} }); u.v += r.valor; u.l += r.litros; u.n++; u.cl[CLASES[r.clase] || r.clase] = 1;
     });
-    var lista = Object.keys(us).map(function(k){ return us[k]; }).sort(function(a, b){ return b.v - a.v; });
+    var lista = Object.keys(us).map(function(k){ return us[k]; }).sort(function(a, b){ return b.l - a.l; });
     function dib(){
       var q = $("qU").value.trim().toUpperCase(), l = lista.filter(function(u){ return !q || u.e.indexOf(q) >= 0; });
-      zona.innerHTML = tabla([["Unidad"], ["CEDIS"], ["Combustible"], ["Gastado", 1], ["Litros", 1], ["$/L", 1], ["Cargas", 1]],
-        l.slice(0, 300).map(function(u){ return [esc(u.e), esc(nomCedis(u.ced)), esc(Object.keys(u.cl).join(", ")), pesos(u.v), lts(u.l), u.l ? "$" + fmt.format(u.v / u.l) : "—", String(u.n)]; }));
-      if(l.length > 300) zona.appendChild(el("p", "pie", "Se muestran las 300 con más gasto; afina con el buscador."));
+      zona.innerHTML = tabla([["Unidad"], ["CEDIS"], ["Combustible"], ["Litros", 1], ["Gastado", 1], ["$/L", 1], ["Cargas", 1]],
+        l.slice(0, 300).map(function(u){ return [esc(u.e), esc(nomCedis(u.ced)), esc(Object.keys(u.cl).join(", ")), "<b>" + lts(u.l) + "</b>", pesos(u.v), u.l ? "$" + fmt.format(u.v / u.l) : "—", String(u.n)]; }));
+      if(l.length > 300) zona.appendChild(el("p", "pie", "Se muestran las 300 con más litros; afina con el buscador."));
     }
     $("qU").addEventListener("input", dib); dib();
   }).catch(function(e){ zona.textContent = "No se pudo leer el detalle: " + e.message; });
