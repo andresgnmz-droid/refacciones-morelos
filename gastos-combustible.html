@@ -309,6 +309,7 @@ function vistaUnidad(root, A){
       var u = us[r.economico] || (us[r.economico] = { e:r.economico, ced:r.ceco.slice(0, 3), v:0, l:0, n:0, cl:{} }); u.v += r.valor; u.l += r.litros; u.n++; u.cl[CLASES[r.clase] || r.clase] = 1;
     });
     var lista = Object.keys(us).map(function(k){ return us[k]; }).sort(function(a, b){ return b.l - a.l; });
+    if(rows.every(function(r){ return r.clase === "6011001"; })){ var av = el("div", "aviso"); av.textContent = "Por ahora solo está cargado el detalle de la gasolina cargada a centros de gas LP. El detalle de todas las unidades (diésel, gas LP y gasolina) aparece al subir los archivos de SAP y Cargas.xlsx en Ajustes › Gasto de combustible."; root.insertBefore(av, barra); }
     function dib(){
       var q = $("qU").value.trim().toUpperCase(), l = lista.filter(function(u){ return !q || u.e.indexOf(q) >= 0; });
       zona.innerHTML = tabla([["Unidad"], ["CEDIS"], ["Combustible"], ["Litros", 1], ["Gastado", 1], ["$/L", 1], ["Cargas", 1]],
