@@ -144,7 +144,7 @@
 <body>
 
 <section id="acceso">
-  <form class="login" id="formLogin" autocomplete="on">
+  <form class="login" id="formLogin" method="post" action="#" onsubmit="return false" autocomplete="on">
     <div><h1>ERP Automotriz Morelos</h1><p class="sub">Embotelladora Mexicana · Zona Morelos</p></div>
     <div><label for="lUser">Usuario</label><input id="lUser" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" required></div>
     <div><label for="lPass">Contraseña</label><input id="lPass" name="password" type="password" autocomplete="current-password" required></div>
@@ -153,10 +153,10 @@
     <button class="link" id="bActivar" type="button" hidden>Primer acceso: activar al administrador</button>
   </form>
 
-  <form class="login" id="formActivar" hidden autocomplete="off">
+  <form class="login" id="formActivar" method="post" action="#" onsubmit="return false" hidden autocomplete="off">
     <div><h1>Activar administrador</h1><p class="sub">Se hace una sola vez. Necesitas el código de activación que dejaste en Supabase (Edge Functions · Secrets · SETUP_CODE).</p></div>
     <div><label for="aCodigo">Código de activación</label><input id="aCodigo" type="password" autocomplete="off" required></div>
-    <div><label for="aUser">Usuario</label><input id="aUser" autocapitalize="none" spellcheck="false" placeholder="ej. agaytan" required></div>
+    <div><label for="aUser">Usuario</label><input id="aUser" autocapitalize="none" spellcheck="false" placeholder="usuario" required></div>
     <div><label for="aNombre">Nombre completo</label><input id="aNombre" required></div>
     <div><label for="aPass">Contraseña (mínimo 8 caracteres)</label><input id="aPass" type="password" autocomplete="new-password" minlength="8" required></div>
     <button class="btn" id="bCrearAdmin" type="submit">Crear administrador y entrar</button>
@@ -229,9 +229,14 @@
         m.textContent = /Invalid login|credentials/i.test(r.error.message) ? "Usuario o contraseña incorrectos." : "No se pudo entrar: " + r.error.message;
         b.disabled = false; return;
       }
-      return iniciarSesion().then(function(ok){
+      return iniciarSesion().then(function(res){
         b.disabled = false;
-        if(!ok){ m.className = "msg err"; m.textContent = "Tu usuario no tiene acceso activo. Avisa al administrador."; }
+        if(!res.ok){
+          m.className = "msg err";
+          m.textContent = res.motivo === "sin_acceso"
+            ? "Tu usuario no tiene acceso activo. Avisa al administrador."
+            : "No se pudo verificar tu acceso (" + res.detalle + "). Revisa tu conexión y la fecha y hora de tu equipo, e inténtalo de nuevo.";
+        }
       });
     }).catch(function(err){ b.disabled = false; m.className = "msg err"; m.textContent = "Sin conexión: " + err.message; });
   });
@@ -251,16 +256,21 @@
     }).catch(function(err){ b.disabled = false; m.className = "msg err"; m.textContent = "Sin conexión: " + err.message; });
   });
 
+  // Devuelve { ok:true } o { ok:false, motivo:"sin_acceso" | "error", detalle }.
+  // Una falla técnica (red, sesión rechazada, hora del equipo…) NO cierra la sesión ni se presenta como "sin acceso".
   function iniciarSesion(){
     return sb.rpc("mi_sesion").then(function(r){
-      if(r.error || !r.data){
-        return sb.auth.signOut().then(function(){ try{ localStorage.removeItem("erp_perfil"); }catch(e){} return false; });
+      if(r.error){
+        return { ok:false, motivo:"error", detalle:(r.error.message || r.error.code || "error desconocido") };
+      }
+      if(!r.data){
+        return sb.auth.signOut().then(function(){ try{ localStorage.removeItem("erp_perfil"); }catch(e){} return { ok:false, motivo:"sin_acceso" }; });
       }
       perfil = r.data;
       try{ localStorage.setItem("erp_perfil", JSON.stringify(perfil)); }catch(e){}
       arrancarApp();
-      return true;
-    });
+      return { ok:true };
+    }).catch(function(err){ return { ok:false, motivo:"error", detalle:(err && err.message) || "sin conexión" }; });
   }
 
   function salir(){
@@ -283,7 +293,7 @@
     { id:"gastos", t:"Gastos", src:"gastos.html", visible:function(){ return ve("gastos"); } },
     { id:"carga-trabajo", t:"Carga de trabajo", src:"carga-mecanicos.html", visible:function(){ return ve("carga_trabajo"); } },
     { id:"piso", t:"Unidades en piso", src:"unidades-piso.html", visible:function(){ return ve("piso"); } },
-    { id:"varios", t:"Varios", visible:function(){ return ["combustible","gasto_combustible","llantas","catalogo_refacciones","control_refacciones","carta_peticion","catalogo_unidades","horas_extras"].some(ve); } },
+    { id:"varios", t:"Varios", visible:function(){ return ["combustible","gasto_combustible","llantas","catalogo_refacciones","control_refacciones","carta_peticion","catalogo_unidades","horas_extras","stock_refacciones"].some(ve); } },
     { id:"historial", t:"Histórico y respaldo", src:"historial.html", visible:function(){ return ve("historial"); } },
     { id:"ajustes", t:"Ajustes", visible:function(){ return nivel("ajustes") === "editar"; } }
   ];
@@ -295,9 +305,10 @@
   ];
   var VARIOS_ITEMS = [
     { id:"gasto-combustible", t:"Gasto de combustible", src:"gastos-combustible.html", m:"gasto_combustible", d:"Gasto real de diésel, gasolina y gas LP contra presupuesto, por CEDIS y mes; la gasolina cargada a centros de gas LP va aparte." },
-    { id:"combustible", t:"Combustible", src:"rendimientos.html", m:"combustible", activo:false, d:"Rendimientos y cargas de combustible de la flota." },
+    { id:"combustible", t:"Combustible", m:"combustible", activo:false, d:"Rendimientos y cargas de combustible de la flota." },
     { id:"llantas", t:"Control de llantas", m:"llantas", activo:false, d:"Revisión mensual de profundidad de llantas, cámara y alarma de las unidades de reparto." },
     { id:"catalogo-refacciones", t:"Catálogo de refacciones", src:"catalogo-refacciones.html", m:"catalogo_refacciones", d:"Material por CEDIS (existencia, bloqueo, entradas y salidas) y semáforo de material sin salir." },
+    { id:"stock-refacciones", t:"Buscador de stock", src:"index.html", m:"stock_refacciones", d:"Busca una refacción por código o nombre y ve su existencia en cada CEDIS." },
     { id:"control-refacciones", t:"Control de refacciones faltantes", src:"faltantes.html", m:"control_refacciones", d:"Faltantes: pedidos contra ingresos de SAP, por CEDIS." },
     { id:"carta-peticion", t:"Carta petición", src:"carta-peticion.html", m:"carta_peticion", d:"Genera la carta petición de dotación de combustible para SAP." },
     { id:"catalogo-unidades", t:"Catálogo de unidades", src:"catalogo-maestro.html", m:"catalogo_unidades", d:"Ficha maestra de las unidades de la zona." },
@@ -397,13 +408,19 @@
     var kG = kpi("Gasto de mantenimiento", "…", "Gastado contra presupuesto", "gastos");
     var kC = kpi("Gasto de combustible", "…", "Gastado contra presupuesto", "varios/gasto-combustible");
     [kG, kC, kP, kH, kS, kU].forEach(function(k){ row.appendChild(k.node); });
+    // Cada indicador solo se muestra (y solo consulta datos) si el usuario tiene permiso sobre su módulo.
+    kU.node.hidden = !ve("catalogo_unidades");
+    kC.node.hidden = kC.node.hidden || !ve("gasto_combustible");
+    kP.node.hidden = kP.node.hidden || !ve("preventivos");
+    kH.node.hidden = kH.node.hidden || !ve("hojalateria");
     var estado = el("span", "pill", "Conectando…");
     function fail(e){ console.error(e); estado.textContent = "Sin conexión a datos"; estado.className = "pill warn"; }
 
-    if(!kU.node.hidden || true){
+    if(!kU.node.hidden){
       count("catalogo_unidades?activo=eq.true&select=economico").then(function(n){ kU.set(String(n)); }).catch(fail);
     }
-    json("preventivos_cargas?select=periodo&order=periodo.desc&limit=1").then(function(r){
+    (kP.node.hidden ? Promise.resolve(null) : json("preventivos_cargas?select=periodo&order=periodo.desc&limit=1")).then(function(r){
+      if(!r) return;
       if(!r.length) return kP.set("—", "Sin cargas");
       var per = r[0].periodo;
       return json("preventivos_programa?select=estatus&periodo=eq." + per + "&limit=2000").then(function(rows){
@@ -415,11 +432,13 @@
     }).catch(fail);
     if(!kG.node.hidden) cargarGastoInicio(kG);
     if(!kC.node.hidden) cargarCombustibleInicio(kC);
-    json("hojalateria_cronograma?select=estatus&limit=1000").then(function(rows){
+    (kH.node.hidden ? Promise.resolve(null) : json("hojalateria_cronograma?select=estatus&limit=1000")).then(function(rows){
+      if(!rows) return;
       var rea = rows.filter(function(x){ return (x.estatus || "").toUpperCase() === "REALIZADO"; }).length;
       kH.set(rows.length ? (Math.round(rea / rows.length * 1000) / 10) + "%" : "—", rea + " de " + rows.length + " unidades");
     }).catch(fail);
-    json("unidades_piso_datos?select=corte,datos&id=eq.1").then(function(r){
+    (kS.node.hidden ? Promise.resolve(null) : json("unidades_piso_datos?select=corte,datos&id=eq.1")).then(function(r){
+      if(!r) return;
       if(!r.length){ kS.set("—", "Sin corte cargado"); return; }
       var us = (r[0].datos && r[0].datos.units) || [];
       kS.set(String(us.length), "Corte " + r[0].corte);
@@ -440,7 +459,7 @@
     var cV = el("div", "card"); cV.appendChild(el("h3", "", "Varios"));
     cV.appendChild(el("p", "", "Catálogo de unidades, catálogo de refacciones, control de refacciones faltantes y carta petición."));
     var goV = el("button", "btn ghost", "Abrir Varios"); goV.style.alignSelf = "flex-start";
-    goV.addEventListener("click", function(){ location.hash = "varios"; }); cV.appendChild(goV); g.appendChild(cV);
+    goV.addEventListener("click", function(){ location.hash = "varios"; }); cV.appendChild(goV); if(panels.varios.tab.visible()) g.appendChild(cV);
   }
 
   // Tarjeta de la portada: gastado contra presupuesto de todo mantenimiento, con el avance de Reparto (0002) aparte.
@@ -728,18 +747,26 @@
     dialogo(function(box, cerrar){
       box.appendChild(el("h3", "", "Mi cuenta"));
       box.appendChild(el("p", "msg", perfil.nombre + " · usuario " + perfil.usuario));
+      if(perfil.rol === "mecanico"){
+        box.appendChild(el("p", "msg", "Esta cuenta es compartida: la contraseña la cambia únicamente el administrador."));
+        var r0 = el("div", "row"); var c0 = el("button", "btn ghost", "Cerrar"); c0.addEventListener("click", cerrar); r0.appendChild(c0); box.appendChild(r0);
+        return;
+      }
       var f = el("div", "f"); f.appendChild(el("label", "", "Nueva contraseña (mínimo 8 caracteres)"));
       var i = el("input"); i.type = "password"; i.autocomplete = "new-password"; f.appendChild(i); box.appendChild(f);
+      var f2 = el("div", "f"); f2.appendChild(el("label", "", "Repite la contraseña"));
+      var i2 = el("input"); i2.type = "password"; i2.autocomplete = "new-password"; f2.appendChild(i2); box.appendChild(f2);
       var m = el("p", "msg"); box.appendChild(m);
       var row = el("div", "row"); var c = el("button", "btn ghost", "Cerrar"); var g = el("button", "btn", "Cambiar contraseña");
       c.addEventListener("click", cerrar);
       g.addEventListener("click", function(){
         if(i.value.length < 8){ m.className = "msg err"; m.textContent = "Mínimo 8 caracteres."; return; }
+        if(i.value !== i2.value){ m.className = "msg err"; m.textContent = "Las dos contraseñas no coinciden."; return; }
         g.disabled = true;
         sb.auth.updateUser({ password:i.value }).then(function(r){
           g.disabled = false;
           if(r.error){ m.className = "msg err"; m.textContent = r.error.message; }
-          else { m.className = "msg ok"; m.textContent = "Contraseña actualizada."; i.value = ""; }
+          else { m.className = "msg ok"; m.textContent = "Contraseña actualizada."; i.value = ""; i2.value = ""; }
         });
       });
       row.appendChild(c); row.appendChild(g); box.appendChild(row);
@@ -824,14 +851,14 @@
     function formUsuario(u){
       dialogo(function(box, cerrar){
         box.appendChild(el("h3", "", u ? "Editar usuario" : "Nuevo usuario"));
-        var fu = el("div", "f"); fu.appendChild(el("label", "", "Usuario (para entrar)")); var iu = el("input"); iu.autocapitalize = "none"; iu.value = u ? u.usuario : ""; iu.disabled = !!u; iu.placeholder = "ej. dsoler"; fu.appendChild(iu); box.appendChild(fu);
+        var fu = el("div", "f"); fu.appendChild(el("label", "", "Usuario (para entrar)")); var iu = el("input"); iu.autocapitalize = "none"; iu.value = u ? u.usuario : ""; iu.disabled = !!u; iu.placeholder = "usuario"; fu.appendChild(iu); box.appendChild(fu);
         var fn = el("div", "f"); fn.appendChild(el("label", "", "Nombre completo")); var inn = el("input"); inn.value = u ? u.nombre : ""; fn.appendChild(inn); box.appendChild(fn);
         var fr = el("div", "f"); fr.appendChild(el("label", "", "Rol")); var sr = el("select"); opcionesRol(sr, u ? u.rol : "mecanico"); fr.appendChild(sr); box.appendChild(fr);
         var fc = el("div", "f"); fc.appendChild(el("label", "", "Alcance por CEDIS (sin marcar = todos)")); var cc = checksCedis(u ? u.cedis : []); fc.appendChild(cc); box.appendChild(fc);
         var ip = null, fp = null;
         if(!u){
-          fp = el("div", "f"); fp.appendChild(el("label", "", "Contraseña inicial (mínimo 8 caracteres)")); ip = el("input"); ip.value = claveAleatoria(); fp.appendChild(ip);
-          var gen = el("button", "btn ghost sm", "Generar otra"); gen.type = "button"; gen.style.marginTop = "6px"; gen.addEventListener("click", function(){ ip.value = claveAleatoria(); }); fp.appendChild(gen);
+          fp = el("div", "f"); fp.appendChild(el("label", "", "Contraseña inicial (mínimo 8 caracteres)")); ip = el("input"); ip.placeholder = "Escríbela tú (mínimo 8 caracteres)"; ip.autocomplete = "off"; fp.appendChild(ip);
+          var gen = el("button", "btn ghost sm", "Generar una al azar (opcional)"); gen.type = "button"; gen.style.marginTop = "6px"; gen.addEventListener("click", function(){ ip.value = claveAleatoria(); }); fp.appendChild(gen);
           box.appendChild(fp);
         }
         var ia = null;
@@ -842,6 +869,7 @@
         var row = el("div", "row"); var c = el("button", "btn ghost", "Cancelar"); var g = el("button", "btn", u ? "Guardar" : "Crear usuario");
         c.addEventListener("click", cerrar);
         g.addEventListener("click", function(){
+          if(!u && (!ip.value || ip.value.length < 8)){ m.className = "msg err"; m.textContent = "Escribe una contraseña de al menos 8 caracteres."; return; }
           g.disabled = true; m.className = "msg"; m.textContent = "Guardando…";
           var cuerpo = u
             ? { accion:"actualizar", usuario:u.usuario, nombre:inn.value, rol:sr.value, cedis:leerCedis(cc), activo:ia.checked }
@@ -871,18 +899,29 @@
     }
     function formPassword(u){
       dialogo(function(box, cerrar){
+        var propia = (u.usuario === perfil.usuario);
         box.appendChild(el("h3", "", "Nueva contraseña para " + u.nombre));
-        var f = el("div", "f"); f.appendChild(el("label", "", "Contraseña (mínimo 8 caracteres)")); var i = el("input"); i.value = claveAleatoria(); f.appendChild(i); box.appendChild(f);
+        box.appendChild(el("p", "msg", "La contraseña queda fija: solo cambia cuando tú la cambies aquí. Escríbela tú (mínimo 8 caracteres)."));
+        var f = el("div", "f"); f.appendChild(el("label", "", "Contraseña nueva"));
+        var i = el("input"); i.type = "password"; i.autocomplete = "new-password"; f.appendChild(i); box.appendChild(f);
+        var f2 = el("div", "f"); f2.appendChild(el("label", "", "Repite la contraseña"));
+        var i2 = el("input"); i2.type = "password"; i2.autocomplete = "new-password"; f2.appendChild(i2); box.appendChild(f2);
+        var ver = el("label", "msg"); var cv = el("input"); cv.type = "checkbox"; ver.appendChild(cv); ver.appendChild(document.createTextNode(" Mostrar contraseña"));
+        cv.addEventListener("change", function(){ i.type = i2.type = cv.checked ? "text" : "password"; });
+        box.appendChild(ver);
         var m = el("p", "msg"); box.appendChild(m);
-        var row = el("div", "row"); var c = el("button", "btn ghost", "Cancelar"); var g = el("button", "btn", "Cambiar");
+        var row = el("div", "row"); var c = el("button", "btn ghost", "Cancelar"); var g = el("button", "btn", "Cambiar contraseña");
         c.addEventListener("click", cerrar);
         g.addEventListener("click", function(){
-          g.disabled = true;
+          if(i.value.length < 8){ m.className = "msg err"; m.textContent = "Mínimo 8 caracteres."; return; }
+          if(i.value !== i2.value){ m.className = "msg err"; m.textContent = "Las dos contraseñas no coinciden."; return; }
+          if(propia && !confirm("Vas a cambiar TU PROPIA contraseña de administrador. ¿Continuar?")) return;
+          g.disabled = true; m.className = "msg"; m.textContent = "Guardando…";
           llamarFn({ accion:"cambiar_password", usuario:u.usuario, password:i.value }).then(function(r){
             g.disabled = false;
             if(r.error){ m.className = "msg err"; m.textContent = r.error; }
-            else { m.className = "msg ok"; m.textContent = "Listo. Entrégale la nueva contraseña: " + i.value; }
-          });
+            else { m.className = "msg ok"; m.textContent = "Listo: la contraseña de " + u.nombre + " se cambió."; i.value = ""; i2.value = ""; }
+          }).catch(function(e){ g.disabled = false; m.className = "msg err"; m.textContent = "Sin conexión: " + e.message; });
         });
         row.appendChild(c); row.appendChild(g); box.appendChild(row);
       });
@@ -997,7 +1036,11 @@
     return sb.auth.getSession();
   }).then(function(r){
     if(r && r.data && r.data.session){
-      return iniciarSesion().then(function(ok){ if(!ok) mostrarAcceso(); });
+      return iniciarSesion().then(function(res){
+        if(res.ok) return;
+        mostrarAcceso();
+        if(res.motivo === "error"){ $("lMsg").className = "msg err"; $("lMsg").textContent = "No se pudo verificar tu sesión (" + res.detalle + "). Entra de nuevo."; }
+      });
     }
     mostrarAcceso();
   }).catch(function(){ mostrarAcceso(); });

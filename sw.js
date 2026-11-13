@@ -2,13 +2,26 @@
    Guarda en el equipo las páginas, las librerías y la última respuesta de Supabase,
    para poder consultar la información ya cargada cuando no hay internet.
    Si cambias este archivo, sube el número de VERSION. */
-var VERSION = "v25";
+var VERSION = "v26";
 var SHELL = "erp-paginas-" + VERSION;
 var LIBS = "erp-librerias-" + VERSION;
 var DATOS = "erp-datos-" + VERSION;
 
 var API_HOSTS = ["aoutudbxwawlnbwvypir.supabase.co"];
-var PAGINAS = ["./", "index.html", "preventivos.html", "catalogo-maestro.html", "hojalateria.html", "carga-mecanicos.html", "rendimientos.html", "erp.html", "historial.html", "unidades-piso.html", "faltantes.html", "catalogo-refacciones.html", "carta-peticion.html", "offline.js", "erp-auth.js", "correctivos.html", "correctivos-lib.js", "gastos.html", "gastos-lib.js", "gastos-combustible.html"];
+// Tablas que nunca se guardan en el equipo (datos de personas / permisos).
+var SIN_CACHE = ["/rest/v1/personal", "/rest/v1/perfiles", "/rest/v1/permisos"];
+
+// Identifica al usuario de la petición (campo "sub" del token) para que la copia guardada de uno nunca se sirva a otro.
+function claveUsuario(req){
+  try{
+    var t = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
+    var p = t.split(".")[1];
+    if(!p) return "anon";
+    var j = JSON.parse(atob(p.replace(/-/g, "+").replace(/_/g, "/")));
+    return j.sub || j.role || "anon";
+  }catch(e){ return "anon"; }
+}
+var PAGINAS = ["./", "index.html", "preventivos.html", "catalogo-maestro.html", "hojalateria.html", "carga-mecanicos.html", "erp.html", "historial.html", "unidades-piso.html", "faltantes.html", "catalogo-refacciones.html", "carta-peticion.html", "offline.js", "erp-auth.js", "correctivos.html", "correctivos-lib.js", "gastos.html", "gastos-lib.js", "gastos-combustible.html"];
 var LIBRERIAS = [
   "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js",
   "https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js",
@@ -60,16 +73,17 @@ function avisarGuardado(hit){
 }
 
 // Primero la red; si falla o tarda, la copia guardada.
-function redPrimero(req, nombre, espera, ignorarQuery, alUsarCopia, revalidar){
+function redPrimero(req, nombre, espera, ignorarQuery, alUsarCopia, revalidar, clave){
   return caches.open(nombre).then(function(cache){
+    var kreq = clave ? new Request(req.url + (req.url.indexOf("?") >= 0 ? "&" : "?") + "__u=" + encodeURIComponent(clave)) : req;
     /* Las páginas se revalidan siempre contra el servidor (si no cambiaron, responde 304 y es rápido): así un cambio publicado se ve de inmediato y no hasta 10 minutos después. */
     var red = fetch(revalidar ? new Request(req, { cache: "no-cache" }) : req).then(function(res){
       if(res.status >= 500) throw new Error("servidor");
-      if(res.status === 200) guardar(cache, req, res);
+      if(res.status === 200) guardar(cache, kreq, res);
       return res;
     });
     return conTiempo(red, espera).catch(function(){
-      return cache.match(req, { ignoreSearch: !!ignorarQuery, ignoreVary: true }).then(function(hit){
+      return cache.match(kreq, { ignoreSearch: !!ignorarQuery, ignoreVary: true }).then(function(hit){
         if(hit){ if(alUsarCopia) alUsarCopia(hit); return hit; }
         return red;
       });
@@ -105,10 +119,11 @@ self.addEventListener("fetch", function(e){
   if(url.protocol !== "http:" && url.protocol !== "https:") return;
 
   if(API_HOSTS.indexOf(url.host) >= 0){
-    e.respondWith(redPrimero(req, DATOS, 8000, false, avisarGuardado));
+    if(SIN_CACHE.some(function(p){ return url.pathname.indexOf(p) === 0; })) return; // siempre directo a la red
+    e.respondWith(redPrimero(req, DATOS, 8000, false, avisarGuardado, false, claveUsuario(req)));
     return;
   }
-  if(req.mode === "navigate" || (url.origin === self.location.origin && /\.html?$/.test(url.pathname))){
+  if(req.mode === "navigate" || (url.origin === self.location.origin && /\.(html?|js)$/.test(url.pathname))){
     e.respondWith(redPrimero(req, SHELL, 5000, true, null, true));
     return;
   }

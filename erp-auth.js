@@ -9,9 +9,8 @@
   var TK = "sb-aoutudbxwawlnbwvypir-auth-token";
   var PK = "erp_perfil";
 
-  // false = los módulos sueltos siguen abriendo sin sesión (fase de transición).
-  // true  = un módulo abierto sin sesión muestra un aviso para entrar por erp.html.
-  var EXIGIR_SESION = false;
+  // true = un módulo abierto sin sesión muestra un aviso para entrar por erp.html (ya no hay modo de transición).
+  var EXIGIR_SESION = true;
 
   function leer(k){ try{ return JSON.parse(localStorage.getItem(k) || "null"); }catch(e){ return null; } }
 
@@ -69,7 +68,7 @@
     document.addEventListener("DOMContentLoaded", function(){
       var d = document.createElement("div");
       d.style.cssText = "position:fixed;inset:0;z-index:99999;background:#0F1620;color:#E7EDF2;display:flex;align-items:center;justify-content:center;font:15px system-ui,sans-serif;text-align:center;padding:24px";
-      d.innerHTML = "<div><p style='margin:0 0 14px'>Para ver esta información inicia sesión en el ERP.</p><a href='erp.html' style='color:#35B6C2;font-weight:600'>Ir al inicio de sesión</a></div>";
+      d.innerHTML = "<div><p style='margin:0 0 14px'>Para ver esta información inicia sesión en el ERP.</p><a href='erp.html' target='_top' style='color:#35B6C2;font-weight:600'>Ir al inicio de sesión</a></div>";
       document.body.appendChild(d);
     });
   }

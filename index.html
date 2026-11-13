@@ -7,7 +7,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+  /* Esta pantalla forma parte del ERP (misma sesión y mismos permisos). Si alguien la abre sola, se le lleva al ERP. */
+  if (window.top === window) { location.replace("erp.html#varios/stock-refacciones"); }
+</script>
+<script src="erp-auth.js"></script>
 <style>
   :root{
     --bg:#14181B; --bg2:#1A1F23; --bg3:#0E1113; --border:#23282D; --border2:#2A3035;
@@ -69,18 +73,6 @@
 </head>
 <body>
 
-<!-- ======================================================= -->
-<!-- CONFIGURA AQUI TUS DATOS DE SUPABASE (paso 3 de la guía) -->
-<script>
-  const SUPABASE_URL = "https://aoutudbxwawlnbwvypir.supabase.co";
-  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFvdXR1ZGJ4d2F3bG5id3Z5cGlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU4NzQzNTMsImV4cCI6MjEwMTQ1MDM1M30.cfdjH9rwQDYyxrrKZIAw7JpcQKYcFWtiEYXEDF8fa_E";
-</script>
-<!-- ======================================================= -->
-
-<div id="config-banner" class="config-banner" style="display:none">
-  ⚠️ Falta configurar la conexión a la base de datos. Abre este archivo HTML en un editor de texto y reemplaza SUPABASE_URL y SUPABASE_ANON_KEY en la parte de arriba del código.
-</div>
-
 <header>
   <div class="header-top">
     <div class="brand-row">
@@ -137,7 +129,7 @@
 let ITEMS = [];
 let CEDIS_LIST = [];
 let META = null;
-let sbClient = null;
+let LOAD_ERROR = null;
 
 const CEDIS_LABELS = { MMAX:"MMAX", MMCC:"MMCC", MMCU:"MMCU", MMCV:"MMCV", MMJO:"MMJO", MMPU:"MMPU" };
 
@@ -169,21 +161,11 @@ function readFileSmart(file){
   });
 }
 
-// ---------- Supabase ----------
-function initSupabase(){
-  if (!SUPABASE_URL || SUPABASE_URL.startsWith("PEGA_AQUI") || !SUPABASE_ANON_KEY || SUPABASE_ANON_KEY.startsWith("PEGA_AQUI")) {
-    document.getElementById("config-banner").style.display = "block";
-    return false;
-  }
-  sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-  return true;
-}
-
+// ---------- Datos (con la sesión del ERP) ----------
 async function loadInventory(){
-  if (!sbClient) { renderAll(); return; }
   try {
-    const { data, error } = await sbClient.from("inventario_data").select("*").eq("id", 1).single();
-    if (error) throw error;
+    const rows = await ERP.rest("inventario_data?select=items,cedis_list,meta&id=eq.1");
+    const data = rows && rows[0];
     if (data) {
       ITEMS = data.items || [];
       CEDIS_LIST = data.cedis_list || [];
@@ -191,15 +173,18 @@ async function loadInventory(){
     }
   } catch(e) {
     console.error("Error cargando inventario:", e);
+    LOAD_ERROR = e && e.message ? e.message : String(e);
   }
   renderAll();
 }
 
 async function saveInventory(items, cedisList, meta){
-  const { error } = await sbClient.from("inventario_data").update({
-    items, cedis_list: cedisList, meta, updated_at: new Date().toISOString()
-  }).eq("id", 1);
-  if (error) throw error;
+  // return=representation + select=id permite detectar si la base rechazó el cambio por falta de permiso (0 filas).
+  const r = await ERP.rest("inventario_data?id=eq.1&select=id", {
+    method: "PATCH", prefer: "return=representation",
+    body: { items, cedis_list: cedisList, meta, updated_at: new Date().toISOString() }
+  });
+  if (!r || !r.length) throw new Error("Tu usuario no tiene permiso para actualizar el inventario.");
 }
 
 // ---------- Carga y parseo de CSV ----------
@@ -208,8 +193,8 @@ function handleFile(file){
   const statusArea = document.getElementById("statusArea");
   statusArea.innerHTML = statusRowHtml("spin", "#8A97A3", "Procesando archivo...");
 
-  if (!sbClient) {
-    statusArea.innerHTML = statusRowHtml("alert", "#E5484D", "La base de datos no está configurada. Revisa la guía de instalación.");
+  if (!puedeActualizar()) {
+    statusArea.innerHTML = statusRowHtml("alert", "#E5484D", "Tu usuario solo puede consultar el inventario.");
     return;
   }
 
@@ -300,7 +285,9 @@ function statusRowHtml(icon, color, text){
 
 // ---------- Render ----------
 function renderAll(){
-  document.getElementById("terminalCaption").textContent = ITEMS.length > 0
+  document.getElementById("terminalCaption").textContent = LOAD_ERROR
+    ? `No se pudo leer el inventario (${LOAD_ERROR}). Cierra sesión y vuelve a entrar al ERP.`
+    : ITEMS.length > 0
     ? `${ITEMS.length.toLocaleString("es-MX")} refacciones en inventario`
     : "Sin inventario cargado todavía";
 
@@ -310,7 +297,7 @@ function renderAll(){
 
   renderResults();
 
-  if (ITEMS.length === 0) {
+  if (ITEMS.length === 0 && !LOAD_ERROR && puedeActualizar()) {
     document.getElementById("uploadOverlay").style.display = "flex";
   }
 }
@@ -381,7 +368,7 @@ function emptyStateHtml(){
     <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#3A4750" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
     <div class="empty-title">Sin inventario todavía</div>
     <div class="empty-text">Sube el CSV de stock de los 6 CEDIS para que los mecánicos puedan buscar refacciones por código.</div>
-    <button class="empty-btn" id="emptyUploadBtn">Subir inventario</button>
+    ${puedeActualizar() ? '<button class="empty-btn" id="emptyUploadBtn">Subir inventario</button>' : ''}
   </div>`;
 }
 
@@ -396,19 +383,18 @@ document.getElementById("clearBtn").addEventListener("click", () => {
   renderResults();
   document.getElementById("searchInput").focus();
 });
-const UPDATE_PASSWORD = "REDCOLA30";
-function requestPassword(){
-  const input = window.prompt("Escribe la contraseña para actualizar el inventario:");
-  if (input === null) return false; // canceló
-  if (input.trim() === UPDATE_PASSWORD) return true;
-  alert("Contraseña incorrecta.");
+// Actualizar el inventario requiere el permiso "editar" del Buscador de stock (se asigna en Ajustes › Permisos).
+function puedeActualizar(){ return !!(window.ERP && ERP.puede("stock_refacciones")); }
+function verificarPermiso(){
+  if (puedeActualizar()) return true;
+  alert("Tu usuario solo puede consultar el inventario. Para actualizarlo pide el permiso de edición al administrador.");
   return false;
 }
 
 document.getElementById("toggleUploadBtn").addEventListener("click", () => {
   const el = document.getElementById("uploadOverlay");
   if (el.style.display === "flex") { el.style.display = "none"; return; }
-  if (!requestPassword()) return;
+  if (!verificarPermiso()) return;
   el.style.display = "flex";
 });
 document.getElementById("closeUploadBtn").addEventListener("click", () => {
@@ -423,15 +409,15 @@ document.getElementById("dropZone").addEventListener("drop", (e) => { e.preventD
 document.getElementById("fileInput").addEventListener("change", (e) => handleFile(e.target.files?.[0]));
 document.getElementById("mainResults").addEventListener("click", (e) => {
   if (e.target.id === "emptyUploadBtn") {
-    if (!requestPassword()) return;
+    if (!verificarPermiso()) return;
     document.getElementById("uploadOverlay").style.display = "flex";
   }
 });
 
 
 // ---------- Inicio ----------
-const ok = initSupabase();
-if (ok) { loadInventory(); } else { renderAll(); }
+if (!puedeActualizar()) document.getElementById("toggleUploadBtn").style.display = "none";
+loadInventory();
 </script>
 <script src="offline.js" defer></script>
 </body>
