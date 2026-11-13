@@ -163,6 +163,14 @@
     <p class="msg" id="aMsg"></p>
     <button class="link" id="bVolver" type="button">Volver al inicio de sesión</button>
   </form>
+
+  <form class="login" id="formMfa" method="post" action="#" onsubmit="return false" hidden autocomplete="off">
+    <div><h1>Verificación en dos pasos</h1><p class="sub">Abre Google Authenticator y escribe el código de 6 dígitos de “ERP Morelos”.</p></div>
+    <div><label for="mCodigo">Código</label><input id="mCodigo" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code" required></div>
+    <button class="btn" id="bMfa" type="submit">Verificar</button>
+    <p class="msg" id="mMsg"></p>
+    <button class="link" id="bMfaSalir" type="button">Cancelar y salir</button>
+  </form>
 </section>
 
 <div id="app" hidden>
@@ -214,7 +222,7 @@
 
   function mostrarAcceso(){
     $("app").hidden = true; $("acceso").hidden = false;
-    $("formLogin").hidden = false; $("formActivar").hidden = true;
+    $("formLogin").hidden = false; $("formActivar").hidden = true; $("formMfa").hidden = true;
     llamarFn({ accion:"estado" }).then(function(r){
       $("bActivar").hidden = !(r && r.hayAdmin === false);
     }).catch(function(){});
@@ -231,6 +239,7 @@
       }
       return iniciarSesion().then(function(res){
         b.disabled = false;
+        if(!res.ok && res.motivo === "mfa"){ pedirMfa(); return; }
         if(!res.ok){
           m.className = "msg err";
           m.textContent = res.motivo === "sin_acceso"
@@ -256,9 +265,40 @@
     }).catch(function(err){ b.disabled = false; m.className = "msg err"; m.textContent = "Sin conexión: " + err.message; });
   });
 
-  // Devuelve { ok:true } o { ok:false, motivo:"sin_acceso" | "error", detalle }.
+  function pedirMfa(){
+    $("app").hidden = true; $("acceso").hidden = false;
+    $("formLogin").hidden = true; $("formActivar").hidden = true; $("formMfa").hidden = false;
+    $("mCodigo").value = ""; $("mMsg").textContent = ""; $("mCodigo").focus();
+  }
+  $("bMfaSalir").addEventListener("click", function(){ sb.auth.signOut().then(function(){ location.reload(); }); });
+  $("formMfa").addEventListener("submit", function(e){
+    e.preventDefault();
+    var b = $("bMfa"), m = $("mMsg"); b.disabled = true; m.className = "msg"; m.textContent = "Verificando…";
+    sb.auth.mfa.listFactors().then(function(l){
+      var f = l && l.data && l.data.totp && l.data.totp.filter(function(x){ return x.status === "verified"; })[0];
+      if(!f) throw new Error("No hay autenticador activo en esta cuenta.");
+      return sb.auth.mfa.challengeAndVerify({ factorId:f.id, code:$("mCodigo").value.replace(/\s/g, "") });
+    }).then(function(r){
+      if(r.error){ b.disabled = false; m.className = "msg err"; m.textContent = "Código incorrecto o vencido. Escribe el que muestra ahora la app."; return; }
+      return iniciarSesionPaso2().then(function(res){
+        b.disabled = false;
+        if(!res.ok){ m.className = "msg err"; m.textContent = res.motivo === "sin_acceso" ? "Tu usuario no tiene acceso activo." : "No se pudo verificar tu acceso (" + res.detalle + ")."; }
+      });
+    }).catch(function(err){ b.disabled = false; m.className = "msg err"; m.textContent = err.message; });
+  });
+
+  // Devuelve { ok:true } o { ok:false, motivo:"sin_acceso" | "error" | "mfa", detalle }.
   // Una falla técnica (red, sesión rechazada, hora del equipo…) NO cierra la sesión ni se presenta como "sin acceso".
   function iniciarSesion(){
+    return sb.auth.mfa.getAuthenticatorAssuranceLevel().then(function(a){
+      if(a && a.data && a.data.nextLevel === "aal2" && a.data.currentLevel !== "aal2") return { ok:false, motivo:"mfa" };
+      return null;
+    }).catch(function(){ return null; }).then(function(pend){
+      if(pend) return pend;
+      return iniciarSesionPaso2();
+    });
+  }
+  function iniciarSesionPaso2(){
     return sb.rpc("mi_sesion").then(function(r){
       if(r.error){
         return { ok:false, motivo:"error", detalle:(r.error.message || r.error.code || "error desconocido") };
@@ -770,8 +810,63 @@
         });
       });
       row.appendChild(c); row.appendChild(g); box.appendChild(row);
+      if(perfil.rol === "admin"){ var sec = el("div", "f"); sec.style.marginTop = "14px"; box.appendChild(sec); seccionMfa(sec); }
     });
   });
+
+  function seccionMfa(sec){
+    sec.innerHTML = "";
+    sec.appendChild(el("label", "", "Verificación en dos pasos (Google Authenticator)"));
+    var msg = el("p", "msg"); sec.appendChild(msg);
+    sb.auth.mfa.listFactors().then(function(l){
+      var todos = (l && l.data && l.data.all) || [];
+      var ok = todos.filter(function(x){ return x.factor_type === "totp" && x.status === "verified"; })[0];
+      if(ok){
+        msg.className = "msg ok"; msg.textContent = "Activada. Al entrar se te pedirá el código de la app.";
+        var q = el("button", "btn ghost sm", "Desactivar");
+        q.addEventListener("click", function(){
+          if(!confirm("¿Desactivar la verificación en dos pasos de tu cuenta?")) return;
+          sb.auth.mfa.unenroll({ factorId:ok.id }).then(function(r){
+            if(r.error){ msg.className = "msg err"; msg.textContent = r.error.message + " (si dice AAL2, cierra sesión y entra con tu código)."; }
+            else seccionMfa(sec);
+          });
+        });
+        sec.appendChild(q); return;
+      }
+      msg.textContent = "No está activada. Actívala para que, además de tu contraseña, se pida un código de tu teléfono.";
+      var a = el("button", "btn sm", "Activar Google Authenticator");
+      a.addEventListener("click", function(){
+        a.disabled = true;
+        var pend = todos.filter(function(x){ return x.status !== "verified"; });
+        Promise.all(pend.map(function(x){ return sb.auth.mfa.unenroll({ factorId:x.id }); })).then(function(){
+          return sb.auth.mfa.enroll({ factorType:"totp", issuer:"ERP Morelos", friendlyName:"ERP Morelos " + Date.now() });
+        }).then(function(r){
+          if(r.error){ a.disabled = false; msg.className = "msg err"; msg.textContent = r.error.message; return; }
+          var d = r.data; sec.innerHTML = "";
+          sec.appendChild(el("label", "", "1. Escanea este código con Google Authenticator"));
+          sec.appendChild(el("p", "msg", "Si tienes DOS teléfonos, escanéalo en los dos ahora mismo: este código solo se muestra una vez."));
+          var img = el("img"); img.src = d.totp.qr_code; img.alt = "Código QR"; img.style.cssText = "width:200px;height:200px;background:#fff;padding:6px;border-radius:8px;display:block;margin:8px 0";
+          sec.appendChild(img);
+          sec.appendChild(el("p", "msg", "O escribe esta clave manualmente (guárdala en un lugar seguro: es tu respaldo si pierdes los teléfonos):"));
+          sec.appendChild(el("div", "code", d.totp.secret));
+          sec.appendChild(el("label", "", "2. Escribe el código de 6 dígitos que muestra la app"));
+          var inp = el("input"); inp.inputMode = "numeric"; inp.maxLength = 6; inp.autocomplete = "one-time-code"; sec.appendChild(inp);
+          var m2 = el("p", "msg"); sec.appendChild(m2);
+          var v = el("button", "btn sm", "Confirmar y activar");
+          v.addEventListener("click", function(){
+            v.disabled = true;
+            sb.auth.mfa.challengeAndVerify({ factorId:d.id, code:inp.value.replace(/\s/g, "") }).then(function(x){
+              v.disabled = false;
+              if(x.error){ m2.className = "msg err"; m2.textContent = "Código incorrecto. Revisa que el reloj de tu teléfono esté en automático e inténtalo de nuevo."; }
+              else seccionMfa(sec);
+            });
+          });
+          sec.appendChild(v);
+        });
+      });
+      sec.appendChild(a);
+    }).catch(function(e){ msg.className = "msg err"; msg.textContent = "No se pudo consultar: " + e.message; });
+  }
 
   /* ================= Ajustes (solo administrador) ================= */
   var rolesTxt = {}, rolesLista = [], modulosLista = [];
@@ -1039,6 +1134,7 @@
       return iniciarSesion().then(function(res){
         if(res.ok) return;
         mostrarAcceso();
+        if(res.motivo === "mfa"){ pedirMfa(); return; }
         if(res.motivo === "error"){ $("lMsg").className = "msg err"; $("lMsg").textContent = "No se pudo verificar tu sesión (" + res.detalle + "). Entra de nuevo."; }
       });
     }
