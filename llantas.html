@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Control de llantas</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap">
+<script src="erp-auth.js"></script>
+<script src="llantas-lib.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{--ink:#142433;--ink-soft:#48607A;--ink-faint:#7C93A6;--bg:#EEF2F5;--surface:#FFFFFF;--surface-alt:#E4EAEF;--border:#D3DCE3;--accent:#0E7C86;--accent-ink:#FFFFFF;--accent-soft:#DCEEF0;--shadow:0 1px 2px rgba(20,36,51,.06),0 4px 14px rgba(20,36,51,.07);--good:#0b8a0b;--warn:#b07400;--bad:#d63a39;--naranja:#e8830c;--amarillo:#f2c94c;}
+  @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--ink:#E7EDF2;--ink-soft:#9AB0C2;--ink-faint:#7C93A6;--bg:#0F1620;--surface:#182230;--surface-alt:#1F2C3C;--border:#2B3B4D;--accent:#35B6C2;--accent-ink:#06232A;--accent-soft:#163238;--shadow:0 1px 2px rgba(0,0,0,.3),0 4px 14px rgba(0,0,0,.35);--good:#2fbf2f;--warn:#d99a1a;--bad:#e66767;color-scheme:dark;}}
+  :root[data-theme="dark"]{--ink:#E7EDF2;--ink-soft:#9AB0C2;--ink-faint:#7C93A6;--bg:#0F1620;--surface:#182230;--surface-alt:#1F2C3C;--border:#2B3B4D;--accent:#35B6C2;--accent-ink:#06232A;--accent-soft:#163238;--shadow:0 1px 2px rgba(0,0,0,.3),0 4px 14px rgba(0,0,0,.35);--good:#2fbf2f;--warn:#d99a1a;--bad:#e66767;color-scheme:dark;}
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px 'Inter',system-ui,sans-serif;}
+  h1,h2,h3{font-family:'Barlow Semi Condensed',system-ui,sans-serif;font-weight:700;margin:0;}
+  p{margin:0;} [hidden]{display:none !important;}
+  .wrap{max-width:1100px;margin:0 auto;padding:20px 16px 48px;display:flex;flex-direction:column;gap:16px;}
+  .hero h1{font-size:26px;} .hero p{font-size:14px;color:var(--ink-soft);line-height:1.5;margin-top:4px;max-width:78ch;}
+  .meta,.note{font-size:12.5px;color:var(--ink-faint);line-height:1.5;}
+  .fbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+  .fbar label{font-size:12px;color:var(--ink-soft);display:flex;align-items:center;gap:6px;}
+  select,input[type=search],input[type=number],input[type=month]{font:inherit;padding:8px 10px;border-radius:10px;border:1px solid var(--border);background:var(--surface);color:var(--ink);}
+  input[type=search]{min-width:200px;} input[type=number]{width:84px;}
+  .tabs{display:flex;gap:6px;flex-wrap:wrap;border-bottom:1px solid var(--border);padding-bottom:8px;}
+  .tabs button{border:1px solid var(--border);background:var(--surface);color:var(--ink-soft);border-radius:999px;padding:7px 14px;font:inherit;font-weight:600;cursor:pointer;}
+  .tabs button.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);}
+  .kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;}
+  .kpi{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:4px;}
+  .kpi .l{font-size:11px;font-weight:600;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.5px;}
+  .kpi .v{font-family:'Barlow Semi Condensed',sans-serif;font-size:28px;font-weight:700;line-height:1.1;}
+  .kpi .s{font-size:12px;color:var(--ink-soft);}
+  .kpi.bad .v{color:var(--bad);} .kpi.warn .v{color:var(--naranja);}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:18px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:12px;min-width:0;}
+  .card h2{font-size:18px;} .card h3{font-size:15px;}
+  .tw{overflow:auto;max-height:520px;}
+  table{width:100%;border-collapse:collapse;font-size:12.5px;}
+  th{text-align:left;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--ink-faint);padding:6px 8px;border-bottom:1px solid var(--border);white-space:nowrap;position:sticky;top:0;background:var(--surface);}
+  td{padding:7px 8px;border-bottom:1px solid var(--border);vertical-align:middle;}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;}
+  tr.cl{cursor:pointer;} tr.cl:hover td{background:var(--accent-soft);} tr.sel td{background:var(--accent-soft);}
+  tr.tot td{font-weight:700;border-top:2px solid var(--border);}
+  .btn{border:1px solid var(--border);background:transparent;color:var(--ink);border-radius:10px;padding:7px 12px;font:inherit;font-weight:600;cursor:pointer;}
+  .btn.pri{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);} .btn:disabled{opacity:.5;cursor:default;}
+  .empty{font-size:13px;color:var(--ink-faint);text-align:center;padding:24px 8px;line-height:1.5;}
+  .pos{display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:26px;border-radius:7px;font-weight:700;font-variant-numeric:tabular-nums;margin-right:3px;font-size:12px;}
+  .pos.sin{background:var(--surface-alt);color:var(--ink-faint);font-weight:500;}
+  .pos.dud{background:var(--surface-alt);color:var(--ink-faint);text-decoration:line-through;outline:1px dashed var(--bad);}
+  .e-ilegal{background:var(--bad);color:#fff;} .e-cambio{background:var(--naranja);color:#fff;}
+  .e-vigilar{background:var(--amarillo);color:#3a2e00;} .e-ok{background:rgba(47,191,47,.16);color:var(--good);}
+  .pill{display:inline-block;border-radius:999px;padding:2px 9px;font-size:11px;font-weight:700;}
+  .stack{display:flex;height:14px;border-radius:99px;overflow:hidden;background:var(--surface-alt);min-width:120px;}
+  .stack i{display:block;height:100%;}
+  .leyenda{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--ink-soft);}
+  .leyenda span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px;background:var(--c);}
+  .aviso{display:grid;grid-template-columns:70px 120px 1fr;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:12.5px;align-items:start;}
+  .aviso b.dato{color:var(--naranja);} .aviso b.info{color:var(--ink-faint);} .aviso b.error{color:var(--bad);}
+  .par{border:1px solid var(--border);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:6px;background:var(--surface-alt);}
+  .par .t{font-weight:700;}
+  .flecha{color:var(--accent);font-weight:700;}
+  .two{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:10px;}
+  .drop{border:2px dashed var(--border);border-radius:14px;padding:18px;text-align:center;color:var(--ink-soft);}
+  .msg{padding:10px 12px;border-radius:10px;font-size:13px;line-height:1.5;}
+  .msg.ok{background:rgba(47,191,47,.14);color:var(--good);} .msg.err{background:rgba(230,103,103,.14);color:var(--bad);}
+  @media (max-width:640px){ .aviso{grid-template-columns:1fr;} .hero h1{font-size:22px;} }
+</style></head>
+<body>
+<div class="wrap" id="app"><div class="empty">Cargando control de llantas…</div></div>
+<script>
+(function(){
+"use strict";
+var L = window.LLA;
+var $app = document.getElementById("app");
+var params = new URLSearchParams(location.search);
+var S = {
+  cargas:[], lect:{}, cat:null, tipos:{}, periodo:"", tab:"resumen",
+  cedis:"", nivel:"", q:"", h:1, modo:"generica", tasa:L.TASA, unidad:"",
+  subida:null, mensaje:null
+};
+var TABS = [["resumen","Resumen"],["alertas","Alertas"],["pedido","Proyección y pedido"],["duales","Emparejar duales"],["historico","Histórico"],["calidad","Calidad de datos"]];
+
+function esc(s){ return String(s == null ? "" : s).replace(/[&<>"]/g, function(c){ return { "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]; }); }
+function int(n){ return Number(n || 0).toLocaleString("es-MX"); }
+function pc(a, b){ return b ? (a / b * 100).toFixed(1) + "%" : "—"; }
+function num1(n){ return n == null ? "—" : (Math.round(n * 10) / 10).toLocaleString("es-MX"); }
+function cedisNom(c){ return L.CEDIS[c] || c; }
+function fecha(iso){ try{ return new Date(iso).toLocaleString("es-MX", { day:"2-digit", month:"short", year:"numeric", hour:"2-digit", minute:"2-digit" }); }catch(e){ return ""; } }
+function puedeEditar(){ return window.ERP && ERP.puede("llantas"); }
+
+/* ---------- datos ---------- */
+function traerTodo(path){
+  var out = [], paso = 1000;
+  function pagina(off){
+    return ERP.rest(path + (path.indexOf("?") >= 0 ? "&" : "?") + "limit=" + paso + "&offset=" + off).then(function(r){
+      r = r || []; out = out.concat(r);
+      return r.length === paso ? pagina(off + paso) : out;
+    });
+  }
+  return pagina(0);
+}
+function cargarDatos(){
+  return Promise.all([
+    traerTodo("llantas_cargas?select=*&order=periodo.desc"),
+    traerTodo("llantas_lecturas?select=*&order=periodo.desc,economico.asc"),
+    traerTodo("catalogo_unidades?select=economico,marca&activo=eq.true&order=economico.asc")
+  ]).then(function(r){
+    S.cargas = r[0]; S.lect = {};
+    r[1].forEach(function(x){ (S.lect[x.periodo] = S.lect[x.periodo] || []).push(L.deBase(x)); });
+    S.cat = {}; S.tipos = {};
+    r[2].forEach(function(c){ var t = L.tipoDeMarca(c.marca); S.cat[c.economico] = { marca:c.marca, tipo:t }; S.tipos[c.economico] = t; });
+    var ps = Object.keys(S.lect).sort().reverse();
+    if(!S.periodo || ps.indexOf(S.periodo) < 0) S.periodo = ps[0] || "";
+  });
+}
+function filas(periodo, cedis){
+  return (S.lect[periodo || S.periodo] || []).filter(function(f){ return !cedis || f.cedis === cedis; });
+}
+function periodos(){ return Object.keys(S.lect).sort().reverse(); }
+function previo(){ var ps = periodos(), i = ps.indexOf(S.periodo); return i >= 0 && i + 1 < ps.length ? ps[i + 1] : null; }
+function tasasReales(){
+  var pp = previo(), out = {};
+  if(!pp) return out;
+  var prev = {}; (S.lect[pp] || []).forEach(function(f){ prev[f.economico] = f; });
+  filas().forEach(function(f){ var t = L.tasaReal(f, prev[f.economico], S.periodo, pp, S.tipos[f.economico]); if(t) out[f.economico] = t; });
+  return out;
+}
+function tasaDeFn(){
+  var reales = S.modo === "real" ? tasasReales() : {};
+  return function(eco){ return reales[eco] || S.tasa; };
+}
+
+/* ---------- piezas de pantalla ---------- */
+function chips(f, tipo){
+  var act = tipo ? L.posActivas(tipo) : [1,2,3,4,5,6];
+  return [1,2,3,4,5,6].map(function(k){
+    var v = f.p[k - 1], dud = f.dudosas.indexOf(k) >= 0;
+    if(act.indexOf(k) < 0 && v == null) return '<span class="pos sin" title="Posición ' + k + ': no aplica">·</span>';
+    if(v == null) return '<span class="pos sin" title="Posición ' + k + ': sin captura">–</span>';
+    if(dud) return '<span class="pos dud" title="Posición ' + k + ': valor dudoso, excluido del cálculo">' + num1(v) + '</span>';
+    return '<span class="pos e-' + L.estado(v) + '" title="Posición ' + k + '">' + num1(v) + '</span>';
+  }).join("");
+}
+function nivelPill(n){ return n === "ilegal" ? '<span class="pill e-ilegal">Bajo mínimo legal</span>' : '<span class="pill e-cambio">Cambio por norma</span>'; }
+function leyenda(){
+  return '<div class="leyenda"><span style="--c:var(--bad)">3 mm o menos (mínimo legal)</span><span style="--c:var(--naranja)">4 mm (cambio por norma)</span><span style="--c:var(--amarillo)">5 a 6 mm (vigilar)</span><span style="--c:var(--good)">más de 6 mm</span></div>';
+}
+function selectCedis(){
+  return '<label>CEDIS <select data-f="cedis"><option value="">Todos</option>' + L.ORDEN.map(function(c){ return '<option value="' + c + '"' + (S.cedis === c ? " selected" : "") + ">" + cedisNom(c) + "</option>"; }).join("") + "</select></label>";
+}
+function descargar(nombre, hojas){
+  var wb = XLSX.utils.book_new();
+  hojas.forEach(function(h){ XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(h.filas), h.nombre); });
+  XLSX.writeFile(wb, nombre);
+}
+
+/* ---------- pestañas ---------- */
+function vResumen(){
+  var all = filas(), r = L.resumen(all, S.tipos);
+  var h = '<div class="kpi-row">' +
+    '<div class="kpi"><span class="l">Unidades inspeccionadas</span><span class="v">' + int(r.unidades - r.sinCaptura) + '</span><span class="s">' + (r.sinCaptura ? r.sinCaptura + " sin captura este mes" : "todas con captura") + '</span></div>' +
+    '<div class="kpi"><span class="l">Llantas medidas</span><span class="v">' + int(r.posiciones) + '</span><span class="s">sin contar ' + r.dudosas + ' dudosa(s)</span></div>' +
+    '<div class="kpi warn"><span class="l">Por cambiar (≤ 4 mm)</span><span class="v">' + int(r.cambio) + '</span><span class="s">' + pc(r.cambio, r.posiciones) + ' · ' + r.unidadesCambio + ' unidades</span></div>' +
+    '<div class="kpi bad"><span class="l">Bajo mínimo legal (≤ 3 mm)</span><span class="v">' + int(r.ilegal) + '</span><span class="s">' + pc(r.ilegal, r.posiciones) + ' · no deben operar</span></div>' +
+    '<div class="kpi"><span class="l">Delanteras por cambiar</span><span class="v">' + int(r.delCambio) + '</span><span class="s">posiciones 1 y 2 (dirección)</span></div>' +
+    '<div class="kpi"><span class="l">Cámaras / alarmas fallando</span><span class="v">' + r.camFalla + ' / ' + r.alaFalla + '</span><span class="s">capturadas: ' + r.camCap + ' y ' + r.alaCap + ' unidades</span></div></div>';
+  h += '<div class="card"><h2>Por CEDIS</h2>' + leyenda() + '<div class="tw"><table><thead><tr><th>CEDIS</th><th class="num">Unidades</th><th class="num">Llantas</th><th>Distribución</th><th class="num">≤ 4 mm</th><th class="num">% por cambiar</th><th class="num">≤ 3 mm</th><th class="num">5 a 6 mm</th><th class="num">Cámara / alarma fallando</th></tr></thead><tbody>';
+  L.ORDEN.concat([""]).forEach(function(c){
+    var rr = c ? L.resumen(all.filter(function(f){ return f.cedis === c; }), S.tipos) : r;
+    var tot = rr.posiciones || 1;
+    var seg = function(n, col){ return '<i style="width:' + (n / tot * 100) + '%;background:' + col + '"></i>'; };
+    h += '<tr class="' + (c ? "cl" : "tot") + (S.cedis === c && c ? " sel" : "") + '"' + (c ? ' data-cedis="' + c + '"' : "") + '><td>' + (c ? esc(cedisNom(c)) : "Zona Morelos") + '</td><td class="num">' + (rr.unidades - rr.sinCaptura) + '</td><td class="num">' + rr.posiciones + '</td><td><div class="stack">' +
+      seg(rr.ilegal, "var(--bad)") + seg(rr.cambio - rr.ilegal, "var(--naranja)") + seg(rr.vigilar, "var(--amarillo)") + seg(rr.ok, "var(--good)") + '</div></td><td class="num">' + rr.cambio + '</td><td class="num">' + pc(rr.cambio, rr.posiciones) + '</td><td class="num">' + rr.ilegal + '</td><td class="num">' + rr.vigilar + '</td><td class="num">' + rr.camFalla + ' / ' + rr.alaFalla + '</td></tr>';
+  });
+  h += '</tbody></table></div><p class="note">Toca un CEDIS para filtrar las demás pestañas. Una llanta se cambia a 4 mm por norma de la empresa; con 3 mm o menos ya está por debajo del máximo legal.</p></div>';
+  return h;
+}
+
+function vAlertas(){
+  var lista = L.alertas(filas(S.periodo, S.cedis), S.tipos).filter(function(a){
+    if(S.nivel && a.nivel !== S.nivel) return false;
+    if(S.q && (a.fila.economico + " " + (a.tipo || "")).toLowerCase().indexOf(S.q.toLowerCase()) < 0) return false;
+    return true;
+  });
+  var h = '<div class="fbar">' + selectCedis() +
+    '<label>Nivel <select data-f="nivel"><option value="">Todos</option><option value="ilegal"' + (S.nivel === "ilegal" ? " selected" : "") + '>Bajo mínimo legal (≤ 3 mm)</option><option value="cambio"' + (S.nivel === "cambio" ? " selected" : "") + '>Cambio por norma (4 mm)</option></select></label>' +
+    '<input type="search" data-f="q" placeholder="Buscar económico" value="' + esc(S.q) + '"><button class="btn" data-acc="xls-alertas">Descargar Excel</button></div>';
+  h += '<div class="card"><h2>Unidades con llantas por cambiar <span class="note">(' + lista.length + ')</span></h2>' + leyenda();
+  if(!lista.length) return h + '<div class="empty">No hay llantas en 4 mm o menos con estos filtros.</div></div>';
+  h += '<div class="tw"><table><thead><tr><th>CEDIS</th><th>Económico</th><th>Tipo</th><th>Posiciones 1 a 6 (mm)</th><th>Qué cambiar</th><th>Nivel</th></tr></thead><tbody>';
+  lista.forEach(function(a){
+    var f = a.fila, malas = a.posiciones.map(function(x){ return x.pos; });
+    var que = [];
+    if(a.tipo === "Isuzu"){ malas.forEach(function(p){ que.push("Llanta " + p); }); }
+    else{
+      malas.filter(function(p){ return p <= 2; }).forEach(function(p){ que.push("Delantera " + p); });
+      [[3,4],[5,6]].forEach(function(g){ if(malas.indexOf(g[0]) >= 0 || malas.indexOf(g[1]) >= 0) que.push("Dual " + g.join("-") + " (las 2)"); });
+    }
+    h += '<tr><td>' + esc(cedisNom(f.cedis)) + '</td><td><b>' + esc(f.economico) + '</b></td><td>' + esc(a.tipo || "sin catálogo") + '</td><td>' + chips(f, a.tipo) + '</td><td>' + esc(que.join(" · ")) + '</td><td>' + nivelPill(a.nivel) + '</td></tr>';
+  });
+  return h + '</tbody></table></div><p class="note">Los duales traseros se cambian completos (nunca una sola llanta). Para ahorrar llantas nuevas revisa la pestaña Emparejar duales.</p></div>';
+}
+
+function controlesProyeccion(){
+  var pp = previo();
+  return '<div class="fbar">' + selectCedis() +
+    '<label>Horizonte <select data-f="h">' + [[0,"Hoy"],[1,"En 1 mes"],[2,"En 2 meses"],[3,"En 3 meses"],[4,"En 4 meses"],[6,"En 6 meses"]].map(function(x){ return '<option value="' + x[0] + '"' + (S.h === x[0] ? " selected" : "") + ">" + x[1] + "</option>"; }).join("") + '</select></label>' +
+    '<label>Desgaste <select data-f="modo"><option value="generica"' + (S.modo === "generica" ? " selected" : "") + '>Fijo</option><option value="real"' + (S.modo === "real" ? " selected" : "") + (pp ? "" : " disabled") + '>Real por unidad' + (pp ? "" : " (falta mes previo)") + '</option></select></label>' +
+    '<label>mm por mes <input type="number" data-f="tasa" step="0.1" min="0.1" max="3" value="' + S.tasa + '"></label></div>';
+}
+function vPedido(){
+  var tasaDe = tasaDeFn(), todas = filas(S.periodo, ""), plan = L.plan(S.cedis ? todas.filter(function(f){ return f.cedis === S.cedis; }) : todas, S.tipos, S.h, tasaDe);
+  var h = controlesProyeccion();
+  var tot = plan.pedido.reduce(function(a, x){ return { l:a.l + x.llantas, s:a.s + x.ahorro, p:a.p + x.pedir }; }, { l:0, s:0, p:0 });
+  h += '<div class="kpi-row"><div class="kpi"><span class="l">Llantas que llegan a 4 mm</span><span class="v">' + tot.l + '</span><span class="s">' + (S.h ? "dentro de " + S.h + (S.h === 1 ? " mes" : " meses") : "hoy") + ', contando duales completos</span></div>' +
+    '<div class="kpi"><span class="l">Ahorro por emparejar duales</span><span class="v">' + tot.s + '</span><span class="s">' + plan.pares.length + ' par(es) de unidades</span></div>' +
+    '<div class="kpi warn"><span class="l">Llantas a pedir</span><span class="v">' + tot.p + '</span><span class="s">ya descontando el ahorro</span></div></div>';
+  h += '<div class="card"><h2>Pedido sugerido por CEDIS y medida</h2>';
+  if(!plan.pedido.length) h += '<div class="empty">Ninguna llanta llega a 4 mm en este horizonte.</div></div>';
+  else{
+    h += '<div class="tw"><table><thead><tr><th>CEDIS</th><th>Unidad</th><th>Medida (rin)</th><th>Eje</th><th class="num">Unidades</th><th class="num">Llantas necesarias</th><th class="num">Ahorro</th><th class="num">A pedir</th></tr></thead><tbody>' +
+      plan.pedido.map(function(x){ return '<tr><td>' + esc(cedisNom(x.cedis)) + '</td><td>' + esc(L.TIPOS[x.tipo].nombre) + '</td><td>' + x.rin + '</td><td>' + x.eje + '</td><td class="num">' + x.nUnidades + '</td><td class="num">' + x.llantas + '</td><td class="num">' + x.ahorro + '</td><td class="num"><b>' + x.pedir + '</b></td></tr>'; }).join("") +
+      '<tr class="tot"><td colspan="5">Total</td><td class="num">' + tot.l + '</td><td class="num">' + tot.s + '</td><td class="num">' + tot.p + '</td></tr></tbody></table></div>' +
+      '<div class="fbar"><button class="btn" data-acc="xls-pedido">Descargar Excel del pedido</button></div>' +
+      '<p class="note">Las llantas delanteras se piden una por una; los duales traseros siempre de dos en dos. La medida sale del catálogo de unidades: M2 rin 22.5, FL360 rin 17.5, Isuzu rin 16.</p></div>';
+  }
+  var pr = L.proyeccion(S.cedis ? todas.filter(function(f){ return f.cedis === S.cedis; }) : todas, S.tipos, S.periodo, tasaDe).filter(function(x){ return !x.sin; });
+  pr.sort(function(a, b){ return (a.meses - b.meses) || (a.limite.mm - b.limite.mm) || a.fila.economico.localeCompare(b.fila.economico); });
+  h += '<div class="card"><h2>Cuándo toca cambio en cada unidad</h2><div class="tw"><table><thead><tr><th>CEDIS</th><th>Económico</th><th>Posiciones 1 a 6 (mm)</th><th>Llanta limitante</th><th class="num">Meses a 4 mm</th><th class="num">Meses a 3 mm</th><th>Fecha estimada</th></tr></thead><tbody>' +
+    pr.slice(0, 150).map(function(x){
+      var cls = x.meses === 0 ? "e-ilegal" : x.meses <= 1 ? "e-cambio" : x.meses <= 3 ? "e-vigilar" : "e-ok";
+      return '<tr><td>' + esc(cedisNom(x.fila.cedis)) + '</td><td><b>' + esc(x.fila.economico) + '</b></td><td>' + chips(x.fila, x.tipo) + '</td><td>Pos ' + x.limite.pos + ' · ' + num1(x.limite.mm) + ' mm</td><td class="num"><span class="pill ' + cls + '">' + (x.meses === 0 ? "ya" : x.meses) + '</span></td><td class="num">' + (x.mesesLegal === 0 ? "ya" : x.mesesLegal) + '</td><td>' + (x.meses === 0 ? "Ahora" : esc(L.etiquetaPeriodo(x.fecha))) + '</td></tr>';
+    }).join("") + '</tbody></table></div><p class="note">Meses restantes = (mm actual − 4) ÷ desgaste por mes, redondeado hacia arriba, con la llanta más baja de la unidad. Fijo es la tasa confirmada de reparto (1 mm por mes); "Real por unidad" usa lo medido entre este mes y el anterior cuando hay dos inspecciones.' + (pr.length > 150 ? " Se muestran las 150 más cercanas." : "") + '</p></div>';
+  return h;
+}
+
+function vDuales(){
+  var tasaDe = tasaDeFn(), todas = filas(S.periodo, ""), plan = L.plan(S.cedis ? todas.filter(function(f){ return f.cedis === S.cedis; }) : todas, S.tipos, S.h, tasaDe);
+  var h = controlesProyeccion();
+  var duales = plan.duales, conPar = plan.pares.length * 2, sinPar = duales.length - conPar;
+  h += '<div class="kpi-row"><div class="kpi"><span class="l">Duales traseros por cambiar</span><span class="v">' + duales.length + '</span><span class="s">' + (S.h ? "dentro de " + S.h + (S.h === 1 ? " mes" : " meses") : "hoy") + '</span></div>' +
+    '<div class="kpi"><span class="l">Emparejables entre unidades</span><span class="v">' + conPar + '</span><span class="s">' + plan.pares.length + ' movimiento(s) de llanta</span></div>' +
+    '<div class="kpi"><span class="l">Llantas nuevas que se ahorran</span><span class="v">' + plan.pares.length * 2 + '</span><span class="s">2 por cada par</span></div>' +
+    '<div class="kpi"><span class="l">Duales 100% nuevos</span><span class="v">' + sinPar + '</span><span class="s">sin pareja disponible</span></div></div>';
+  h += '<div class="card"><h2>Movimientos sugeridos</h2>';
+  if(!plan.pares.length) h += '<div class="empty">No hay parejas posibles: se necesita, en el mismo CEDIS y medida, dos unidades con un dual trasero que tenga una llanta de 4 mm o menos y otra de más de 7 mm.</div>';
+  else h += '<div class="two">' + plan.pares.map(function(p){
+    var d = p.donante, r = p.receptora;
+    return '<div class="par"><span class="t">' + esc(cedisNom(p.cedis)) + ' · ' + esc(L.TIPOS[p.tipo].nombre) + ' (rin ' + L.TIPOS[p.tipo].rin + ')</span>' +
+      '<span>Quitar la llanta de <b>' + num1(d.buena.mm) + ' mm</b> de <b>' + esc(d.eco) + '</b> (dual ' + d.dual + ', pos ' + d.buena.pos + ')</span>' +
+      '<span class="flecha">→ ponerla en <b>' + esc(r.eco) + '</b>, dual ' + r.dual + ', en lugar de la de ' + num1(r.mala.mm) + ' mm (pos ' + r.mala.pos + '). Queda ' + num1(p.resultado[0]) + ' / ' + num1(p.resultado[1]) + ' mm (diferencia ' + num1(p.dif) + ' mm).</span>' +
+      '<span><b>' + esc(d.eco) + '</b> recibe su dual ' + d.dual + ' nuevo (2 llantas).</span></div>';
+  }).join("") + '</div>';
+  h += '<p class="note">Reglas: mismo CEDIS, misma medida de rin y solo en el eje trasero (nunca delanteras); la marca no importa. Cada dual debe tener una llanta en 4 mm o menos y otra de más de 7 mm. Con varias opciones se prioriza la menor diferencia en mm; no se emparejan duales de la misma unidad. Las unidades Isuzu (llantas sencillas) y las que no están en el catálogo no entran. Resuelve 2 duales con 2 llantas nuevas en lugar de 4.</p></div>';
+  return h;
+}
+
+function vHistorico(){
+  var ps = periodos().slice().reverse();
+  var h = '<div class="card"><h2>Llantas en 4 mm o menos, por CEDIS y mes</h2>';
+  if(ps.length < 1) return h + '<div class="empty">Aún no hay inspecciones guardadas.</div></div>';
+  h += '<div class="tw"><table><thead><tr><th>CEDIS</th>' + ps.map(function(p){ return '<th class="num">' + esc(L.etiquetaPeriodo(p)) + '</th>'; }).join("") + '</tr></thead><tbody>';
+  L.ORDEN.concat([""]).forEach(function(c){
+    h += '<tr class="' + (c ? "" : "tot") + '"><td>' + (c ? esc(cedisNom(c)) : "Zona Morelos") + '</td>' + ps.map(function(p){
+      var rr = L.resumen(filas(p, c), S.tipos);
+      return '<td class="num">' + pc(rr.cambio, rr.posiciones) + '<br><span class="note">' + rr.cambio + ' de ' + rr.posiciones + '</span></td>';
+    }).join("") + '</tr>';
+  });
+  h += '</tbody></table></div>' + (ps.length < 2 ? '<p class="note">Con una sola inspección todavía no se puede medir el desgaste real. A partir de la segunda aparecerá aquí la evolución y el desgaste por unidad.</p>' : '') + '</div>';
+  var ecos = {}; ps.forEach(function(p){ (S.lect[p] || []).forEach(function(f){ ecos[f.economico] = 1; }); });
+  var lista = Object.keys(ecos).sort();
+  h += '<div class="card"><h2>Evolución de una unidad</h2><div class="fbar"><label>Económico <select data-f="unidad"><option value="">Elige una unidad</option>' + lista.map(function(e){ return '<option' + (S.unidad === e ? " selected" : "") + ">" + e + "</option>"; }).join("") + '</select></label></div>';
+  if(S.unidad){
+    h += '<div class="tw"><table><thead><tr><th>Mes</th><th>Posiciones 1 a 6 (mm)</th><th class="num">Desgaste vs mes anterior (mm/mes)</th></tr></thead><tbody>';
+    var prev = null, prevP = null;
+    ps.forEach(function(p){
+      var f = (S.lect[p] || []).filter(function(x){ return x.economico === S.unidad; })[0];
+      if(!f){ return; }
+      var t = S.tipos[S.unidad], d = "—";
+      if(prev){ var tr = L.tasaReal(f, prev, p, prevP, t); d = tr ? num1(tr) : "—"; }
+      h += '<tr><td>' + esc(L.etiquetaPeriodo(p)) + '</td><td>' + chips(f, t) + '</td><td class="num">' + d + '</td></tr>';
+      prev = f; prevP = p;
+    });
+    h += '</tbody></table></div><p class="note">Si una posición sube de un mes a otro se interpreta como llanta cambiada y no cuenta para el desgaste.</p>';
+  }
+  h += '</div><div class="card"><h2>Cargas realizadas</h2><div class="tw"><table><thead><tr><th>Mes</th><th>Archivo</th><th class="num">Unidades</th><th class="num">Llantas</th><th class="num">Avisos</th><th>Cargado</th></tr></thead><tbody>' +
+    S.cargas.map(function(c){ return '<tr><td>' + esc(L.etiquetaPeriodo(c.periodo)) + '</td><td>' + esc(c.archivo || "") + '</td><td class="num">' + c.unidades + '</td><td class="num">' + c.posiciones + '</td><td class="num">' + (c.avisos || []).length + '</td><td>' + esc(fecha(c.cargado_at)) + (c.cargado_por ? " · " + esc(c.cargado_por) : "") + '</td></tr>'; }).join("") + '</tbody></table></div></div>';
+  return h;
+}
+
+function filaAviso(a){
+  return '<div class="aviso"><b class="' + esc(a.nivel) + '">' + (a.nivel === "dato" ? "Revisar" : a.nivel === "error" ? "Error" : "Nota") + '</b><span>' + esc([a.hoja, a.eco].filter(Boolean).join(" · ")) + '</span><span>' + esc(a.texto) + '</span></div>';
+}
+function vCalidad(){
+  var c = S.cargas.filter(function(x){ return x.periodo === S.periodo; })[0], avisos = c ? (c.avisos || []) : [];
+  var all = filas(S.periodo, ""), h = '<div class="card"><h2>Avisos de la carga de ' + esc(L.etiquetaPeriodo(S.periodo)) + '</h2>';
+  h += avisos.length ? avisos.map(filaAviso).join("") : '<div class="empty">Sin avisos para este mes.</div>';
+  h += '</div>';
+  var dud = all.filter(function(f){ return f.dudosas.length; });
+  h += '<div class="card"><h2>Datos dudosos excluidos del cálculo</h2>' + (dud.length ? '<div class="tw"><table><thead><tr><th>CEDIS</th><th>Económico</th><th>Posiciones 1 a 6 (mm)</th><th>Excluidas</th></tr></thead><tbody>' + dud.map(function(f){ return '<tr><td>' + esc(cedisNom(f.cedis)) + '</td><td><b>' + esc(f.economico) + '</b></td><td>' + chips(f, S.tipos[f.economico]) + '</td><td>Posición ' + f.dudosas.join(", ") + '</td></tr>'; }).join("") + '</tbody></table></div><p class="note">Se detectan por valores imposibles (más de 2 mm sobre la llanta nueva de su tipo, negativos o texto). Corrige el Excel y vuelve a cargarlo para que entren al cálculo.</p>' : '<div class="empty">No hay datos dudosos este mes.</div>') + '</div>';
+  var fallas = all.filter(function(f){ return f.camara === 1 || f.alarma === 1; });
+  h += '<div class="card"><h2>Cámara y alarma que no funcionan</h2>' + (fallas.length ? '<div class="tw"><table><thead><tr><th>CEDIS</th><th>Económico</th><th>Cámara</th><th>Alarma</th></tr></thead><tbody>' + fallas.map(function(f){ var t = function(v){ return v === 1 ? '<span class="pill e-ilegal">No funciona</span>' : v === 2 ? "Funciona" : '<span class="note">sin captura</span>'; }; return '<tr><td>' + esc(cedisNom(f.cedis)) + '</td><td><b>' + esc(f.economico) + '</b></td><td>' + t(f.camara) + '</td><td>' + t(f.alarma) + '</td></tr>'; }).join("") + '</tbody></table></div>' : '<div class="empty">Ninguna falla capturada.</div>') +
+    '<p class="note">Solo los CEDIS que capturan cámara y alarma en su pestaña aparecen aquí (este mes: ' + all.filter(function(f){ return f.camara != null || f.alarma != null; }).map(function(f){ return f.cedis; }).filter(function(v, i, a){ return a.indexOf(v) === i; }).map(cedisNom).join(", ") + ').</p></div>';
+  return h;
+}
+
+/* ---------- carga del Excel ---------- */
+function vCarga(){
+  if(!puedeEditar()) return '<div class="card"><h2>Cargar inspección mensual</h2><div class="msg err">Tu usuario solo puede consultar este módulo.</div></div>';
+  var s = S.subida, h = '<div class="card"><h2>Cargar inspección mensual</h2><p class="note">Sube el Excel Llantas_Morelos_MES_AÑO_Reparto.xlsx. Se leen las 6 pestañas de CEDIS (las ocultas se ignoran), el mes sale del encabezado y la carga reemplaza ese mes completo; los meses anteriores quedan como histórico.</p>';
+  h += '<div class="drop"><input type="file" id="archivo" accept=".xlsx,.xls"></div>';
+  if(S.mensaje) h += '<div class="msg ' + S.mensaje.t + '">' + esc(S.mensaje.x) + '</div>';
+  if(s){
+    var posiciones = s.filas.reduce(function(a, f){ return a + f.p.filter(function(x){ return x != null; }).length; }, 0);
+    var existe = S.cargas.filter(function(c){ return c.periodo === s.periodo; })[0];
+    var dato = s.avisos.filter(function(a){ return a.nivel !== "info"; }), info = s.avisos.length - dato.length;
+    h += '<div class="kpi-row"><div class="kpi"><span class="l">Unidades</span><span class="v">' + s.filas.length + '</span><span class="s">' + s.hojas.map(function(x){ return cedisNom(x.cedis) + " " + x.unidades; }).join(" · ") + '</span></div>' +
+      '<div class="kpi"><span class="l">Llantas capturadas</span><span class="v">' + posiciones + '</span><span class="s">' + s.filas.reduce(function(a, f){ return a + f.dudosas.length; }, 0) + ' dudosa(s) se excluyen</span></div>' +
+      '<div class="kpi"><span class="l">Avisos por revisar</span><span class="v">' + dato.length + '</span><span class="s">más ' + info + ' nota(s)</span></div></div>';
+    h += '<div class="fbar"><label>Mes de la inspección <input type="month" id="mesCarga" value="' + (s.periodo ? s.periodo.slice(0, 7) : "") + '"></label>' +
+      (existe ? '<span class="note">Ya hay una carga de este mes (' + esc(fecha(existe.cargado_at)) + '); se reemplazará.</span>' : "") +
+      '<button class="btn pri" data-acc="guardar"' + (s.periodo && s.filas.length ? "" : " disabled") + '>Guardar en el ERP</button><button class="btn" data-acc="cancelar">Cancelar</button></div>';
+    h += '<div class="tw" style="max-height:260px">' + (s.avisos.length ? s.avisos.map(filaAviso).join("") : '<div class="empty">Sin avisos.</div>') + '</div>';
+  }
+  return h + '</div>';
+}
+function leerArchivo(file){
+  S.mensaje = null;
+  var rd = new FileReader();
+  rd.onload = function(){
+    try{
+      var wb = XLSX.read(new Uint8Array(rd.result), { type:"array" });
+      var r = L.parsearLibro(XLSX, wb, S.cat);
+      r.archivo = file.name;
+      S.subida = r;
+      if(!r.filas.length) S.mensaje = { t:"err", x:"No encontré unidades en el archivo. Revisa que sea el Excel de llantas con las pestañas de los 6 CEDIS." };
+    }catch(e){ S.subida = null; S.mensaje = { t:"err", x:"No pude leer el archivo: " + e.message }; }
+    pintar();
+  };
+  rd.readAsArrayBuffer(file);
+}
+function guardar(){
+  var s = S.subida, mes = document.getElementById("mesCarga").value;
+  if(!s || !mes){ return; }
+  var periodo = mes + "-01", ahora = new Date().toISOString(), btn = document.querySelector('[data-acc="guardar"]');
+  btn.disabled = true; btn.textContent = "Guardando…";
+  var rows = s.filas.map(function(f){ var b = L.aBase(f, periodo); b.updated_at = ahora; return b; });
+  var posiciones = s.filas.reduce(function(a, f){ return a + f.p.filter(function(x){ return x != null; }).length; }, 0);
+  var p = Promise.resolve();
+  for(var i = 0; i < rows.length; i += 100){
+    (function(ch){ p = p.then(function(){ return ERP.rest("llantas_lecturas?on_conflict=periodo,economico", { method:"POST", body:ch, prefer:"resolution=merge-duplicates,return=minimal" }); }); })(rows.slice(i, i + 100));
+  }
+  p.then(function(){
+    return ERP.rest("llantas_lecturas?periodo=eq." + periodo + "&economico=not.in.(" + rows.map(function(r){ return r.economico; }).join(",") + ")", { method:"DELETE", prefer:"return=minimal" });
+  }).then(function(){
+    var perfil = ERP.perfil() || {};
+    return ERP.rest("llantas_cargas?on_conflict=periodo", { method:"POST", prefer:"resolution=merge-duplicates,return=minimal",
+      body:[{ periodo:periodo, archivo:s.archivo, unidades:rows.length, posiciones:posiciones, avisos:s.avisos, cargado_por:perfil.nombre || perfil.usuario || null, cargado_at:ahora }] });
+  }).then(function(){
+    S.subida = null; S.periodo = periodo; S.mensaje = { t:"ok", x:"Listo: se guardó la inspección de " + L.etiquetaPeriodo(periodo) + " (" + rows.length + " unidades)." };
+    return cargarDatos();
+  }).then(pintar).catch(function(e){
+    S.mensaje = { t:"err", x:"No se pudo guardar: " + e.message + ". Si la carga quedó a medias, vuelve a subir el archivo para completarla." };
+    pintar();
+  });
+}
+
+/* ---------- Excel de salida ---------- */
+function xlsAlertas(){
+  var lista = L.alertas(filas(S.periodo, S.cedis), S.tipos);
+  var f = [["CEDIS","Económico","Tipo","Pos 1","Pos 2","Pos 3","Pos 4","Pos 5","Pos 6","Nivel"]];
+  lista.forEach(function(a){ f.push([cedisNom(a.fila.cedis), a.fila.economico, a.tipo || ""].concat(a.fila.p.map(function(v, i){ return v == null ? "" : (a.fila.dudosas.indexOf(i + 1) >= 0 ? v + " (dudosa)" : v); })).concat([a.nivel === "ilegal" ? "Bajo mínimo legal (≤3 mm)" : "Cambio por norma (4 mm)"])); });
+  descargar("Llantas_alertas_" + S.periodo.slice(0, 7) + ".xlsx", [{ nombre:"Alertas", filas:f }]);
+}
+function xlsPedido(){
+  var todas = filas(S.periodo, ""), plan = L.plan(S.cedis ? todas.filter(function(f){ return f.cedis === S.cedis; }) : todas, S.tipos, S.h, tasaDeFn());
+  var a = [["CEDIS","Unidad","Rin","Eje","Unidades","Llantas necesarias","Ahorro por emparejar","A pedir"]];
+  plan.pedido.forEach(function(x){ a.push([cedisNom(x.cedis), L.TIPOS[x.tipo].nombre, x.rin, x.eje, x.nUnidades, x.llantas, x.ahorro, x.pedir]); });
+  var b = [["CEDIS","Unidad","Mover llanta de","Dual origen","mm","Hacia","Dual destino","Reemplaza (mm)","Queda (mm)","Diferencia"]];
+  plan.pares.forEach(function(p){ b.push([cedisNom(p.cedis), L.TIPOS[p.tipo].nombre, p.donante.eco, p.donante.dual, p.donante.buena.mm, p.receptora.eco, p.receptora.dual, p.receptora.mala.mm, p.resultado.join(" / "), p.dif]); });
+  descargar("Llantas_pedido_" + S.periodo.slice(0, 7) + "_h" + S.h + ".xlsx", [{ nombre:"Pedido", filas:a }, { nombre:"Emparejamientos", filas:b }]);
+}
+
+/* ---------- armado ---------- */
+function pintar(){
+  var ps = periodos(), h = '<div class="hero"><h1>Control de llantas</h1><p>Inspección mensual de profundidad de llanta (días 1 al 10) de las unidades de Reparto. Cambio por norma a 4 mm; 3 mm o menos está bajo el máximo legal.</p></div>';
+  if(params.get("modo") === "carga") h += vCarga();
+  if(!ps.length){
+    $app.innerHTML = h + '<div class="card"><div class="empty">Todavía no hay ninguna inspección guardada.' + (puedeEditar() && params.get("modo") !== "carga" ? ' Sube el Excel desde Ajustes › Cargas.' : "") + '</div></div>';
+    enlazar(); return;
+  }
+  var c = S.cargas.filter(function(x){ return x.periodo === S.periodo; })[0];
+  h += '<div class="fbar"><label>Inspección <select data-f="periodo">' + ps.map(function(p){ return '<option value="' + p + '"' + (p === S.periodo ? " selected" : "") + ">" + esc(L.etiquetaPeriodo(p)) + "</option>"; }).join("") + '</select></label>' +
+    (c ? '<span class="meta">Cargada ' + esc(fecha(c.cargado_at)) + (c.archivo ? " · " + esc(c.archivo) : "") + '</span>' : "") + '</div>';
+  h += '<div class="tabs">' + TABS.map(function(t){ return '<button data-tab="' + t[0] + '" class="' + (S.tab === t[0] ? "on" : "") + '">' + t[1] + "</button>"; }).join("") + '</div>';
+  h += ({ resumen:vResumen, alertas:vAlertas, pedido:vPedido, duales:vDuales, historico:vHistorico, calidad:vCalidad }[S.tab] || vResumen)();
+  $app.innerHTML = h;
+  enlazar();
+}
+function enlazar(){
+  var f = document.getElementById("archivo");
+  if(f) f.addEventListener("change", function(){ if(f.files[0]) leerArchivo(f.files[0]); });
+  var m = document.getElementById("mesCarga");
+  if(m) m.addEventListener("change", function(){ if(S.subida) S.subida.periodo = m.value ? m.value + "-01" : null; });
+}
+$app.addEventListener("click", function(e){
+  var t = e.target.closest("[data-tab],[data-acc],[data-cedis]");
+  if(!t) return;
+  if(t.dataset.tab){ S.tab = t.dataset.tab; pintar(); }
+  else if(t.dataset.cedis){ S.cedis = S.cedis === t.dataset.cedis ? "" : t.dataset.cedis; pintar(); }
+  else if(t.dataset.acc === "guardar") guardar();
+  else if(t.dataset.acc === "cancelar"){ S.subida = null; S.mensaje = null; pintar(); }
+  else if(t.dataset.acc === "xls-alertas") xlsAlertas();
+  else if(t.dataset.acc === "xls-pedido") xlsPedido();
+});
+$app.addEventListener("change", function(e){
+  var k = e.target.dataset && e.target.dataset.f;
+  if(!k) return;
+  var v = e.target.value;
+  if(k === "h") S.h = +v;
+  else if(k === "tasa"){ var n = parseFloat(v); S.tasa = n > 0 ? n : L.TASA; }
+  else S[k] = v;
+  pintar();
+});
+$app.addEventListener("input", function(e){
+  if(e.target.dataset && e.target.dataset.f === "q"){ S.q = e.target.value; var pos = e.target.selectionStart; pintar(); var n = $app.querySelector('[data-f="q"]'); if(n){ n.focus(); n.setSelectionRange(pos, pos); } }
+});
+
+cargarDatos().then(pintar).catch(function(e){
+  $app.innerHTML = '<div class="card"><div class="msg err">No se pudo cargar el módulo: ' + esc(e.message) + '</div></div>';
+});
+})();
+</script>
+<script src="offline.js" defer></script>
+</body></html>
