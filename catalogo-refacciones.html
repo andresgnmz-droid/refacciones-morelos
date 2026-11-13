@@ -7,7 +7,8 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="erp-auth.js"></script>
-<script>if(/[?&]modo=carga/.test(location.search))document.documentElement.classList.add("modo-carga");</script>
+<script>if(/[?&]modo=carga/.test(location.search))document.documentElement.classList.add("modo-carga");
+if(/[?&]modo=consulta/.test(location.search))document.documentElement.classList.add("modo-consulta");</script>
 <style>
   :root{
     --ink:#142433; --ink-soft:#48607A; --ink-faint:#6A8296;
@@ -119,12 +120,18 @@
   #cardActualizar{display:none;}
   html.modo-carga #cardActualizar{display:flex !important;}
   html.modo-carga .vista{display:none !important;}
+  /* Modo consulta (Buscador de stock para mecánicos): solo la búsqueda de material, sin semáforo, costos ni carga. */
+  html.modo-consulta .hero p, html.modo-consulta #cardActualizar, html.modo-consulta #segVista, html.modo-consulta #vSem{display:none !important;}
+  html.modo-consulta #vCat{display:flex !important;flex-direction:column;gap:18px;}
+  html.modo-consulta #ficha th:nth-child(5), html.modo-consulta #ficha td:nth-child(5),
+  html.modo-consulta #ficha th:nth-child(6), html.modo-consulta #ficha td:nth-child(6),
+  html.modo-consulta #ficha th:nth-child(9), html.modo-consulta #ficha td:nth-child(9){display:none;}
 </style>
 </head>
 <body>
 <div class="wrap">
   <div class="hero">
-    <h1>Catálogo de refacciones</h1>
+    <h1 id="tituloPag">Catálogo de refacciones</h1>
     <p>Consulta de materiales por CEDIS (existencia, bloqueo, si están ampliados y últimas entradas y salidas) y semáforo de material que no sale del almacén, con su cantidad y costo.</p>
     <div class="meta" id="meta"></div>
   </div>
@@ -574,6 +581,7 @@ function infoActual(){
     $("cActual").textContent = r&&r[0] ? "Vigente hoy: "+(r[0].archivo||"archivo")+" · corte del "+fechaCorta(r[0].corte)+" · cargado "+fechaHora(r[0].actualizado_at)+"." : "Todavía no hay un catálogo cargado.";
   }).catch(function(){});
 }
+if(document.documentElement.classList.contains("modo-consulta")){ $("tituloPag").textContent="Buscador de stock"; }
 if(document.documentElement.classList.contains("modo-carga")){
   infoActual();
   if(!ERP.puede("catalogo_refacciones")){

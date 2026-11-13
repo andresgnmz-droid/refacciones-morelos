@@ -2,7 +2,7 @@
    Guarda en el equipo las páginas, las librerías y la última respuesta de Supabase,
    para poder consultar la información ya cargada cuando no hay internet.
    Si cambias este archivo, sube el número de VERSION. */
-var VERSION = "v26";
+var VERSION = "v27";
 var SHELL = "erp-paginas-" + VERSION;
 var LIBS = "erp-librerias-" + VERSION;
 var DATOS = "erp-datos-" + VERSION;
@@ -21,7 +21,7 @@ function claveUsuario(req){
     return j.sub || j.role || "anon";
   }catch(e){ return "anon"; }
 }
-var PAGINAS = ["./", "index.html", "preventivos.html", "catalogo-maestro.html", "hojalateria.html", "carga-mecanicos.html", "erp.html", "historial.html", "unidades-piso.html", "faltantes.html", "catalogo-refacciones.html", "carta-peticion.html", "offline.js", "erp-auth.js", "correctivos.html", "correctivos-lib.js", "gastos.html", "gastos-lib.js", "gastos-combustible.html"];
+var PAGINAS = ["./", "index.html", "stock-carga.html", "preventivos.html", "catalogo-maestro.html", "hojalateria.html", "carga-mecanicos.html", "erp.html", "historial.html", "unidades-piso.html", "faltantes.html", "catalogo-refacciones.html", "carta-peticion.html", "offline.js", "erp-auth.js", "correctivos.html", "correctivos-lib.js", "gastos.html", "gastos-lib.js", "gastos-combustible.html"];
 var LIBRERIAS = [
   "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js",
   "https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js",

@@ -308,7 +308,7 @@
     { id:"combustible", t:"Combustible", m:"combustible", activo:false, d:"Rendimientos y cargas de combustible de la flota." },
     { id:"llantas", t:"Control de llantas", m:"llantas", activo:false, d:"Revisión mensual de profundidad de llantas, cámara y alarma de las unidades de reparto." },
     { id:"catalogo-refacciones", t:"Catálogo de refacciones", src:"catalogo-refacciones.html", m:"catalogo_refacciones", d:"Material por CEDIS (existencia, bloqueo, entradas y salidas) y semáforo de material sin salir." },
-    { id:"stock-refacciones", t:"Buscador de stock", src:"index.html", m:"stock_refacciones", d:"Busca una refacción por código o nombre y ve su existencia en cada CEDIS." },
+    { id:"stock-refacciones", t:"Buscador de stock", src:"catalogo-refacciones.html?modo=consulta", m:"stock_refacciones", d:"Busca una refacción por código o nombre y ve su existencia en cada CEDIS (mismo catálogo de SAP que se actualiza en Catálogo de refacciones)." },
     { id:"control-refacciones", t:"Control de refacciones faltantes", src:"faltantes.html", m:"control_refacciones", d:"Faltantes: pedidos contra ingresos de SAP, por CEDIS." },
     { id:"carta-peticion", t:"Carta petición", src:"carta-peticion.html", m:"carta_peticion", d:"Genera la carta petición de dotación de combustible para SAP." },
     { id:"catalogo-unidades", t:"Catálogo de unidades", src:"catalogo-maestro.html", m:"catalogo_unidades", d:"Ficha maestra de las unidades de la zona." },
@@ -1020,7 +1020,7 @@
 
     tarjeta("Preventivos", "Archivo Preventivos.xlsx con las pestañas MMCV, MMCU, MMJO, MMPU, MMAX y MMCC, Ordenes y MaterialOrden (antes Ordmov); el mes se toma de las fechas de las órdenes (puedes cambiarlo antes de guardar). También sirven los nombres anteriores. Reemplaza lo cargado de ese mes.", "Subir archivo", function(){ abrirFrame("preventivos-carga.html", "Preventivos"); });
     tarjeta("Catálogo de refacciones", "Archivo ERP_Catalogos.xlsx (o Catalogo_Refacciones.xlsx), con Indice, Stock, Bloqueos (antes Codbloq) y las pestañas UESMCV, UESMCU, UESMJO, UESMPU, UESMAX y UESMCC. Se cura al subirlo y reemplaza el corte vigente.", "Subir archivo", function(){ abrirFrame("catalogo-refacciones.html?modo=carga", "Catálogo de refacciones"); });
-    tarjeta("Stock de refacciones", "CSV de existencias de SAP.", "Abrir carga", function(){ abrirFrame("index.html", "Stock de refacciones"); });
+    tarjeta("Stock de refacciones", "CSV de existencias de SAP.", "Abrir carga", function(){ abrirFrame("stock-carga.html", "Stock de refacciones"); });
   }
 
   /* ================= tema ================= */
