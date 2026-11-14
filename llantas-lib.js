@@ -322,7 +322,92 @@
     return { singles:singles, duales:duales, pares:pares, pedido:pedido };
   }
 
+  /* ---------- propuesta de pedido y gasto contra presupuesto ----------
+     Cuentas SAP: 6018302 llantas nuevas (posiciones 1-2 de M2/FL360 y todas las del Isuzu)
+                  6018303 llantas vitalizadas (posiciones 3-6 de M2/FL360).
+     El precio de cada llanta sale del catálogo de refacciones (Stock: valor libre ÷ piezas libres).
+     Si el material no tiene existencia en ningún CEDIS no hay precio en stock y se usa un estimado editable. */
+  var CUENTAS = { nuevas:{ clase:"6018302", nombre:"Llantas nuevas" }, vitalizadas:{ clase:"6018303", nombre:"Llantas vitalizadas" } };
+  var CATEGORIAS = {
+    NUEVA_M2:    { cuenta:"nuevas",      nombre:"Nueva M2 rin 22.5 (delanteras)",      mats:["535391","545421"], precioMat:"535391", respaldo:3235 },
+    NUEVA_FL360: { cuenta:"nuevas",      nombre:"Nueva FL360 rin 17.5 (delanteras)",   mats:["518602"],          precioMat:"518602", respaldo:2200 },
+    NUEVA_ISUZU: { cuenta:"nuevas",      nombre:"Nueva Isuzu rin 16 (las 4 llantas)",  mats:["503228"],          precioMat:"503228", respaldo:2800 },
+    VIT_M2:      { cuenta:"vitalizadas", nombre:"Vitalizada M2 rin 22.5 (traseras)",   mats:[],                  precioMat:null,     respaldo:3550 },
+    VIT_FL360:   { cuenta:"vitalizadas", nombre:"Vitalizada FL360 rin 17.5 (traseras)",mats:["519611"],          precioMat:"519611", respaldo:1800 }
+  };
+  var ORDEN_CAT = ["NUEVA_M2", "NUEVA_FL360", "NUEVA_ISUZU", "VIT_M2", "VIT_FL360"];
+  function categoriaDe(x){
+    if(x.tipo === "Isuzu") return "NUEVA_ISUZU";
+    if(x.eje === "Delantero") return x.tipo === "FL360" ? "NUEVA_FL360" : "NUEVA_M2";
+    return x.tipo === "FL360" ? "VIT_FL360" : "VIT_M2";
+  }
+  function cecoDe(cedis){ return cedis + "M0002"; }
+  function indicesCat(d){ var c = d.cols, o = {}; ["mat","ce","libre","vlibre"].forEach(function(k){ o[k] = c.indexOf(k); }); return o; }
+  // Precio por llanta de un material: valor libre ÷ piezas libres, sumando todos los CEDIS con existencia.
+  function precioStock(d, mat){
+    if(!d || !d.rows) return null;
+    var i = indicesCat(d), v = 0, q = 0;
+    d.rows.forEach(function(r){ if(r[i.mat] === mat && +r[i.libre] > 0 && +r[i.vlibre] > 0){ v += +r[i.vlibre]; q += +r[i.libre]; } });
+    return q > 0 ? Math.round(v / q * 100) / 100 : null;
+  }
+  function existenciaStock(d, mats, cedis){
+    if(!d || !d.rows) return 0;
+    var i = indicesCat(d), n = 0;
+    d.rows.forEach(function(r){ if(r[i.ce] === "M" + cedis && mats.indexOf(r[i.mat]) >= 0 && +r[i.libre] > 0) n += +r[i.libre]; });
+    return n;
+  }
+  // Precio de cada categoría y de dónde sale. editados = { CATEGORIA: precio } puesto a mano.
+  function preciosDe(d, editados){
+    var out = {};
+    ORDEN_CAT.forEach(function(k){
+      var c = CATEGORIAS[k], p = c.precioMat ? precioStock(d, c.precioMat) : null;
+      if(editados && editados[k] > 0) out[k] = { precio:editados[k], origen:"manual" };
+      else if(p != null) out[k] = { precio:p, origen:"stock" };
+      else out[k] = { precio:c.respaldo, origen:"estimado" };
+    });
+    return out;
+  }
+  // pedido = plan().pedido. Devuelve una fila por CEDIS y categoría con consumo (gasto) y compra (descontando stock).
+  function propuesta(pedido, precios, d){
+    var m = {};
+    pedido.forEach(function(x){
+      var cat = categoriaDe(x), k = x.cedis + "|" + cat;
+      var r = m[k] = m[k] || { cedis:x.cedis, cat:cat, cuenta:CATEGORIAS[cat].cuenta, llantas:0, ahorro:0, pedir:0 };
+      r.llantas += x.llantas; r.ahorro += x.ahorro; r.pedir += x.pedir;
+    });
+    var filas = Object.keys(m).map(function(k){
+      var r = m[k];
+      r.precio = precios[r.cat].precio; r.origen = precios[r.cat].origen;
+      r.stock = existenciaStock(d, CATEGORIAS[r.cat].mats, r.cedis);
+      r.comprar = Math.max(r.pedir - r.stock, 0);
+      r.gasto = Math.round(r.pedir * r.precio);
+      r.compra = Math.round(r.comprar * r.precio);
+      return r;
+    });
+    filas.sort(function(a, b){ return ORDEN.indexOf(a.cedis) - ORDEN.indexOf(b.cedis) || ORDEN_CAT.indexOf(a.cat) - ORDEN_CAT.indexOf(b.cat); });
+    return filas;
+  }
+  // presupuesto = { MCV:{ nuevas:{ plan, planMes, real }, vitalizadas:{...} } }. Una fila por CEDIS y cuenta.
+  function contraPresupuesto(filas, presupuesto){
+    var out = [];
+    ORDEN.forEach(function(c){
+      ["nuevas", "vitalizadas"].forEach(function(cu){
+        var mias = filas.filter(function(f){ return f.cedis === c && f.cuenta === cu; });
+        var p = presupuesto && presupuesto[c] && presupuesto[c][cu];
+        var r = { cedis:c, cuenta:cu, pedir:0, gasto:0, comprar:0, compra:0, tiene:!!p, plan:p ? p.plan : null, planMes:p ? p.planMes : null, real:p ? p.real : null };
+        mias.forEach(function(f){ r.pedir += f.pedir; r.gasto += f.gasto; r.comprar += f.comprar; r.compra += f.compra; });
+        r.saldo = p ? p.plan - p.real : null;
+        r.resultado = p ? r.saldo - r.gasto : null;      // positivo = sobra, negativo = se pasa
+        r.estado = !p ? "sin" : r.resultado >= 0 ? "dentro" : "pasa";
+        out.push(r);
+      });
+    });
+    return out;
+  }
+
   var API = {
+    CUENTAS:CUENTAS, CATEGORIAS:CATEGORIAS, ORDEN_CAT:ORDEN_CAT, categoriaDe:categoriaDe, cecoDe:cecoDe,
+    precioStock:precioStock, existenciaStock:existenciaStock, preciosDe:preciosDe, propuesta:propuesta, contraPresupuesto:contraPresupuesto,
     CEDIS:CEDIS, ORDEN:ORDEN, MESES:MESES, TIPOS:TIPOS,
     UMBRAL_CAMBIO:UMBRAL_CAMBIO, UMBRAL_LEGAL:UMBRAL_LEGAL, UMBRAL_VIGILAR:UMBRAL_VIGILAR, BUENA:BUENA, TASA:TASA, TOLERANCIA:TOLERANCIA,
     norm:norm, tipoDeMarca:tipoDeMarca, nueva:nueva, posActivas:posActivas, eje:eje, esDual:esDual, estado:estado,

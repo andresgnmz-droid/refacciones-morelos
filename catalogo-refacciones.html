@@ -157,6 +157,12 @@ if(/[?&]modo=consulta/.test(location.search))document.documentElement.classList.
 
     <!-- ===== Semáforo ===== -->
     <div id="vSem" style="display:contents">
+      <div class="card" id="cValor">
+        <h2>Valor estimado del almacén</h2>
+        <p class="sub" id="subValor"></p>
+        <div class="kpis" id="kpisValor"></div>
+        <div class="bars" id="barsValor"></div>
+      </div>
       <div class="card">
         <div class="filters">
           <div class="f"><label>CEDIS</label><select id="sCed"></select></div>
@@ -216,6 +222,7 @@ if(/[?&]modo=consulta/.test(location.search))document.documentElement.classList.
           <li><b>Semáforo:</b> se mide con los <b>días desde la última salida</b> hasta la fecha de corte del archivo, solo en material con existencia. Nivel 1: 180 días o más pero menos de 1 año (365). Nivel 2: de 1 año a menos de 2 años (730). Nivel 3: 2 años o más. Menos de 180 días no genera alerta.</li>
           <li><b>Material sin ninguna salida registrada:</b> se mide desde su última entrada.</li>
           <li><b>Entrada reciente:</b> un material puede tener la última salida muy vieja y haber recibido piezas hace poco. Para no contarlo como rezago puedes ocultar el que tuvo entrada hace menos de 180 días.</li>
+          <li><b>Valor estimado del almacén:</b> es la existencia libre por su precio en SAP (columna Valor libre util. de la pestaña Stock), sumada por CEDIS. No coincide con el valor medio de la pestaña UES que usa el semáforo, porque son dos datos distintos de SAP.</li>
           <li><b>Cantidad y costo:</b> la existencia y el valor salen de la columna Stock total y Valor stk. med. de la pestaña UES de cada CEDIS (valor medio de SAP en pesos). Las piezas se suman solo en unidad PZA; litros, kilos y metros no se mezclan.</li>
           <li><b>Pestañas UES:</b> se aceptan con los nombres UESMCV, UESMCU, UESMJO, UESMPU, UESMAX y UESMCC (también UESCVA, UESCUA, UESJOJ, UESPIX, UESAXO y UESCOC).</li>
         </ul>
@@ -370,6 +377,16 @@ function resumir(L, soloSinEntRec){
   });
   return res;
 }
+/* Valor estimado del almacén a precio de reposición: valor libre de la pestaña Stock (existencia libre × precio), por CEDIS. */
+function valorAlmacen(L){
+  var res={};
+  CENTROS.concat(["TODOS"]).forEach(function(c){ res[c]={ valor:0, mats:0, pz:0 }; });
+  L.forEach(function(o){
+    if(!(o.libre>0) || !(o.vlibre>0)) return;
+    [o.ce,"TODOS"].forEach(function(c){ var t=res[c]; if(!t) return; t.valor+=o.vlibre; t.mats++; if(o.um==="PZA") t.pz+=o.libre; });
+  });
+  return res;
+}
 /*CORE-END*/
 
 var NIVTXT={1:"Nivel 1",2:"Nivel 2",3:"Nivel 3"};
@@ -403,7 +420,7 @@ function cargarVista(){
     var r=rows[0]; DATOS=r.datos; CORTE=DATOS.corte || r.corte || hoyISO();
     LISTA=armar(DATOS,CORTE); indexar();
     $("meta").innerHTML='<span class="pill">Corte de SAP: '+esc(fechaCorta(CORTE))+'</span><span class="pill mute">Actualizado '+esc(fechaHora(r.actualizado_at))+'</span><span class="pill mute">'+fmt(Object.keys(DATOS.mats).length)+' materiales · '+fmt(LISTA.length)+' registros por CEDIS</span>';
-    armarSelects(); aplicarSem(); pintarCat();
+    armarSelects(); pintarValor(); aplicarSem(); pintarCat();
   }).catch(function(e){
     $("meta").innerHTML='<span class="pill bad">Sin conexión a datos</span>';
     $("bars").innerHTML='<div class="empty">No se pudo leer la información: '+esc(e.message)+'. Si abriste esta página sola, entra por el ERP para usar tu sesión.</div>';
@@ -419,6 +436,19 @@ function armarSelects(){
   $("sCed").innerHTML=op; $("cCed").innerHTML=op.replace("Todos los CEDIS","Cualquier CEDIS");
 }
 
+function pintarValor(){
+  var R=valorAlmacen(LISTA), t=R.TODOS, max=0;
+  CENTROS.forEach(function(c){ if(R[c].valor>max) max=R[c].valor; });
+  $("subValor").textContent="Existencia libre a su precio en SAP (pestaña Stock del corte del "+fechaCorta(CORTE)+"). Es un estimado de lo que costaría reponer el almacén; no incluye material bloqueado ni en tránsito.";
+  $("kpisValor").innerHTML=kpi("Almacén de Zona Morelos", mxn(t.valor), fmt(t.mats)+" materiales con existencia libre")+
+    kpi("Piezas en almacén", fmt(t.pz), "solo unidad PZA");
+  $("barsValor").innerHTML=CENTROS.map(function(c){
+    var x=R[c];
+    return '<div class="bar-row"><div class="nm"><b>'+esc(NOMBRES[c])+'</b><span>'+c+' · '+fmt(x.mats)+' materiales · '+fmt(x.pz)+' piezas</span></div>'+
+      '<div class="track" title="'+mxn(x.valor)+'"><div class="seg-ok" style="width:'+(max?x.valor/max*100:0)+'%"></div></div>'+
+      '<div class="val"><b>'+mxn(x.valor)+'</b> · '+pct(x.valor,t.valor)+' del total</div></div>';
+  }).join("");
+}
 /* ---- semáforo ---- */
 function aplicarSem(){
   var q=sinAcentos(S.q).split(/\s+/).filter(Boolean);
@@ -446,7 +476,7 @@ function pintarSem(){
   var nun=LISTA.filter(function(o){ return o.conExist && o.nunca && o.nivel && (!S.ced||o.ce===S.ced) && !(S.entRec&&o.entRec); }).length;
   $("notaSem").textContent="Días al corte del "+fechaCorta(CORTE)+", contados desde la última salida de cada material con existencia."+(S.entRec?" Se ocultó el material con entrada de menos de 180 días.":"");
   $("kpis").innerHTML=
-    kpi("Valor del material en almacén", mxn(t.almV), fmt(t.almN)+" materiales con existencia")+
+    kpi("Valor medio en almacén (UES)", mxn(t.almV), fmt(t.almN)+" materiales con existencia")+
     kpi("Valor sin salir (180 días o más)", mxn(inm.v), pct(inm.v,t.almV)+" del valor en almacén")+
     kpi("Materiales sin salir", fmt(inm.n), pct(inm.n,t.almN)+" de los materiales con existencia")+
     kpi("Piezas sin salir", fmt(inm.pz), "solo unidad PZA"+(nun?" · "+fmt(nun)+" nunca han salido":""));
