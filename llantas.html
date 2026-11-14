@@ -73,9 +73,11 @@ var params = new URLSearchParams(location.search);
 var S = {
   cargas:[], lect:{}, cat:null, tipos:{}, periodo:"", tab:"resumen",
   cedis:"", nivel:"", q:"", h:1, modo:"generica", tasa:L.TASA, unidad:"",
-  subida:null, mensaje:null
+  subida:null, mensaje:null,
+  precios:{}, notaProp:"", propVer:"",
+  fin:{ cargado:false, cargando:false, cat:null, real:[], plan:[], props:[], avisos:[] }
 };
-var TABS = [["resumen","Resumen"],["alertas","Alertas"],["pedido","Proyección y pedido"],["duales","Emparejar duales"],["historico","Histórico"],["calidad","Calidad de datos"]];
+var TABS = [["resumen","Resumen"],["alertas","Alertas"],["pedido","Proyección y pedido"],["propuesta","Propuesta y presupuesto"],["duales","Emparejar duales"],["historico","Histórico"],["calidad","Calidad de datos"]];
 
 function esc(s){ return String(s == null ? "" : s).replace(/[&<>"]/g, function(c){ return { "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]; }); }
 function int(n){ return Number(n || 0).toLocaleString("es-MX"); }
@@ -362,6 +364,142 @@ function guardar(){
   });
 }
 
+/* ---------- propuesta de pedido y gasto contra presupuesto ---------- */
+function mxn(n){ return (n < 0 ? "–$" : "$") + Math.abs(Math.round(n || 0)).toLocaleString("es-MX"); }
+function mesObjetivo(){ return L.sumaMeses(S.periodo, 1); }
+function cargarFin(){
+  if(S.fin.cargado || S.fin.cargando) return Promise.resolve();
+  S.fin.cargando = true; S.fin.avisos = [];
+  var cecos = L.ORDEN.map(L.cecoDe).join(","), cl = "(6018302,6018303)", anio = +mesObjetivo().slice(0, 4);
+  function seguro(nombre, p){ return p.catch(function(){ S.fin.avisos.push(nombre); return null; }); }
+  return Promise.all([
+    seguro("el catálogo de refacciones (precios y stock)", ERP.rest("catalogo_refacciones_datos?select=corte,datos&id=eq.1")),
+    seguro("los gastos reales de SAP", traerTodo("gastos_real?select=anio,ceco,clase,mes,valor&anio=gte." + (anio - 1) + "&clase=in." + cl + "&ceco=in.(" + cecos + ")&order=id.asc")),
+    seguro("el presupuesto", traerTodo("gastos_plan?select=*&anio=eq." + anio + "&clase=in." + cl + "&ceco=in.(" + cecos + ")&order=ceco.asc,clase.asc")),
+    seguro("las propuestas guardadas", traerTodo("llantas_propuestas?select=*&order=periodo.desc"))
+  ]).then(function(r){
+    var c = r[0] && r[0][0];
+    S.fin.cat = c ? c.datos : null; S.fin.corte = c ? c.corte : null;
+    S.fin.real = r[1] || []; S.fin.plan = r[2] || []; S.fin.props = r[3] || [];
+    S.fin.cargado = true; S.fin.cargando = false;
+  });
+}
+function presupuesto(){
+  var anio = +mesObjetivo().slice(0, 4), mes = +mesObjetivo().slice(5, 7), out = {};
+  L.ORDEN.forEach(function(c){
+    out[c] = {};
+    ["nuevas", "vitalizadas"].forEach(function(cu){
+      var clase = L.CUENTAS[cu].clase, ceco = L.cecoDe(c);
+      var pl = S.fin.plan.filter(function(x){ return x.ceco === ceco && x.clase === clase; });
+      if(!pl.length) return;
+      var plan = 0, planMes = 0;
+      pl.forEach(function(x){ for(var i = 1; i <= 12; i++) plan += +x["m" + i] || 0; planMes += +x["m" + mes] || 0; });
+      var real = S.fin.real.filter(function(x){ return x.ceco === ceco && x.clase === clase && x.anio === anio; }).reduce(function(a, x){ return a + (+x.valor || 0); }, 0);
+      out[c][cu] = { plan:plan, planMes:planMes, real:real };
+    });
+  });
+  return out;
+}
+function realDelMes(mesIso, cedis, cuenta){
+  var a = +mesIso.slice(0, 4), m = +mesIso.slice(5, 7), n = 0, hay = false;
+  S.fin.real.forEach(function(x){
+    if(x.anio !== a || x.mes !== m || x.clase !== L.CUENTAS[cuenta].clase) return;
+    if(cedis && x.ceco !== L.cecoDe(cedis)) return;
+    n += +x.valor || 0; hay = true;
+  });
+  return hay ? n : null;
+}
+function calcPropuesta(){
+  var plan = L.plan(filas(S.periodo, ""), S.tipos, S.h, tasaDeFn()), precios = L.preciosDe(S.fin.cat, S.precios);
+  var prop = L.propuesta(plan.pedido, precios, S.fin.cat);
+  return { plan:plan, precios:precios, prop:prop, cp:L.contraPresupuesto(prop, presupuesto()) };
+}
+function pillEstado(e){ return e === "dentro" ? '<span class="pill e-ok">Dentro</span>' : e === "pasa" ? '<span class="pill e-ilegal">Se pasa</span>' : '<span class="pill e-vigilar">Sin presupuesto</span>'; }
+function pillOrigen(o){ return o === "stock" ? '<span class="pill e-ok">Stock SAP</span>' : o === "manual" ? '<span class="pill e-cambio">Manual</span>' : '<span class="pill e-vigilar">Estimado</span>'; }
+function vPropuesta(){
+  if(!S.fin.cargado) return '<div class="card"><div class="empty">Cargando precios, stock y presupuesto…</div></div>';
+  var C = calcPropuesta(), cp = C.cp, mesO = mesObjetivo();
+  var h = '<div class="card"><h2>Es una propuesta, no un pedido cerrado</h2><p class="note">Se calcula con la inspección de ' + esc(L.etiquetaPeriodo(S.periodo)) + ', el horizonte y el desgaste que elijas, los precios del catálogo de refacciones y el presupuesto de SAP. Guárdala cada mes y el siguiente mes se compara contra lo que realmente se gastó, para saber qué corregir.</p></div>';
+  if(S.fin.avisos.length) h += '<div class="msg err">Sin acceso a ' + esc(S.fin.avisos.join(", ")) + '. Lo que falta se muestra vacío o con precios estimados.</div>';
+  h += '<div class="fbar"><label>Horizonte <select data-f="h">' + [[0,"Hoy"],[1,"En 1 mes"],[2,"En 2 meses"],[3,"En 3 meses"]].map(function(x){ return '<option value="' + x[0] + '"' + (S.h === x[0] ? " selected" : "") + ">" + x[1] + "</option>"; }).join("") + '</select></label>' +
+    '<label>Desgaste <select data-f="modo"><option value="generica"' + (S.modo === "generica" ? " selected" : "") + '>Fijo</option><option value="real"' + (S.modo === "real" ? " selected" : "") + (previo() ? "" : " disabled") + '>Real por unidad</option></select></label>' +
+    '<label>mm por mes <input type="number" data-f="tasa" step="0.1" min="0.1" max="3" value="' + S.tasa + '"></label>' +
+    '<span class="meta">Gasto esperado en ' + esc(L.etiquetaPeriodo(mesO)) + '</span></div>';
+  var tN = 0, tV = 0, tP = 0, tR = 0, hayPres = false;
+  cp.forEach(function(r){ tP += r.pedir; if(r.cuenta === "nuevas") tN += r.gasto; else tV += r.gasto; if(r.tiene){ tR += r.resultado; hayPres = true; } });
+  h += '<div class="kpi-row"><div class="kpi"><span class="l">Llantas a consumir</span><span class="v">' + int(tP) + '</span><span class="s">ya descontando duales emparejados</span></div>' +
+    '<div class="kpi"><span class="l">Gasto en nuevas</span><span class="v">' + mxn(tN) + '</span><span class="s">cuenta 6018302</span></div>' +
+    '<div class="kpi"><span class="l">Gasto en vitalizadas</span><span class="v">' + mxn(tV) + '</span><span class="s">cuenta 6018303</span></div>' +
+    '<div class="kpi ' + (hayPres && tR < 0 ? "bad" : "") + '"><span class="l">Contra presupuesto anual</span><span class="v">' + (hayPres ? mxn(tR) : "—") + '</span><span class="s">' + (hayPres ? (tR < 0 ? "se pasa en total" : "sobra en total") + " (saldo anual − gasto)" : "sin presupuesto cargado") + '</span></div></div>';
+
+  h += '<div class="card"><h2>Gasto estimado contra presupuesto, por bodega y cuenta</h2><div class="tw"><table><thead><tr><th>Bodega</th><th>Cuenta</th><th class="num">Llantas</th><th class="num">Gasto estimado</th><th class="num">Presupuesto del mes</th><th class="num">Real acumulado</th><th class="num">Saldo anual</th><th class="num">Resultado</th><th>Estado</th></tr></thead><tbody>' +
+    cp.map(function(r){
+      return '<tr><td>' + esc(cedisNom(r.cedis)) + '</td><td>' + esc(L.CUENTAS[r.cuenta].nombre) + '</td><td class="num">' + r.pedir + '</td><td class="num"><b>' + mxn(r.gasto) + '</b></td><td class="num">' + (r.tiene ? mxn(r.planMes) : "—") + '</td><td class="num">' + (r.tiene ? mxn(r.real) : "—") + '</td><td class="num">' + (r.tiene ? mxn(r.saldo) : "—") + '</td><td class="num">' + (r.tiene ? '<b style="color:' + (r.resultado < 0 ? "var(--bad)" : "var(--good)") + '">' + mxn(r.resultado) + '</b>' : "—") + '</td><td>' + pillEstado(r.estado) + '</td></tr>';
+    }).join("") + '</tbody></table></div>' +
+    '<p class="note"><b>Saldo anual</b> = presupuesto del año − real acumulado en SAP. <b>Resultado</b> = saldo − gasto estimado: negativo es lo que nos pasaríamos. El gasto se carga a la cuenta cuando la llanta sale de almacén al CeCo de Reparto, por eso el gasto estimado no descuenta el stock.</p></div>';
+
+  h += '<div class="card"><h2>Qué comprar</h2><div class="tw"><table><thead><tr><th>Bodega</th><th>Llanta</th><th class="num">A consumir</th><th class="num">En stock</th><th class="num">A comprar</th><th class="num">Precio</th><th>Origen del precio</th><th class="num">Importe</th></tr></thead><tbody>' +
+    (C.prop.length ? C.prop.map(function(r){
+      return '<tr><td>' + esc(cedisNom(r.cedis)) + '</td><td>' + esc(L.CATEGORIAS[r.cat].nombre) + '</td><td class="num">' + r.pedir + '</td><td class="num">' + num1(r.stock) + '</td><td class="num"><b>' + r.comprar + '</b></td><td class="num">' + mxn(r.precio) + '</td><td>' + pillOrigen(r.origen) + '</td><td class="num">' + mxn(r.compra) + '</td></tr>';
+    }).join("") + '<tr class="tot"><td colspan="4">Total</td><td class="num">' + C.prop.reduce(function(a, r){ return a + r.comprar; }, 0) + '</td><td colspan="2"></td><td class="num">' + mxn(C.prop.reduce(function(a, r){ return a + r.compra; }, 0)) + '</td></tr>' : '<tr><td colspan="8" class="empty">Ninguna llanta llega a 4 mm en este horizonte.</td></tr>') +
+    '</tbody></table></div><p class="note">El stock es la existencia libre del catálogo de refacciones' + (S.fin.corte ? " (corte " + esc(S.fin.corte) + ")" : "") + '. No descuenta pedidos que ya van en camino.</p></div>';
+
+  h += '<div class="card"><h2>Precios por llanta</h2><div class="tw"><table><thead><tr><th>Llanta</th><th>Cuenta</th><th class="num">Precio (MXN)</th><th>Origen</th></tr></thead><tbody>' +
+    L.ORDEN_CAT.map(function(k){
+      return '<tr><td>' + esc(L.CATEGORIAS[k].nombre) + '</td><td>' + esc(L.CUENTAS[L.CATEGORIAS[k].cuenta].nombre) + '</td><td class="num"><input type="number" min="0" step="10" data-f="precio" data-k="' + k + '" value="' + C.precios[k].precio + '"></td><td>' + pillOrigen(C.precios[k].origen) + '</td></tr>';
+    }).join("") + '</tbody></table></div><p class="note"><b>Stock SAP</b> = valor libre ÷ piezas libres del material en el catálogo de refacciones. <b>Estimado</b> = no hay existencia de ese material en ningún CEDIS, así que no hay precio en stock; se usa el promedio por llanta de los cargos de SAP y conviene corregirlo con el precio de tu último pedido. Si cambias un precio queda como Manual; déjalo en blanco para volver al de stock.</p></div>';
+
+  if(puedeEditar()){
+    var ya = S.fin.props.filter(function(p){ return p.periodo === S.periodo; })[0];
+    h += '<div class="card"><h2>Guardar la propuesta de ' + esc(L.etiquetaPeriodo(S.periodo)) + '</h2><div class="fbar"><input type="search" data-f="notaProp" placeholder="Nota (opcional): supuestos o decisiones" value="' + esc(S.notaProp) + '" style="flex:1;min-width:240px">' +
+      '<button class="btn pri" data-acc="guardar-prop">' + (ya ? "Actualizar propuesta guardada" : "Guardar propuesta") + '</button><button class="btn" data-acc="xls-prop">Descargar Excel</button></div>' +
+      (ya ? '<p class="note">Ya hay una propuesta guardada de este mes (' + esc(fecha(ya.guardado_at)) + (ya.guardado_por ? " · " + esc(ya.guardado_por) : "") + '). Al guardar se reemplaza.</p>' : "") + (S.mensajeProp ? '<div class="msg ' + S.mensajeProp.t + '">' + esc(S.mensajeProp.x) + '</div>' : "") + '</div>';
+  } else h += '<div class="fbar"><button class="btn" data-acc="xls-prop">Descargar Excel</button></div>';
+  return h + vHistProp();
+}
+function vHistProp(){
+  var ps = S.fin.props.filter(function(p){ return p.resultado && p.resultado.mesObj; });
+  if(!ps.length) return '<div class="card"><h2>Propuestas anteriores contra lo real</h2><div class="empty">Cuando guardes la primera propuesta, aquí verás cada mes lo propuesto contra el gasto real de SAP.</div></div>';
+  var h = '<div class="card"><h2>Propuestas anteriores contra lo real</h2><div class="tw"><table><thead><tr><th>Inspección</th><th>Gasto en</th><th class="num">Llantas</th><th class="num">Nuevas propuesto</th><th class="num">Nuevas real</th><th class="num">Vitalizadas propuesto</th><th class="num">Vitalizadas real</th><th>Nota</th></tr></thead><tbody>' +
+    ps.map(function(p){
+      var r = p.resultado, rn = realDelMes(r.mesObj, "", "nuevas"), rv = realDelMes(r.mesObj, "", "vitalizadas");
+      var cel = function(prop, real){ return real == null ? '<span class="meta">sin cargos aún</span>' : mxn(real) + ' <span class="meta">(' + (real - prop >= 0 ? "+" : "") + mxn(real - prop) + ')</span>'; };
+      return '<tr class="cl" data-acc="ver-prop" data-p="' + p.periodo + '"><td>' + esc(L.etiquetaPeriodo(p.periodo)) + '</td><td>' + esc(L.etiquetaPeriodo(r.mesObj)) + '</td><td class="num">' + (r.tot.nuevas.pedir + r.tot.vitalizadas.pedir) + '</td><td class="num">' + mxn(r.tot.nuevas.gasto) + '</td><td class="num">' + cel(r.tot.nuevas.gasto, rn) + '</td><td class="num">' + mxn(r.tot.vitalizadas.gasto) + '</td><td class="num">' + cel(r.tot.vitalizadas.gasto, rv) + '</td><td>' + esc(p.nota || "") + '</td></tr>';
+    }).join("") + '</tbody></table></div><p class="note">Lo real es todo lo cargado en SAP a esas cuentas de Reparto ese mes, no solo las llantas que salieron de esta propuesta. Toca un renglón para ver el detalle por bodega.</p>';
+  var sel = ps.filter(function(p){ return p.periodo === S.propVer; })[0] || ps[0], r = sel.resultado;
+  h += '<h3>Detalle por bodega · propuesta de ' + esc(L.etiquetaPeriodo(sel.periodo)) + '</h3><div class="tw"><table><thead><tr><th>Bodega</th><th>Cuenta</th><th class="num">Llantas</th><th class="num">Propuesto</th><th class="num">Real</th><th class="num">Diferencia</th></tr></thead><tbody>' +
+    (r.porBodega || []).map(function(x){
+      var real = realDelMes(r.mesObj, x.cedis, x.cuenta);
+      return '<tr><td>' + esc(cedisNom(x.cedis)) + '</td><td>' + esc(L.CUENTAS[x.cuenta].nombre) + '</td><td class="num">' + x.pedir + '</td><td class="num">' + mxn(x.gasto) + '</td><td class="num">' + (real == null ? "—" : mxn(real)) + '</td><td class="num">' + (real == null ? "—" : mxn(real - x.gasto)) + '</td></tr>';
+    }).join("") + '</tbody></table></div></div>';
+  return h;
+}
+function guardarProp(){
+  var C = calcPropuesta(), perfil = (window.ERP && ERP.perfil && ERP.perfil()) || {};
+  var tot = { nuevas:{ pedir:0, gasto:0 }, vitalizadas:{ pedir:0, gasto:0 } };
+  C.cp.forEach(function(r){ tot[r.cuenta].pedir += r.pedir; tot[r.cuenta].gasto += r.gasto; });
+  var res = { mesObj:mesObjetivo(), modo:S.modo, tot:tot,
+    porBodega:C.cp.map(function(r){ return { cedis:r.cedis, cuenta:r.cuenta, pedir:r.pedir, gasto:r.gasto, comprar:r.comprar, compra:r.compra, saldo:r.saldo, resultado:r.resultado, estado:r.estado }; }),
+    filas:C.prop.map(function(r){ return { cedis:r.cedis, cat:r.cat, pedir:r.pedir, stock:r.stock, comprar:r.comprar, precio:r.precio, origen:r.origen }; }) };
+  var precios = {}; Object.keys(C.precios).forEach(function(k){ precios[k] = C.precios[k]; });
+  S.mensajeProp = null;
+  ERP.rest("llantas_propuestas?on_conflict=periodo", { method:"POST", prefer:"resolution=merge-duplicates,return=minimal",
+    body:[{ periodo:S.periodo, horizonte:S.h, tasa:S.tasa, precios:precios, resultado:res, nota:S.notaProp || null, guardado_por:perfil.nombre || perfil.usuario || null, guardado_at:new Date().toISOString() }] })
+  .then(function(){ S.fin.cargado = false; return cargarFin(); })
+  .then(function(){ S.mensajeProp = { t:"ok", x:"Propuesta guardada." }; pintar(); })
+  .catch(function(e){ S.mensajeProp = { t:"err", x:"No se pudo guardar: " + e.message }; pintar(); });
+}
+function xlsProp(){
+  var C = calcPropuesta();
+  var a = [["Bodega","Cuenta","Llantas a consumir","Gasto estimado","Presupuesto del mes","Real acumulado","Saldo anual","Resultado","Estado"]];
+  C.cp.forEach(function(r){ a.push([cedisNom(r.cedis), L.CUENTAS[r.cuenta].nombre, r.pedir, r.gasto, r.tiene ? r.planMes : "", r.tiene ? r.real : "", r.tiene ? r.saldo : "", r.tiene ? r.resultado : "", r.estado === "pasa" ? "Se pasa" : r.estado === "dentro" ? "Dentro" : "Sin presupuesto"]); });
+  var b = [["Bodega","Llanta","A consumir","En stock","A comprar","Precio","Origen del precio","Importe"]];
+  C.prop.forEach(function(r){ b.push([cedisNom(r.cedis), L.CATEGORIAS[r.cat].nombre, r.pedir, r.stock, r.comprar, r.precio, r.origen, r.compra]); });
+  var c = [["Llanta","Cuenta","Precio","Origen"]];
+  L.ORDEN_CAT.forEach(function(k){ c.push([L.CATEGORIAS[k].nombre, L.CUENTAS[L.CATEGORIAS[k].cuenta].nombre, C.precios[k].precio, C.precios[k].origen]); });
+  descargar("Llantas_propuesta_" + S.periodo.slice(0, 7) + "_h" + S.h + ".xlsx", [{ nombre:"Contra presupuesto", filas:a }, { nombre:"Compra", filas:b }, { nombre:"Precios", filas:c }]);
+}
+
 /* ---------- Excel de salida ---------- */
 function xlsAlertas(){
   var lista = L.alertas(filas(S.periodo, S.cedis), S.tipos);
@@ -390,7 +528,7 @@ function pintar(){
   h += '<div class="fbar"><label>Inspección <select data-f="periodo">' + ps.map(function(p){ return '<option value="' + p + '"' + (p === S.periodo ? " selected" : "") + ">" + esc(L.etiquetaPeriodo(p)) + "</option>"; }).join("") + '</select></label>' +
     (c ? '<span class="meta">Cargada ' + esc(fecha(c.cargado_at)) + (c.archivo ? " · " + esc(c.archivo) : "") + '</span>' : "") + '</div>';
   h += '<div class="tabs">' + TABS.map(function(t){ return '<button data-tab="' + t[0] + '" class="' + (S.tab === t[0] ? "on" : "") + '">' + t[1] + "</button>"; }).join("") + '</div>';
-  h += ({ resumen:vResumen, alertas:vAlertas, pedido:vPedido, duales:vDuales, historico:vHistorico, calidad:vCalidad }[S.tab] || vResumen)();
+  h += ({ resumen:vResumen, alertas:vAlertas, pedido:vPedido, propuesta:vPropuesta, duales:vDuales, historico:vHistorico, calidad:vCalidad }[S.tab] || vResumen)();
   $app.innerHTML = h;
   enlazar();
 }
@@ -403,18 +541,23 @@ function enlazar(){
 $app.addEventListener("click", function(e){
   var t = e.target.closest("[data-tab],[data-acc],[data-cedis]");
   if(!t) return;
-  if(t.dataset.tab){ S.tab = t.dataset.tab; pintar(); }
+  if(t.dataset.tab){ S.tab = t.dataset.tab; pintar(); if(S.tab === "propuesta" && !S.fin.cargado) cargarFin().then(pintar).catch(function(e){ S.fin.cargando = false; S.fin.cargado = true; S.fin.avisos.push("los datos (" + e.message + ")"); pintar(); }); }
   else if(t.dataset.cedis){ S.cedis = S.cedis === t.dataset.cedis ? "" : t.dataset.cedis; pintar(); }
   else if(t.dataset.acc === "guardar") guardar();
   else if(t.dataset.acc === "cancelar"){ S.subida = null; S.mensaje = null; pintar(); }
   else if(t.dataset.acc === "xls-alertas") xlsAlertas();
   else if(t.dataset.acc === "xls-pedido") xlsPedido();
+  else if(t.dataset.acc === "guardar-prop") guardarProp();
+  else if(t.dataset.acc === "xls-prop") xlsProp();
+  else if(t.dataset.acc === "ver-prop"){ S.propVer = t.dataset.p; pintar(); }
 });
 $app.addEventListener("change", function(e){
   var k = e.target.dataset && e.target.dataset.f;
   if(!k) return;
   var v = e.target.value;
   if(k === "h") S.h = +v;
+  else if(k === "precio"){ var pv = parseFloat(v); if(pv > 0) S.precios[e.target.dataset.k] = pv; else delete S.precios[e.target.dataset.k]; }
+  else if(k === "notaProp") S.notaProp = v;
   else if(k === "tasa"){ var n = parseFloat(v); S.tasa = n > 0 ? n : L.TASA; }
   else S[k] = v;
   pintar();
