@@ -332,7 +332,7 @@
     NUEVA_M2:    { cuenta:"nuevas",      nombre:"Nueva M2 rin 22.5 (delanteras)",      mats:["535391","545421"], precioMat:"535391", respaldo:3235 },
     NUEVA_FL360: { cuenta:"nuevas",      nombre:"Nueva FL360 rin 17.5 (delanteras)",   mats:["518602"],          precioMat:"518602", respaldo:2200 },
     NUEVA_ISUZU: { cuenta:"nuevas",      nombre:"Nueva Isuzu rin 16 (las 4 llantas)",  mats:["503228"],          precioMat:"503228", respaldo:2800 },
-    VIT_M2:      { cuenta:"vitalizadas", nombre:"Vitalizada M2 rin 22.5 (traseras)",   mats:[],                  precioMat:null,     respaldo:3550 },
+    VIT_M2:      { cuenta:"vitalizadas", nombre:"Vitalizada M2 rin 22.5 (traseras)",   mats:[],                  precioMat:null,     respaldo:7100 },
     VIT_FL360:   { cuenta:"vitalizadas", nombre:"Vitalizada FL360 rin 17.5 (traseras)",mats:["519611"],          precioMat:"519611", respaldo:1800 }
   };
   var ORDEN_CAT = ["NUEVA_M2", "NUEVA_FL360", "NUEVA_ISUZU", "VIT_M2", "VIT_FL360"];

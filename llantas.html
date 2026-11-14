@@ -447,7 +447,7 @@ function vPropuesta(){
   h += '<div class="card"><h2>Precios por llanta</h2><div class="tw"><table><thead><tr><th>Llanta</th><th>Cuenta</th><th class="num">Precio (MXN)</th><th>Origen</th></tr></thead><tbody>' +
     L.ORDEN_CAT.map(function(k){
       return '<tr><td>' + esc(L.CATEGORIAS[k].nombre) + '</td><td>' + esc(L.CUENTAS[L.CATEGORIAS[k].cuenta].nombre) + '</td><td class="num"><input type="number" min="0" step="10" data-f="precio" data-k="' + k + '" value="' + C.precios[k].precio + '"></td><td>' + pillOrigen(C.precios[k].origen) + '</td></tr>';
-    }).join("") + '</tbody></table></div><p class="note"><b>Stock SAP</b> = valor libre ÷ piezas libres del material en el catálogo de refacciones. <b>Estimado</b> = no hay existencia de ese material en ningún CEDIS, así que no hay precio en stock; se usa el promedio por llanta de los cargos de SAP y conviene corregirlo con el precio de tu último pedido. Si cambias un precio queda como Manual; déjalo en blanco para volver al de stock.</p></div>';
+    }).join("") + '</tbody></table></div><p class="note"><b>Stock SAP</b> = valor libre ÷ piezas libres del material en el catálogo de refacciones. <b>Estimado</b> = no hay existencia de ese material en ningún CEDIS, así que no hay precio en stock; se usa el último cargo por llanta de SAP a la cuenta de vitalizadas ($7,100) y conviene confirmarlo con tu último pedido. Si cambias un precio queda como Manual; déjalo en blanco para volver al de stock.</p></div>';
 
   if(puedeEditar()){
     var ya = S.fin.props.filter(function(p){ return p.periodo === S.periodo; })[0];
