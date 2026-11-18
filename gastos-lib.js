@@ -209,7 +209,7 @@
     if(cr){ out.hojas.push("combustible_real");
       var f3 = cr.map(function(r){ return { c: txt(r.ceco), k: txt(r.clase), kd: txt(r.clase_den), a: txt(r.area), e: txt(r.economico) || null, op: txt(r.operador) || null,
         fu: txt(r.fuente_unidad) || null, l: nm(r.litros), v: redondea(nm(r.valor)), f: fechaLibro(r.fecha), r: fechaLibro(r.registrado) || "", u: txt(r.usuario),
-        rc: txt(r.ruta_cubierta) || null, mu: txt(r.motivo_unidad) || null }; }).filter(function(f){ return f.c && f.f; });
+        rc: txt(r.ruta_cubierta) || null, mu: txt(r.motivo_unidad) || null, ec: txt(r.eco_cargas) || null }; }).filter(function(f){ return f.c && f.f; });
       out.comb.real = f3;
     }
     var cp = hoja("combustible_plan");

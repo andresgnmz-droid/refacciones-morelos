@@ -434,6 +434,22 @@ function leerXlsx(buf){
   if(wb.SheetNames.some(function(n){ return !!mesDeHoja(n); })) return { planL:leerPlanLitros(wb) };
   return { cargas:leerCargas(wb) };
 }
+/* Verificación contra el catálogo de unidades: si el Power Query dejó una partida "Revisar: Cargas difiere del ECO"
+   y la unidad que Cargas identifica tiene, en el catálogo vigente, como ruta justo el centro de coste de la partida,
+   la unidad de Cargas es la que cargó (el ECO de la denominación estaba mal tecleado o es otra unidad de la misma
+   ruta compartida, p. ej. autoservicio). Solo se toca lo que estaba por revisar; el resto queda como viene del libro. */
+function aplicarCatalogo(listas){
+  var pend = listas.filter(function(f){ return f.ec && /^Revisar/.test(f.mu || ""); });
+  if(!pend.length) return Promise.resolve();
+  return fetch(ERP.URL + "/rest/v1/catalogo_unidades?activo=eq.true&select=economico,ruta&limit=2000", { headers:ERP.headers() })
+    .then(function(r){ return r.ok ? r.json() : []; }).catch(function(){ return []; })
+    .then(function(cat){
+      var ruta = {}; cat.forEach(function(u){ if(u.ruta) ruta[u.economico] = u.ruta; });
+      pend.forEach(function(f){
+        if(ruta[f.ec] && ruta[f.ec] === f.c){ f.e = f.ec; f.fu = "Cargas"; f.rc = f.c; f.mu = "Catálogo: la unidad de Cargas es de esta ruta"; }
+      });
+    });
+}
 /* Unidades especiales (catálogo): reservas y económicos virtuales. Se leen de Supabase al abrir la carga. */
 var ESP = { res:{}, vir:{} };
 function cargarEspeciales(){
@@ -509,7 +525,10 @@ function arrancarCarga(){
         L.resumenes.push(r);
         if(r.tipo === "real") L.reales = L.reales.concat(r.filas); else L.planes.push(r);
       });
-      inp.value = ""; pintarCarga(zona);
+      (L.listas ? aplicarCatalogo(L.listas) : Promise.resolve()).then(function(){
+        if(L.listas) L.listas.forEach(function(f){ delete f.ec; });
+        inp.value = ""; pintarCarga(zona);
+      });
     });
   });
 }
@@ -522,7 +541,7 @@ function pintarCarga(zona){
   var ar;
   if(L.listas){ ar = { filas:L.listas, st:{ cargas:0, texto:0, sin:0, reserva:0, virtual:0, generica:0, revisar:0 } };
     L.listas.forEach(function(f){ if(f.fu === "Cargas") ar.st.cargas++; else if(f.fu) ar.st.texto++; else ar.st.sin++;
-      if(f.mu === "Reserva cubrió la ruta") ar.st.reserva++; else if(/^ECO virtual/.test(f.mu || "")) ar.st.virtual++; else if(/^Ruta genérica/.test(f.mu || "")) ar.st.generica++; else if(/^Revisar/.test(f.mu || "")) ar.st.revisar++; }); }
+      if(f.mu === "Reserva cubrió la ruta") ar.st.reserva++; else if(/^ECO virtual/.test(f.mu || "")) ar.st.virtual++; else if(/^Ruta genérica/.test(f.mu || "")) ar.st.generica++; else if(/^Catálogo/.test(f.mu || "")) ar.st.catalogo = (ar.st.catalogo || 0) + 1; else if(/^Revisar/.test(f.mu || "")) ar.st.revisar++; }); }
   else ar = L.reales.length ? armarFilas() : { filas:[], st:{ cargas:0, texto:0, sin:0, reserva:0, virtual:0, generica:0, revisar:0 } };
   var tot = ar.filas.reduce(function(a, f){ a.v += f.v; a.l += f.l; return a; }, { v:0, l:0 });
   var anios = {}; ar.filas.forEach(function(f){ anios[f.f.slice(0, 4)] = (anios[f.f.slice(0, 4)] || 0) + 1; });
@@ -531,7 +550,7 @@ function pintarCarga(zona){
   var card = el("div", "card"); card.appendChild(el("h3", "", "Lo que trae la carga"));
   var tb = "<div class='tbl'><table><tbody>";
   function fd(l, v){ tb += "<tr><td>" + esc(l) + "</td><td class='n'>" + v + "</td></tr>"; }
-  if(ar.filas.length){ fd("Partidas de gasto", ar.filas.length.toLocaleString("es-MX")); fd("Importe neto", pesos(tot.v)); fd("Litros", lts(tot.l)); fd("Último movimiento", fmax.split("-").reverse().join("/")); fd("Unidad identificada con Cargas", ar.st.cargas.toLocaleString("es-MX")); fd("Unidad tomada del texto de SAP", ar.st.texto.toLocaleString("es-MX")); fd("Sin unidad (centros por flota)", ar.st.sin.toLocaleString("es-MX")); fd("Reserva que cubrió una ruta", ar.st.reserva.toLocaleString("es-MX")); fd("ECO virtual → unidad real", ar.st.virtual.toLocaleString("es-MX")); fd("Ruta genérica → unidad de Cargas", ar.st.generica.toLocaleString("es-MX")); fd("Por revisar (Cargas difiere del ECO)", ar.st.revisar.toLocaleString("es-MX")); }
+  if(ar.filas.length){ fd("Partidas de gasto", ar.filas.length.toLocaleString("es-MX")); fd("Importe neto", pesos(tot.v)); fd("Litros", lts(tot.l)); fd("Último movimiento", fmax.split("-").reverse().join("/")); fd("Unidad identificada con Cargas", ar.st.cargas.toLocaleString("es-MX")); fd("Unidad tomada del texto de SAP", ar.st.texto.toLocaleString("es-MX")); fd("Sin unidad (centros por flota)", ar.st.sin.toLocaleString("es-MX")); fd("Reserva que cubrió una ruta", ar.st.reserva.toLocaleString("es-MX")); fd("ECO virtual → unidad real", ar.st.virtual.toLocaleString("es-MX")); fd("Ruta genérica → unidad de Cargas", ar.st.generica.toLocaleString("es-MX")); if(ar.st.catalogo) fd("Unidad de Cargas confirmada con el catálogo (su ruta)", ar.st.catalogo.toLocaleString("es-MX")); fd("Por revisar (Cargas difiere del ECO)", ar.st.revisar.toLocaleString("es-MX")); }
   if(planFilas.length){ var ta = planFilas.reduce(function(a, f){ return a + f.m.reduce(function(x, y){ return x + y; }, 0); }, 0); fd("Renglones de presupuesto", planFilas.length); fd("Presupuesto anual", pesos(GASTOS_LIB.redondea(ta))); }
   if(L.planL){ var tl = L.planL.filas.reduce(function(a, f){ return a + f.m.reduce(function(x, y){ return x + y; }, 0); }, 0); fd("Presupuesto en litros: renglones", L.planL.filas.length); fd("Presupuesto en litros: anual", lts(tl) + " L"); }
   card.innerHTML += tb + "</tbody></table></div>"; zona.appendChild(card);

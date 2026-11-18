@@ -588,7 +588,7 @@ function arrancarCarga(){
       });
     })).then(function(rs){
       rs = rs.reduce(function(a, r){
-        if(r.libro){ [r.libro.real, r.libro.plan].forEach(function(x){ if(x){ x.nombre = r.nombre; a.push(x); } }); } else a.push(r);
+        if(r.libro){ [r.libro.real, r.libro.plan].forEach(function(x){ if(x){ x.nombre = r.nombre; x.deLibro = true; a.push(x); } }); } else a.push(r);
         return a;
       }, []);
       rs.forEach(function(r){
@@ -638,7 +638,7 @@ function pintarCarga(zona){
   if(L.real && L.plan){
     var cr = Object.keys(L.real.resumen.cecos), cp = Object.keys(L.plan.resumen.cecos);
     var faltaPlan = cr.filter(function(c){ return cp.indexOf(c) < 0; }), faltaReal = cp.filter(function(c){ return cr.indexOf(c) < 0; });
-    if(faltaPlan.length){ criticos = true; var d1 = el("div", "aviso"); d1.textContent = "El gasto trae centros de coste que el presupuesto no trae: " + faltaPlan.join(", ") + "."; zona.appendChild(d1); }
+    if(faltaPlan.length){ if(!L.real.deLibro) criticos = true; /* en el libro de Power Query el archivo no se corta: un centro con gasto y sin presupuesto es un dato, no un archivo incompleto */ var d1 = el("div", "aviso"); d1.textContent = "El gasto trae centros de coste que el presupuesto no trae: " + faltaPlan.join(", ") + "."; zona.appendChild(d1); }
     if(faltaReal.length){ var d2 = el("div", "aviso"); d2.textContent = "El presupuesto trae centros de coste que el gasto no trae: " + faltaReal.join(", ") + "."; zona.appendChild(d2); }
   }
 
