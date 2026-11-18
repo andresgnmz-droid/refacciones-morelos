@@ -427,22 +427,47 @@ function leerPlanLitros(wb){
 }
 function leerXlsx(buf){
   var wb = XLSX.read(buf, { type:"array", cellDates:true });
+  if(wb.SheetNames.some(function(n){ return n.trim().toLowerCase() === "combustible_real" || n.trim().toLowerCase() === "combustible_plan"; })){
+    var hojas = {}; wb.SheetNames.forEach(function(n){ hojas[n.trim().toLowerCase()] = XLSX.utils.sheet_to_json(wb.Sheets[n], { header:0, raw:true, defval:null }); });
+    return { libro:GASTOS_LIB.leerLibro(hojas).comb };
+  }
   if(wb.SheetNames.some(function(n){ return !!mesDeHoja(n); })) return { planL:leerPlanLitros(wb) };
   return { cargas:leerCargas(wb) };
 }
+/* Unidades especiales (catálogo): reservas y económicos virtuales. Se leen de Supabase al abrir la carga. */
+var ESP = { res:{}, vir:{} };
+function cargarEspeciales(){
+  var h = ERP.headers();
+  function get(q){ return fetch(ERP.URL + "/rest/v1/" + q, { headers:h }).then(function(r){ return r.ok ? r.json() : []; }).catch(function(){ return []; }); }
+  return Promise.all([get("catalogo_unidades?area=eq.RESERVA&select=economico"), get("catalogo_virtuales?select=economico")]).then(function(x){
+    ESP.res = {}; ESP.vir = {};
+    x[0].forEach(function(r){ ESP.res[r.economico] = 1; }); x[1].forEach(function(r){ ESP.vir[r.economico] = 1; });
+  });
+}
+/* Quién cargó (para rendimiento: la unidad que realmente cargó).
+   Base: ECO de la denominación + prefijo del centro de coste. Cargas = misma fecha, mismo CEDIS, mismos litros.
+   - Cargas confirma el ECO → se queda el ECO (fuente "Cargas").
+   - Sin ECO y Cargas identifica una sola unidad → esa unidad.
+   - Cargas identifica una sola unidad distinta del ECO: manda Cargas si el ECO es virtual, si la unidad es RESERVA
+     (cubrió la ruta) o si el centro de coste es genérico (R0990/R0991/R0992); en esos casos se anota la ruta cubierta.
+   - Cualquier otro caso se deja el ECO de la denominación y se marca "Revisar". */
 function armarFilas(){
   var idx = {};
   L.cargas.forEach(function(c){ var k = c.p + "|" + c.f + "|" + c.l.toFixed(3); (idx[k] = idx[k] || []).push(c.e); });
-  var st = { cargas:0, texto:0, sin:0 };
+  var st = { cargas:0, texto:0, sin:0, reserva:0, virtual:0, generica:0, revisar:0 };
   var filas = L.reales.map(function(r){
-    var p = r.c.slice(0, 3), n = ecoTexto(r.d), cand = idx[p + "|" + r.f + "|" + Math.abs(r.q).toFixed(3)] || [], e = null, fu = null;
+    var p = r.c.slice(0, 3), n = ecoTexto(r.d), den = n ? p + n : null, cand = idx[p + "|" + r.f + "|" + Math.abs(r.q).toFixed(3)] || [], e = null, fu = null, rc = null, mu = null;
     cand = cand.filter(function(x, i){ return cand.indexOf(x) === i; });
-    if(cand.length && n && cand.indexOf(p + n) >= 0){ e = p + n; fu = "Cargas"; }
-    else if(cand.length === 1){ e = cand[0]; fu = "Cargas"; }
-    else if(n){ e = p + n; fu = "denominación"; }
+    var unico = cand.length === 1 ? cand[0] : null, gen = /^R099[012]$/.test(r.c.slice(3, 8));
+    if(den && cand.indexOf(den) >= 0){ e = den; fu = "Cargas"; }
+    else if(unico && !den){ e = unico; fu = "Cargas"; mu = "Sin ECO: según Cargas"; }
+    else if(unico && ESP.vir[den]){ e = unico; fu = "Cargas"; rc = r.c; mu = "ECO virtual: unidad real según Cargas"; st.virtual++; }
+    else if(unico && ESP.res[unico]){ e = unico; fu = "Cargas"; rc = r.c; mu = "Reserva cubrió la ruta"; st.reserva++; }
+    else if(unico && gen){ e = unico; fu = "Cargas"; rc = r.c; mu = "Ruta genérica: unidad según Cargas"; st.generica++; }
+    else if(den){ e = den; fu = "denominación"; if(unico){ mu = "Revisar: Cargas difiere del ECO"; st.revisar++; } }
     if(fu === "Cargas") st.cargas++; else if(fu) st.texto++; else st.sin++;
     var op = (r.d || "").replace(/eco[.\s-]*\d{3,4}/i, "").trim();
-    return { c:r.c, k:r.k, kd:r.kd, a:r.a, e:e, op:op || null, fu:fu, l:r.q, v:r.v, f:r.f, r:r.r, u:r.u };
+    return { c:r.c, k:r.k, kd:r.kd, a:r.a, e:e, op:op || null, fu:fu, l:r.q, v:r.v, f:r.f, r:r.r, u:r.u, rc:rc, mu:mu };
   });
   return { filas:filas, st:st };
 }
@@ -454,13 +479,13 @@ function arrancarCarga(){
     "<p>Elige juntos los archivos de SAP (Salida dinámica de lista, .XLS): <b>los dos de gasto</b> (centros de reparto y centros de tráfico, ventas y administración) y <b>los de presupuesto</b>. También puedes elegir el archivo de <b>gastos de combustible</b> (GASTOS_COMBUSTIBLE.xlsx, hojas Enero 2026 a Diciembre 2026): de ahí salen los <b>litros presupuestados</b>. Opcional pero recomendado: el archivo <b>Cargas.xlsx</b> que alimenta el ERP, para saber a qué unidad se cargó cada combustible en los centros genéricos (XXXR0990, XXXR0991…).</p>" +
     "<p>Cada carga reemplaza el año de los centros de coste que trae. Los totales de la carga inicial se sustituyen por el detalle, así que sube <b>los dos archivos de gasto</b> juntos.</p>";
   var fila = el("div", "row"); fila.style.alignItems = "center";
-  var inp = el("input"); inp.type = "file"; inp.multiple = true; inp.accept = ".xls,.txt,.csv,.tsv,.xlsx"; inp.hidden = true;
+  var inp = el("input"); inp.type = "file"; inp.multiple = true; inp.accept = ".xls,.txt,.csv,.tsv,.xlsx"; inp.hidden = true; inp.id = "fArch";
   var bel = el("button", "btn", "Elegir archivos"); bel.type = "button"; bel.addEventListener("click", function(){ inp.click(); });
   fila.appendChild(bel); fila.appendChild(inp); h.appendChild(fila); root.appendChild(h);
   var zona = el("div"); zona.style.display = "flex"; zona.style.flexDirection = "column"; zona.style.gap = "16px"; root.appendChild(zona);
   inp.addEventListener("change", function(){
     var fs = Array.prototype.slice.call(inp.files || []); if(!fs.length) return;
-    L = { reales:[], planes:[], cargas:[], errores:[], nombres:[], resumenes:[], planL:null };
+    L = { reales:[], planes:[], cargas:[], errores:[], nombres:[], resumenes:[], planL:null, listas:null };
     Promise.all(fs.map(function(f){
       return f.arrayBuffer().then(function(buf){
         try{
@@ -473,6 +498,12 @@ function arrancarCarga(){
       rs.forEach(function(r){
         if(r.error){ L.errores.push(r); return; }
         L.nombres.push(r.nombre);
+        if(r.libro){
+          if(r.libro.real) L.listas = r.libro.real;
+          if(r.libro.plan){ r.libro.plan.nombre = r.nombre; L.planes.push(r.libro.plan); }
+          if(r.libro.planL) L.planL = r.libro.planL;
+          return;
+        }
         if(r.cargas){ L.cargas = L.cargas.concat(r.cargas); return; }
         if(r.planL){ L.planL = r.planL; return; }
         L.resumenes.push(r);
@@ -487,8 +518,12 @@ function pintarCarga(zona){
   L.errores.forEach(function(e){ var d = el("div", "aviso bad"); d.textContent = e.nombre + ": " + e.error; zona.appendChild(d); });
   var plan = {}, planFilas = [];
   L.planes.forEach(function(p){ p.filas.forEach(function(f){ var id = f.c + "|" + f.k; if(plan[id]){ plan[id].m = plan[id].m.map(function(v, j){ return GASTOS_LIB.redondea(v + f.m[j]); }); } else { plan[id] = { c:f.c, k:f.k, kd:f.kd, m:f.m.slice() }; planFilas.push(plan[id]); } }); });
-  if(!L.reales.length && !planFilas.length && !L.planL) return;
-  var ar = L.reales.length ? armarFilas() : { filas:[], st:{ cargas:0, texto:0, sin:0 } };
+  if(!L.reales.length && !L.listas && !planFilas.length && !L.planL) return;
+  var ar;
+  if(L.listas){ ar = { filas:L.listas, st:{ cargas:0, texto:0, sin:0, reserva:0, virtual:0, generica:0, revisar:0 } };
+    L.listas.forEach(function(f){ if(f.fu === "Cargas") ar.st.cargas++; else if(f.fu) ar.st.texto++; else ar.st.sin++;
+      if(f.mu === "Reserva cubrió la ruta") ar.st.reserva++; else if(/^ECO virtual/.test(f.mu || "")) ar.st.virtual++; else if(/^Ruta genérica/.test(f.mu || "")) ar.st.generica++; else if(/^Revisar/.test(f.mu || "")) ar.st.revisar++; }); }
+  else ar = L.reales.length ? armarFilas() : { filas:[], st:{ cargas:0, texto:0, sin:0, reserva:0, virtual:0, generica:0, revisar:0 } };
   var tot = ar.filas.reduce(function(a, f){ a.v += f.v; a.l += f.l; return a; }, { v:0, l:0 });
   var anios = {}; ar.filas.forEach(function(f){ anios[f.f.slice(0, 4)] = (anios[f.f.slice(0, 4)] || 0) + 1; });
   var anio = +Object.keys(anios).sort(function(a, b){ return anios[b] - anios[a]; })[0] || (L.planL && L.planL.anio) || new Date().getFullYear();
@@ -496,12 +531,12 @@ function pintarCarga(zona){
   var card = el("div", "card"); card.appendChild(el("h3", "", "Lo que trae la carga"));
   var tb = "<div class='tbl'><table><tbody>";
   function fd(l, v){ tb += "<tr><td>" + esc(l) + "</td><td class='n'>" + v + "</td></tr>"; }
-  if(ar.filas.length){ fd("Partidas de gasto", ar.filas.length.toLocaleString("es-MX")); fd("Importe neto", pesos(tot.v)); fd("Litros", lts(tot.l)); fd("Último movimiento", fmax.split("-").reverse().join("/")); fd("Unidad identificada con Cargas", ar.st.cargas.toLocaleString("es-MX")); fd("Unidad tomada del texto de SAP", ar.st.texto.toLocaleString("es-MX")); fd("Sin unidad (centros por flota)", ar.st.sin.toLocaleString("es-MX")); }
+  if(ar.filas.length){ fd("Partidas de gasto", ar.filas.length.toLocaleString("es-MX")); fd("Importe neto", pesos(tot.v)); fd("Litros", lts(tot.l)); fd("Último movimiento", fmax.split("-").reverse().join("/")); fd("Unidad identificada con Cargas", ar.st.cargas.toLocaleString("es-MX")); fd("Unidad tomada del texto de SAP", ar.st.texto.toLocaleString("es-MX")); fd("Sin unidad (centros por flota)", ar.st.sin.toLocaleString("es-MX")); fd("Reserva que cubrió una ruta", ar.st.reserva.toLocaleString("es-MX")); fd("ECO virtual → unidad real", ar.st.virtual.toLocaleString("es-MX")); fd("Ruta genérica → unidad de Cargas", ar.st.generica.toLocaleString("es-MX")); fd("Por revisar (Cargas difiere del ECO)", ar.st.revisar.toLocaleString("es-MX")); }
   if(planFilas.length){ var ta = planFilas.reduce(function(a, f){ return a + f.m.reduce(function(x, y){ return x + y; }, 0); }, 0); fd("Renglones de presupuesto", planFilas.length); fd("Presupuesto anual", pesos(GASTOS_LIB.redondea(ta))); }
   if(L.planL){ var tl = L.planL.filas.reduce(function(a, f){ return a + f.m.reduce(function(x, y){ return x + y; }, 0); }, 0); fd("Presupuesto en litros: renglones", L.planL.filas.length); fd("Presupuesto en litros: anual", lts(tl) + " L"); }
   card.innerHTML += tb + "</tbody></table></div>"; zona.appendChild(card);
   var avisos = []; L.resumenes.forEach(function(r){ r.avisos.forEach(function(a){ avisos.push(r.nombre + ": " + a); }); });
-  if(ar.filas.length && !L.cargas.length) avisos.push("No elegiste Cargas.xlsx: la unidad se toma solo del texto de la denominación de SAP.");
+  if(ar.filas.length && !L.listas && !L.cargas.length) avisos.push("No elegiste Cargas.xlsx: la unidad se toma solo del texto de la denominación de SAP.");
   var cedCub = {}; ar.filas.forEach(function(f){ cedCub[grupo(f.c)] = 1; });
   var faltan = {}; if(D) D.real.forEach(function(r){ var g = grupo(r[0]); if(!cedCub[g]) faltan[g] = 1; });
   if(ar.filas.length && Object.keys(faltan).length) avisos.push("Faltan centros que hoy tienen gasto (" + Object.keys(faltan).slice(0, 8).join(", ") + (Object.keys(faltan).length > 8 ? "…" : "") + "). Al guardar se quita su total inicial y quedarían sin gasto: sube también el otro archivo de gasto.");
@@ -509,8 +544,8 @@ function pintarCarga(zona){
   avisos.forEach(function(a){ var d = el("div", "aviso"); d.textContent = a; zona.appendChild(d); });
   var fila = el("div", "row"); fila.style.alignItems = "center";
   var fa = el("div", "f"); fa.innerHTML = "<label>Año</label><input id='qAnio' type='number' value='" + anio + "' style='width:100px'>"; fila.appendChild(fa);
-  var b = el("button", "btn", "Guardar en el ERP"); b.type = "button"; fila.appendChild(b);
-  var m = el("p", "msg"); fila.appendChild(m); zona.appendChild(fila);
+  var b = el("button", "btn", "Guardar en el ERP"); b.type = "button"; b.id = "bGuardar"; fila.appendChild(b);
+  var m = el("p", "msg"); m.id = "gMsg"; fila.appendChild(m); zona.appendChild(fila);
   b.addEventListener("click", function(){
     var a = +$("qAnio").value; b.disabled = true; m.className = "msg"; m.textContent = "Guardando…";
     var pasos = Promise.resolve(null);
@@ -535,7 +570,7 @@ function pintarCarga(zona){
     }).catch(function(e){ b.disabled = false; m.className = "msg err"; m.textContent = "No se pudo guardar: " + e.message; });
   });
 }
-if(params.get("modo") === "carga"){ cargarDatos(new Date().getFullYear()).catch(function(){}).then(arrancarCarga); } else arrancarVista();
+if(params.get("modo") === "carga"){ cargarDatos(new Date().getFullYear()).catch(function(){}).then(cargarEspeciales).then(arrancarCarga); } else arrancarVista();
 })();
 </script>
 </body>

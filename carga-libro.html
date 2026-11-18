@@ -72,6 +72,12 @@ var T_MSG={
   fin:function(d){ var t=txt(d,"cMsg"), c=cls(d,"cMsg"); if(/\bok\b/.test(c)&&/^(Listo|El ERP ya tiene)/.test(t)) return "ok"; if(/\berr\b/.test(c)||/No se pudo guardar|Pon la fecha|Elige el mes/.test(t)) return "err"; return null; },
   texto:function(d){ return txt(d,"cMsg"); }
 };
+var T_GASTO={
+  listo:function(d){ return !!d.getElementById("bGuardar") || !!d.querySelector(".aviso.bad"); },
+  leido:function(d){ return !!d.getElementById("bGuardar"); },
+  fin:function(d){ var t=txt(d,"gMsg"), c=cls(d,"gMsg"); if(/\bok\b/.test(c)&&/^Guardado y verificado/.test(t)) return "ok"; if(/\berr\b/.test(c)) return "err"; return null; },
+  texto:function(d){ return txt(d,"gMsg")||(d.querySelector(".aviso.bad")||{}).textContent||""; }
+};
 var T_STATUS={
   listo:function(d){ return visible(d,"diffPreview") || /No se|No pude/.test(txt(d,"statusBox")); },
   leido:function(d){ return visible(d,"diffPreview"); },
@@ -93,6 +99,13 @@ var LIBROS={
       { t:"Preventivos", u:"preventivos-carga.html", i:"#fArch", btn:"#bGuardar", needs:[["MMCV","Cuernavaca"],["MMCU","Cuautla"]], f:T_MSG },
       { t:"Hojalatería y Pintura", u:"hojalateria.html?modo=carga", i:"#fileInput", btn:"#btnConfirm", needs:[["CronogramaHojalateria","Cronograma","CRONOGRAMA"],["Ordenes","Remo"],["MaterialOrden","Remomov"]], f:T_STATUS },
       { t:"Control de refacciones faltantes", u:"faltantes.html?modo=carga", i:"#fArch", btn:"#bGuardar", needs:[["Pedidos"],["Ingresos"]], f:T_MSG }
+    ]
+  },
+  gasto:{
+    titulo:"Libro de gasto (ERP_Gasto.xlsx)",
+    modulos:[
+      { t:"Gastos (mantenimiento y presupuesto)", u:"gastos.html?modo=carga", i:"#fArch", btn:"#bGuardar", needs:[["gastos_real"],["gastos_plan"]], f:T_GASTO },
+      { t:"Gasto de combustible", u:"gastos-combustible.html?modo=carga", i:"#fArch", btn:"#bGuardar", needs:[["combustible_real"],["combustible_plan"]], f:T_GASTO }
     ]
   },
   catalogos:{
