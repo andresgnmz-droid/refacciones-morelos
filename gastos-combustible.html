@@ -440,19 +440,29 @@ function leerXlsx(buf){
    ruta compartida, p. ej. autoservicio). Solo se toca lo que estaba por revisar; el resto queda como viene del libro. */
 function aplicarCatalogo(listas){
   var pend = listas.filter(function(f){ return f.ec && /^Revisar/.test(f.mu || ""); });
-  if(!pend.length) return Promise.resolve();
-  return fetch(ERP.URL + "/rest/v1/catalogo_unidades?activo=eq.true&select=economico,ruta&limit=2000", { headers:ERP.headers() })
-    .then(function(r){ return r.ok ? r.json() : []; }).catch(function(){ return []; })
-    .then(function(cat){
-      var ruta = {}; cat.forEach(function(u){ if(u.ruta) ruta[u.economico] = u.ruta; });
-      pend.forEach(function(f){
-        if(ruta[f.ec] && ruta[f.ec] === f.c){ f.e = f.ec; f.fu = "Cargas"; f.rc = f.c; f.mu = "Catálogo: la unidad de Cargas es de esta ruta"; }
-        /* Al revés: el catálogo ubica el ECO de SAP en este centro de coste y la unidad de Cargas no es de aquí
-           (o ya no existe en el catálogo). Cargas solo coincidió en fecha, CEDIS y litros (cargas estándar de 45, 50, 70, 75 L…):
-           se queda el ECO de SAP. */
-        else if(ruta[f.e] && ruta[f.e] === f.c){ f.mu = "SAP coincide con el catálogo (Cargas es coincidencia de litros)"; }
+  function get(q){ return fetch(ERP.URL + "/rest/v1/" + q, { headers:ERP.headers() }).then(function(r){ return r.ok ? r.json() : []; }).catch(function(){ return []; }); }
+  return Promise.all([
+    pend.length ? get("catalogo_unidades?activo=eq.true&select=economico,ruta&limit=2000") : Promise.resolve([]),
+    get("combustible_correcciones?select=ceco,fecha,litros,eco_sap,eco_correcto,nota&limit=2000")
+  ]).then(function(x){
+    var ruta = {}; x[0].forEach(function(u){ if(u.ruta) ruta[u.economico] = u.ruta; });
+    pend.forEach(function(f){
+      if(ruta[f.ec] && ruta[f.ec] === f.c){ f.e = f.ec; f.fu = "Cargas"; f.rc = f.c; f.mu = "Catálogo: la unidad de Cargas es de esta ruta"; }
+      /* Al revés: el catálogo ubica el ECO de SAP en este centro de coste y la unidad de Cargas no es de aquí
+         (o ya no existe en el catálogo). Cargas solo coincidió en fecha, CEDIS y litros (cargas estándar de 45, 50, 70, 75 L…):
+         se queda el ECO de SAP. */
+      else if(ruta[f.e] && ruta[f.e] === f.c){ f.mu = "SAP coincide con el catálogo (Cargas es coincidencia de litros)"; }
+    });
+    /* Correcciones manuales (tabla combustible_correcciones): casos que el supervisor confirmó en campo o con el concentrado de cargas.
+       Se identifican por centro de coste + fecha + litros (+ el ECO que trae SAP, si se anotó). */
+    x[1].forEach(function(c){
+      listas.forEach(function(f){
+        if(f.c === c.ceco && f.f === String(c.fecha).slice(0, 10) && Math.abs((f.l || 0) - Number(c.litros)) < 0.0005 && (!c.eco_sap || f.e === c.eco_sap)){
+          f.e = c.eco_correcto; f.fu = "Corrección manual"; f.mu = "Corrección manual: " + (c.nota || "confirmado por el supervisor");
+        }
       });
     });
+  });
 }
 /* Unidades especiales (catálogo): reservas y económicos virtuales. Se leen de Supabase al abrir la carga. */
 var ESP = { res:{}, vir:{} };
@@ -545,7 +555,7 @@ function pintarCarga(zona){
   var ar;
   if(L.listas){ ar = { filas:L.listas, st:{ cargas:0, texto:0, sin:0, reserva:0, virtual:0, generica:0, revisar:0 } };
     L.listas.forEach(function(f){ if(f.fu === "Cargas") ar.st.cargas++; else if(f.fu) ar.st.texto++; else ar.st.sin++;
-      if(f.mu === "Reserva cubrió la ruta") ar.st.reserva++; else if(/^ECO virtual/.test(f.mu || "")) ar.st.virtual++; else if(/^Ruta genérica/.test(f.mu || "")) ar.st.generica++; else if(/^Catálogo/.test(f.mu || "")) ar.st.catalogo = (ar.st.catalogo || 0) + 1; else if(/^SAP coincide/.test(f.mu || "")) ar.st.sapcat = (ar.st.sapcat || 0) + 1; else if(/^Revisar/.test(f.mu || "")) ar.st.revisar++; }); }
+      if(f.mu === "Reserva cubrió la ruta") ar.st.reserva++; else if(/^ECO virtual/.test(f.mu || "")) ar.st.virtual++; else if(/^Ruta genérica/.test(f.mu || "")) ar.st.generica++; else if(/^Catálogo/.test(f.mu || "")) ar.st.catalogo = (ar.st.catalogo || 0) + 1; else if(/^SAP coincide/.test(f.mu || "")) ar.st.sapcat = (ar.st.sapcat || 0) + 1; else if(/^Corrección manual/.test(f.mu || "")) ar.st.manual = (ar.st.manual || 0) + 1; else if(/^Revisar/.test(f.mu || "")) ar.st.revisar++; }); }
   else ar = L.reales.length ? armarFilas() : { filas:[], st:{ cargas:0, texto:0, sin:0, reserva:0, virtual:0, generica:0, revisar:0 } };
   var tot = ar.filas.reduce(function(a, f){ a.v += f.v; a.l += f.l; return a; }, { v:0, l:0 });
   var anios = {}; ar.filas.forEach(function(f){ anios[f.f.slice(0, 4)] = (anios[f.f.slice(0, 4)] || 0) + 1; });
@@ -554,7 +564,7 @@ function pintarCarga(zona){
   var card = el("div", "card"); card.appendChild(el("h3", "", "Lo que trae la carga"));
   var tb = "<div class='tbl'><table><tbody>";
   function fd(l, v){ tb += "<tr><td>" + esc(l) + "</td><td class='n'>" + v + "</td></tr>"; }
-  if(ar.filas.length){ fd("Partidas de gasto", ar.filas.length.toLocaleString("es-MX")); fd("Importe neto", pesos(tot.v)); fd("Litros", lts(tot.l)); fd("Último movimiento", fmax.split("-").reverse().join("/")); fd("Unidad identificada con Cargas", ar.st.cargas.toLocaleString("es-MX")); fd("Unidad tomada del texto de SAP", ar.st.texto.toLocaleString("es-MX")); fd("Sin unidad (centros por flota)", ar.st.sin.toLocaleString("es-MX")); fd("Reserva que cubrió una ruta", ar.st.reserva.toLocaleString("es-MX")); fd("ECO virtual → unidad real", ar.st.virtual.toLocaleString("es-MX")); fd("Ruta genérica → unidad de Cargas", ar.st.generica.toLocaleString("es-MX")); if(ar.st.catalogo) fd("Unidad de Cargas confirmada con el catálogo (su ruta)", ar.st.catalogo.toLocaleString("es-MX")); if(ar.st.sapcat) fd("ECO de SAP confirmado con el catálogo (Cargas coincidió solo en litros)", ar.st.sapcat.toLocaleString("es-MX")); fd("Por revisar (Cargas difiere del ECO)", ar.st.revisar.toLocaleString("es-MX")); }
+  if(ar.filas.length){ fd("Partidas de gasto", ar.filas.length.toLocaleString("es-MX")); fd("Importe neto", pesos(tot.v)); fd("Litros", lts(tot.l)); fd("Último movimiento", fmax.split("-").reverse().join("/")); fd("Unidad identificada con Cargas", ar.st.cargas.toLocaleString("es-MX")); fd("Unidad tomada del texto de SAP", ar.st.texto.toLocaleString("es-MX")); fd("Sin unidad (centros por flota)", ar.st.sin.toLocaleString("es-MX")); fd("Reserva que cubrió una ruta", ar.st.reserva.toLocaleString("es-MX")); fd("ECO virtual → unidad real", ar.st.virtual.toLocaleString("es-MX")); fd("Ruta genérica → unidad de Cargas", ar.st.generica.toLocaleString("es-MX")); if(ar.st.catalogo) fd("Unidad de Cargas confirmada con el catálogo (su ruta)", ar.st.catalogo.toLocaleString("es-MX")); if(ar.st.manual) fd("Corrección manual aplicada", ar.st.manual.toLocaleString("es-MX")); if(ar.st.sapcat) fd("ECO de SAP confirmado con el catálogo (Cargas coincidió solo en litros)", ar.st.sapcat.toLocaleString("es-MX")); fd("Por revisar (Cargas difiere del ECO)", ar.st.revisar.toLocaleString("es-MX")); }
   if(planFilas.length){ var ta = planFilas.reduce(function(a, f){ return a + f.m.reduce(function(x, y){ return x + y; }, 0); }, 0); fd("Renglones de presupuesto", planFilas.length); fd("Presupuesto anual", pesos(GASTOS_LIB.redondea(ta))); }
   if(L.planL){ var tl = L.planL.filas.reduce(function(a, f){ return a + f.m.reduce(function(x, y){ return x + y; }, 0); }, 0); fd("Presupuesto en litros: renglones", L.planL.filas.length); fd("Presupuesto en litros: anual", lts(tl) + " L"); }
   card.innerHTML += tb + "</tbody></table></div>"; zona.appendChild(card);
