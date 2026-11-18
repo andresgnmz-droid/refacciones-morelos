@@ -159,6 +159,72 @@
     };
   }
 
-  root.GASTOS_LIB = { decodificar: decodificar, leer: leer, numero: numero, fechaISO: fechaISO, redondea: redondea };
+  // ---- Libro ERP_Gasto.xlsx (armado con Power Query a partir de los archivos de SAP) ----
+  // Fecha de Excel (número de serie) o texto → "aaaa-mm-dd"
+  function fechaLibro(v){
+    if(v == null || v === "") return null;
+    if(v instanceof Date) return v.getUTCFullYear() + "-" + ("0" + (v.getUTCMonth() + 1)).slice(-2) + "-" + ("0" + v.getUTCDate()).slice(-2);
+    if(typeof v === "number"){ var d = new Date(Math.round((v - 25569) * 86400000)); return fechaLibro(d); }
+    var t = String(v).trim();
+    if(/^\d{4}-\d{2}-\d{2}/.test(t)) return t.slice(0, 10);
+    return fechaISO(t);
+  }
+  function txt(v){ return v == null ? "" : String(v).trim(); }
+  function nm(v){ var n = Number(v); return isNaN(n) ? 0 : n; }
+  function resumenReal(filas){
+    var cecos = {}, porMes = {}, anioC = {}, total = 0, fmin = null, fmax = null, rmax = null;
+    filas.forEach(function(f){
+      cecos[f.c] = (cecos[f.c] || 0) + 1;
+      var mm = +f.f.slice(5, 7); porMes[mm] = redondea((porMes[mm] || 0) + f.v);
+      anioC[f.f.slice(0, 4)] = (anioC[f.f.slice(0, 4)] || 0) + 1; total += f.v;
+      if(!fmin || f.f < fmin) fmin = f.f; if(!fmax || f.f > fmax) fmax = f.f; if(f.r && (!rmax || f.r > rmax)) rmax = f.r;
+    });
+    var anio = Object.keys(anioC).sort(function(a, b){ return anioC[b] - anioC[a]; })[0];
+    return { n: filas.length, total: redondea(total), fmin: fmin, fmax: fmax, rmax: rmax, cecos: cecos, porMes: porMes, anio: anio ? +anio : null };
+  }
+  function resumenPlan(filas){
+    var cecos = {}, mes = new Array(12).fill(0);
+    filas.forEach(function(r){ cecos[r.c] = (cecos[r.c] || 0) + 1; r.m.forEach(function(v, j){ mes[j] += v; }); });
+    mes = mes.map(redondea);
+    return { n: filas.length, cecos: cecos, porMes: mes, totalAnual: redondea(mes.reduce(function(a, b){ return a + b; }, 0)), anios: [] };
+  }
+  // hojas = { nombre_de_hoja: [ {col:valor}, ... ] }  (ya leídas con SheetJS: raw:true)
+  // Devuelve { mtto:{real,plan}, comb:{real,plan,planL}, anio, hojas:[...] } con lo que traiga el libro.
+  function leerLibro(hojas){
+    var out = { hojas: [], mtto: {}, comb: {} };
+    function hoja(n){ return hojas[n] || null; }
+    var gr = hoja("gastos_real");
+    if(gr){ out.hojas.push("gastos_real");
+      var f1 = gr.map(function(r){ return { c: txt(r.ceco), k: txt(r.clase), kd: txt(r.clase_den), a: txt(r.area), o: txt(r.orden), od: txt(r.orden_den),
+        f: fechaLibro(r.fecha), v: redondea(nm(r.valor)), u: txt(r.usuario), r: fechaLibro(r.registrado) || "" }; }).filter(function(f){ return f.c && f.f; });
+      out.mtto.real = { tipo: "real", filas: f1, avisos: [], resumen: resumenReal(f1) };
+    }
+    var gp = hoja("gastos_plan");
+    if(gp){ out.hojas.push("gastos_plan");
+      var f2 = gp.map(function(r){ var m = []; for(var i = 1; i <= 12; i++) m.push(redondea(nm(r["m" + i]))); return { c: txt(r.ceco), k: txt(r.clase), kd: txt(r.clase_den), m: m }; }).filter(function(f){ return f.c; });
+      var rp = resumenPlan(f2); rp.anios = gp.length && gp[0].anio ? [String(gp[0].anio)] : [];
+      out.mtto.plan = { tipo: "plan", filas: f2, avisos: [], resumen: rp };
+    }
+    var cr = hoja("combustible_real");
+    if(cr){ out.hojas.push("combustible_real");
+      var f3 = cr.map(function(r){ return { c: txt(r.ceco), k: txt(r.clase), kd: txt(r.clase_den), a: txt(r.area), e: txt(r.economico) || null, op: txt(r.operador) || null,
+        fu: txt(r.fuente_unidad) || null, l: nm(r.litros), v: redondea(nm(r.valor)), f: fechaLibro(r.fecha), r: fechaLibro(r.registrado) || "", u: txt(r.usuario),
+        rc: txt(r.ruta_cubierta) || null, mu: txt(r.motivo_unidad) || null }; }).filter(function(f){ return f.c && f.f; });
+      out.comb.real = f3;
+    }
+    var cp = hoja("combustible_plan");
+    if(cp){ out.hojas.push("combustible_plan");
+      var f4 = cp.map(function(r){ var m = []; for(var i = 1; i <= 12; i++) m.push(redondea(nm(r["m" + i]))); return { c: txt(r.ceco), k: txt(r.clase), kd: txt(r.clase_den), m: m }; }).filter(function(f){ return f.c; });
+      out.comb.plan = { tipo: "plan", filas: f4, avisos: [], resumen: resumenPlan(f4) };
+    }
+    var cl = hoja("combustible_plan_litros");
+    if(cl){ out.hojas.push("combustible_plan_litros");
+      var f5 = cl.map(function(r){ var m = []; for(var i = 1; i <= 12; i++) m.push(nm(r["m" + i])); return { c: txt(r.ceco), k: txt(r.clase), m: m }; }).filter(function(f){ return f.c; });
+      out.comb.planL = { filas: f5, avisos: [], hojas: 12, anio: cl.length && cl[0].anio ? +cl[0].anio : null };
+    }
+    return out;
+  }
+
+  root.GASTOS_LIB = { decodificar: decodificar, leer: leer, numero: numero, fechaISO: fechaISO, redondea: redondea, leerLibro: leerLibro, fechaLibro: fechaLibro };
   if(typeof module !== "undefined" && module.exports) module.exports = root.GASTOS_LIB;
 })(typeof window !== "undefined" ? window : globalThis);

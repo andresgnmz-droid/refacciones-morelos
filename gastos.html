@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap">
 <script src="erp-auth.js"></script>
 <script src="gastos-lib.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root{
     --ink:#142433; --ink-soft:#48607A; --ink-faint:#7C93A6;
@@ -560,7 +561,7 @@ function arrancarCarga(){
     "<li><b>Presupuesto:</b> KSBP, versión 0, periodos 1 a 12, con el layout que trae el valor de cada mes (Val./MI).</li></ul>" +
     "<p>Cada carga reemplaza el año de los centros de coste que trae el archivo; no toca los demás.</p>";
   var fila = el("div", "row"); fila.style.alignItems = "center";
-  var inp = el("input"); inp.type = "file"; inp.multiple = true; inp.accept = ".xls,.txt,.csv,.tsv"; inp.hidden = true;
+  var inp = el("input"); inp.type = "file"; inp.multiple = true; inp.accept = ".xls,.txt,.csv,.tsv,.xlsx"; inp.hidden = true; inp.id = "fArch";
   var bel = el("button", "btn", "Elegir archivos de SAP"); bel.type = "button";
   bel.addEventListener("click", function(){ inp.click(); });
   fila.appendChild(bel); fila.appendChild(inp); h.appendChild(fila);
@@ -572,10 +573,24 @@ function arrancarCarga(){
     L = { real:null, plan:null, errores:[] };
     Promise.all(fs.map(function(f){
       return f.arrayBuffer().then(function(buf){
-        try{ var r = GASTOS_LIB.leer(GASTOS_LIB.decodificar(buf)); r.nombre = f.name; return r; }
+        try{
+          var b = new Uint8Array(buf);
+          if(b[0] === 0x50 && b[1] === 0x4B){     /* libro ERP_Gasto.xlsx armado con Power Query */
+            var wb = XLSX.read(buf, { type:"array" }), hojas = {};
+            wb.SheetNames.forEach(function(n){ hojas[n.trim().toLowerCase()] = XLSX.utils.sheet_to_json(wb.Sheets[n], { header:0, raw:true, defval:null }); });
+            var lb = GASTOS_LIB.leerLibro(hojas);
+            if(!lb.mtto.real && !lb.mtto.plan) throw new Error("Este libro no trae las pestañas gastos_real ni gastos_plan.");
+            return { libro:lb.mtto, nombre:f.name };
+          }
+          var r = GASTOS_LIB.leer(GASTOS_LIB.decodificar(buf)); r.nombre = f.name; return r;
+        }
         catch(e){ return { error:e.message, nombre:f.name }; }
       });
     })).then(function(rs){
+      rs = rs.reduce(function(a, r){
+        if(r.libro){ [r.libro.real, r.libro.plan].forEach(function(x){ if(x){ x.nombre = r.nombre; a.push(x); } }); } else a.push(r);
+        return a;
+      }, []);
       rs.forEach(function(r){
         if(r.error) L.errores.push(r);
         else if(r.tipo === "real"){ if(L.real) L.errores.push({ nombre:r.nombre, error:"Hay dos archivos de gasto real; se usa el último (" + r.nombre + ")." }); L.real = r; }
