@@ -333,7 +333,8 @@
     { id:"gastos", t:"Gastos", src:"gastos.html", visible:function(){ return ve("gastos"); } },
     { id:"carga-trabajo", t:"Carga de trabajo", src:"carga-mecanicos.html", visible:function(){ return ve("carga_trabajo"); } },
     { id:"piso", t:"Unidades en piso", src:"unidades-piso.html", visible:function(){ return ve("piso"); } },
-    { id:"varios", t:"Varios", visible:function(){ return ["combustible","gasto_combustible","llantas","catalogo_refacciones","control_refacciones","carta_peticion","catalogo_unidades","horas_extras","stock_refacciones"].some(ve); } },
+    { id:"supervision", t:"Supervisión Vehicular", visible:function(){ return SUPERVISION_ITEMS.some(function(it){ return ve(it.m); }); } },
+    { id:"varios", t:"Varios", visible:function(){ return VARIOS_ITEMS.some(function(it){ return ve(it.m); }); } },
     { id:"historial", t:"Histórico y respaldo", src:"historial.html", visible:function(){ return ve("historial"); } },
     { id:"ajustes", t:"Ajustes", visible:function(){ return nivel("ajustes") === "editar"; } }
   ];
@@ -343,14 +344,17 @@
     { id:"correctivos", t:"Correctivos", src:"correctivos.html", m:"correctivos" },
     { id:"hojalateria", t:"Hojalatería y Pintura", src:"hojalateria.html", m:"hojalateria" }
   ];
-  var VARIOS_ITEMS = [
+  // Supervisión Vehicular: actividades de control del supervisor (combustible y trámites de dotación en SAP).
+  var SUPERVISION_ITEMS = [
+    { id:"carta-peticion", t:"Carta petición", src:"carta-peticion.html", m:"carta_peticion", d:"Genera la carta petición de dotación de combustible para SAP." },
     { id:"gasto-combustible", t:"Gasto de combustible", src:"gastos-combustible.html", m:"gasto_combustible", d:"Gasto real de diésel, gasolina y gas LP contra presupuesto, por CEDIS y mes; la gasolina cargada a centros de gas LP va aparte." },
     { id:"combustible", t:"Combustible", m:"combustible", activo:false, d:"Rendimientos y cargas de combustible de la flota." },
+  ];
+  var VARIOS_ITEMS = [
     { id:"llantas", t:"Control de llantas", src:"llantas.html", m:"llantas", d:"Profundidad de llantas por unidad (cambio a 4 mm), proyección de cambios, pedido sugerido y emparejamiento de duales entre unidades." },
     { id:"catalogo-refacciones", t:"Catálogo de refacciones", src:"catalogo-refacciones.html", m:"catalogo_refacciones", d:"Material por CEDIS (existencia, bloqueo, entradas y salidas) y semáforo de material sin salir." },
     { id:"stock-refacciones", t:"Buscador de stock", src:"catalogo-refacciones.html?modo=consulta", m:"stock_refacciones", d:"Busca una refacción por código o nombre y ve su existencia en cada CEDIS (mismo catálogo de SAP que se actualiza en Catálogo de refacciones)." },
     { id:"control-refacciones", t:"Control de refacciones faltantes", src:"faltantes.html", m:"control_refacciones", d:"Faltantes: pedidos contra ingresos de SAP, por CEDIS." },
-    { id:"carta-peticion", t:"Carta petición", src:"carta-peticion.html", m:"carta_peticion", d:"Genera la carta petición de dotación de combustible para SAP." },
     { id:"catalogo-unidades", t:"Catálogo de unidades", src:"catalogo-maestro.html", m:"catalogo_unidades", d:"Ficha maestra de las unidades de la zona." },
     { id:"horas-extras", t:"Horas extras", m:"horas_extras", activo:false, d:"Captura de horas extras por mecánico y semana." }
   ];
@@ -392,23 +396,25 @@
     // Direcciones de antes: #preventivos, #correctivos y #hojalateria ahora viven dentro de Mantenimiento.
     if(id === "preventivos" || id === "hojalateria"){ sub = id; id = "mantenimiento"; }
     else if(id === "correctivos"){ sub = "correctivos"; id = "mantenimiento"; }
+    if(id === "varios" && (sub === "carta-peticion" || sub === "gasto-combustible" || sub === "combustible")) id = "supervision";
     if(!panels[id] || !panels[id].tab.visible()) { id = "inicio"; sub = ""; }
     TABS.forEach(function(t){ panels[t.id].node.hidden = (t.id !== id); });
     TABS.forEach(function(t){ panels[t.id].btn.classList.toggle("on", t.id === id); });
     var P = panels[id];
-    if(P.loaded && P.stale && (P.tab.src || id === "varios" || id === "mantenimiento")){ P.node.textContent = ""; P.loaded = false; P.setSub = null; }
+    if(P.loaded && P.stale && (P.tab.src || id === "varios" || id === "supervision" || id === "mantenimiento")){ P.node.textContent = ""; P.loaded = false; P.setSub = null; }
     if(!P.loaded){
       P.loaded = true; P.stale = false;
       if(P.tab.src){
         var f = document.createElement("iframe"); f.title = P.tab.t; f.src = P.tab.src; temaIframe(f); P.node.appendChild(f);
       } else if(id === "inicio") buildInicio(P.node);
       else if(id === "varios") buildVarios(P.node);
+      else if(id === "supervision") buildSupervision(P.node);
       else if(id === "mantenimiento") buildMantenimiento(P.node);
       else if(id === "ajustes") buildAjustes(P.node);
     }
-    if((id === "varios" || id === "mantenimiento") && P.setSub) P.setSub(sub);
+    if((id === "varios" || id === "supervision" || id === "mantenimiento") && P.setSub) P.setSub(sub);
   }
-  function marcarObsoletos(){ TABS.forEach(function(t){ if(t.src || t.id === "varios" || t.id === "mantenimiento") panels[t.id].stale = true; }); panels.inicio.stale = false; }
+  function marcarObsoletos(){ TABS.forEach(function(t){ if(t.src || t.id === "varios" || t.id === "supervision" || t.id === "mantenimiento") panels[t.id].stale = true; }); panels.inicio.stale = false; }
 
   /* ================= Inicio ================= */
   function api(path, extra){
@@ -446,7 +452,7 @@
     var kS = kpi("Unidades en piso", "…", "Corte vigente", "piso");
     var kU = kpi("Unidades activas", "…", "Catálogo maestro", "varios");
     var kG = kpi("Gasto de mantenimiento", "…", "Gastado contra presupuesto", "gastos");
-    var kC = kpi("Gasto de combustible", "…", "Gastado contra presupuesto", "varios/gasto-combustible");
+    var kC = kpi("Gasto de combustible", "…", "Gastado contra presupuesto", "supervision/gasto-combustible");
     [kG, kC, kP, kH, kS, kU].forEach(function(k){ row.appendChild(k.node); });
     // Cada indicador solo se muestra (y solo consulta datos) si el usuario tiene permiso sobre su módulo.
     kU.node.hidden = !ve("catalogo_unidades");
@@ -496,8 +502,12 @@
         if(estado.textContent === "Conectando…"){ estado.textContent = "En línea"; }
       }).catch(fail);
     }
+    var cS = el("div", "card"); cS.appendChild(el("h3", "", "Supervisión Vehicular"));
+    cS.appendChild(el("p", "", "Carta petición, gasto de combustible y rendimientos."));
+    var goS = el("button", "btn ghost", "Abrir Supervisión Vehicular"); goS.style.alignSelf = "flex-start";
+    goS.addEventListener("click", function(){ location.hash = "supervision"; }); cS.appendChild(goS); if(panels.supervision.tab.visible()) g.appendChild(cS);
     var cV = el("div", "card"); cV.appendChild(el("h3", "", "Varios"));
-    cV.appendChild(el("p", "", "Catálogo de unidades, catálogo de refacciones, control de refacciones faltantes y carta petición."));
+    cV.appendChild(el("p", "", "Catálogo de unidades, catálogo de refacciones, control de refacciones faltantes y llantas."));
     var goV = el("button", "btn ghost", "Abrir Varios"); goV.style.alignSelf = "flex-start";
     goV.addEventListener("click", function(){ location.hash = "varios"; }); cV.appendChild(goV); if(panels.varios.tab.visible()) g.appendChild(cV);
   }
@@ -725,12 +735,14 @@
   /* ================= Varios ================= */
   // Las herramientas de Varios se abren dentro del ERP. Cada una es un enlace real (#varios/…):
   // con clic normal se queda aquí; con clic derecho › "Abrir en pestaña nueva" (o Ctrl+clic) abre el ERP en esa herramienta.
-  function buildVarios(root){
+  function buildVarios(root){ buildSubmenu(root, "varios", "Varios", "Catálogos y controles de apoyo de la zona: unidades, refacciones, faltantes y llantas.", VARIOS_ITEMS); }
+  function buildSupervision(root){ buildSubmenu(root, "supervision", "Supervisión Vehicular", "Control de las actividades del supervisor: carta petición, gasto de combustible y rendimientos.", SUPERVISION_ITEMS); }
+  function buildSubmenu(root, panelId, titulo, descripcion, ITEMS){
     root.style.display = "flex"; root.style.flexDirection = "column"; root.style.overflow = "hidden";
     var nav = el("div", "subnav"), body = el("div", "subbody");
     root.appendChild(nav); root.appendChild(body);
     // Las herramientas en proceso solo las ve el administrador (bloqueadas); los demás ni las notan.
-    var items = VARIOS_ITEMS.filter(function(it){ return ve(it.m) && (esAdmin() || it.activo !== false); });
+    var items = ITEMS.filter(function(it){ return ve(it.m) && (esAdmin() || it.activo !== false); });
     var enlaces = {}, actual = null;
 
     function enlace(txt, ruta){
@@ -741,21 +753,21 @@
       });
       return a;
     }
-    enlaces[""] = enlace("Resumen", "varios"); nav.appendChild(enlaces[""]);
+    enlaces[""] = enlace("Resumen", panelId); nav.appendChild(enlaces[""]);
     items.forEach(function(it){
-      if(puedeAbrir(it)){ enlaces[it.id] = enlace(it.t, "varios/" + it.id); nav.appendChild(enlaces[it.id]); }
+      if(puedeAbrir(it)){ enlaces[it.id] = enlace(it.t, panelId + "/" + it.id); nav.appendChild(enlaces[it.id]); }
       else nav.appendChild(el("span", "", it.t + " · en proceso"));
     });
 
     function resumen(){
       var w = el("div", "wrap");
       var hero = el("div", "hero");
-      hero.appendChild(el("h2", "", "Varios"));
-      hero.appendChild(el("p", "", "Catálogos y controles de apoyo de la zona: unidades, refacciones, faltantes y carta petición."));
+      hero.appendChild(el("h2", "", titulo));
+      hero.appendChild(el("p", "", descripcion));
       w.appendChild(hero);
       var g = el("div", "vcards"); w.appendChild(g);
       items.forEach(function(it){
-        var abre = puedeAbrir(it), c = abre ? enlace("", "varios/" + it.id) : el("div");
+        var abre = puedeAbrir(it), c = abre ? enlace("", panelId + "/" + it.id) : el("div");
         c.className = "card vc" + (abre ? "" : " locked");
         c.appendChild(el("h3", "", it.t)); c.appendChild(el("p", "", it.d));
         if(!abre) c.appendChild(el("span", "pill warn", "En proceso"));
@@ -764,7 +776,7 @@
       return w;
     }
 
-    panels.varios.setSub = function(sub){
+    panels[panelId].setSub = function(sub){
       var it = items.filter(function(x){ return x.id === sub; })[0];
       if(!it || !puedeAbrir(it)){ sub = ""; it = null; }
       if(actual === sub) return;
