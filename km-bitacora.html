@@ -28,6 +28,9 @@
   th{position:sticky;top:0;background:var(--card)} td.n{text-align:right;font-variant-numeric:tabular-nums}
   .t-dif{color:var(--bad);font-weight:600} .t-ret{color:var(--bad);font-weight:600} .t-sin{color:var(--warn)} .t-dig{color:var(--bad);font-weight:600}
   details summary{cursor:pointer;font-weight:600}
+  td.det{white-space:normal;min-width:320px;max-width:520px;font-size:13px} td.det div{margin-bottom:2px}
+  .e-det,.e-bit,.e-sap{color:var(--bad);font-weight:600} .e-mil,.e-dud{color:var(--warn);font-weight:600} .e-cor{color:var(--ok);font-weight:600} .e-av{color:var(--soft)}
+  input[type=date],input[type=number],input[list]{font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink)}
 </style>
 </head>
 <body>
@@ -61,11 +64,29 @@
     <p class="msg" id="mRes"></p>
     <div class="wrap"><table><thead><tr><th>CEDIS</th><th>Unidad</th><th>Fecha</th><th>Bitácora (km)</th><th>SAP (km)</th><th>Diferencia</th><th>Observación</th></tr></thead><tbody id="tb"></tbody></table></div>
   </div>
+  <div class="card">
+    <h3>Estado del odómetro por unidad</h3>
+    <p class="sub">Con la bitácora y las lecturas de SAP desde agosto: unidades <b>detenidas</b>, las que <b>ya avanzan</b> o <b>reiniciaron</b> el odómetro, las que parecen estar en <b>millas</b>, y el <b>km esperado</b> en la siguiente carga.</p>
+    <div class="row"><button class="btn" id="bEst">Ver estado de las unidades</button>
+      <label>CEDIS <select id="eCed"><option value="">Todos</option></select></label>
+      <label>Estado <select id="eEst"><option value="act">Para revisar (todo menos «Avanzando»)</option></select></label>
+      <button class="btn sec" id="eCopiar">Copiar aviso del CEDIS</button></div>
+    <p class="msg" id="mEst"></p>
+    <div class="kpis" id="eKpis"></div>
+    <div class="wrap" id="eWrap" hidden><table><thead><tr><th>CEDIS</th><th>Unidad</th><th>Estado</th><th>Último km</th><th>Esperado hoy</th><th>Rend. km/l</th><th>Qué se ve</th></tr></thead><tbody id="eTb"></tbody></table></div>
+    <h3>Km esperado en la próxima carga</h3>
+    <p class="sub">Escribe la unidad, la fecha de la carga y, si ya lo tienes, los litros. Te dice entre qué km debería caer la lectura antes de que la captures.</p>
+    <div class="row"><input id="cEco" list="lEco" placeholder="Económico" size="10"><datalist id="lEco"></datalist>
+      <label>Fecha <input type="date" id="cFec"></label><label>Litros <input type="number" id="cLts" min="0" step="0.1" style="width:90px"></label>
+      <button class="btn sec" id="cBtn">Calcular</button></div>
+    <p class="msg" id="mCalc"></p>
+  </div>
 </div>
 <script>
 (function(){
 "use strict";
 var HOJAS = { "cuernavaca":"MMCV", "cuautla":"MMCU", "jojutla":"MMJO", "puente de ixtla":"MMPU", "axochiapan":"MMAX", "cocoyoc":"MMCC" };
+var MI=1.609344;
 var $ = function(i){ return document.getElementById(i); };
 function say(id, t, c){ var e=$(id); e.textContent=t; e.className="msg "+(c||""); }
 function num(v){ if(v==null||v==="") return null; var n=Number(String(v).replace(/,/g,"").trim()); return isFinite(n)?n:null; }
@@ -158,7 +179,9 @@ function comparar(bit, sap, desde, hasta){
       else if(cand.length){
         tipo="dif"; sapkm=cand[0]; obs="Km distinto";
         cand.forEach(function(v){ if(Math.abs(v-b.km)<Math.abs(sapkm-b.km)) sapkm=v; });
-        if(unDigito(b.km,sapkm)) obs="Un dígito distinto (posible error de captura)";
+        if(Math.abs(b.km*MI-sapkm)<=Math.max(2,sapkm*0.01)) obs="Parece millas: la bitácora trae millas (en km serían ≈ "+Math.round(b.km*MI)+")";
+        else if(Math.abs(sapkm*MI-b.km)<=Math.max(2,b.km*0.01)) obs="Parece millas: SAP trae millas (en km serían ≈ "+Math.round(sapkm*MI)+")";
+        else if(unDigito(b.km,sapkm)) obs="Un dígito distinto (posible error de captura)";
         else if(digitoDeMas(b.km,sapkm)) obs="Un dígito de más o de menos (posible error de captura)";
       } else if(cerca.length){ tipo="dif"; sapkm=cerca[0]; obs="Km distinto (SAP en día contiguo)"; if(unDigito(b.km,sapkm)) obs="Un dígito distinto (SAP en día contiguo)"; }
       else { tipo="sin"; obs="Sin lectura de km en SAP ese día"; }
@@ -186,6 +209,167 @@ function comparar(bit, sap, desde, hasta){
   filas.sort(function(a,b){ return a.cedis<b.cedis?-1:a.cedis>b.cedis?1:a.economico<b.economico?-1:a.economico>b.economico?1:a.fecha<b.fecha?-1:a.fecha>b.fecha?1:0; });
   return filas;
 }
+/* ---------- estado del odómetro ---------- */
+var PREF={ MCC:"MMCC", MCV:"MMCV", MCU:"MMCU", MJO:"MMJO", MPU:"MMPU", MAX:"MMAX" };
+var RX_MAT=/hubod|hub\s?od[oó]m|od[oó]metro|tablero|veloc[ií]m|tac[oó]metro|cuenta\s?k|sensor\s+(de\s+)?veloc|chicote\s+p\/?\s?veloc|engrane\s+veloc|instrumentos?\b|cluster/i;
+function d2n(f){ return Math.round(Date.parse(f+"T00:00:00Z")/86400000); }
+function med(a){ if(!a.length) return null; var s=a.slice().sort(function(x,y){return x-y;}), m=s.length>>1; return s.length%2?s[m]:(s[m-1]+s[m])/2; }
+function fmt(n){ return n==null?"—":Math.round(n).toLocaleString("es-MX"); }
+function fcorta(f){ var m=["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"]; return +f.slice(8)+"-"+m[+f.slice(5,7)-1]; }
+/* por qué bajó un km: millas (×1.609 vuelve a la serie), dígito de menos (÷10) u otra causa */
+function causaBaja(prev, nuevo, dias){
+  var conv=nuevo*MI;
+  if(nuevo<prev*0.75 && conv>=prev-Math.max(60,prev*0.015) && conv<=prev+800*dias+200) return "millas";
+  if(digitoDeMas(prev,nuevo)||Math.abs(nuevo/prev-0.1)<0.012) return "digito";
+  return "otra";
+}
+/* serie limpia: acepta lecturas coherentes, separa capturas sueltas y confirma cambios de régimen (reinicio, millas, vuelta a km) */
+function limpiar(L){
+  var ch=[], dud=[], ev=[], pend=[], last=null;
+  function ok(e){ ch.push(e); last=e; }
+  function mal(p,ref){ dud.push({ f:p.f, km:p.km, ref:ref.km, causa: p.km<ref.km?causaBaja(ref.km,p.km,Math.max(1,d2n(p.f)-d2n(ref.f))):(Math.abs(p.km/ref.km-MI)<0.05*MI?"a_km":"alta") }); }
+  L.forEach(function(e){
+    if(!last){ ok(e); return; }
+    var dias=Math.max(1,d2n(e.f)-d2n(last.f)), d=e.km-last.km;
+    if(d>=-0.5&&d<=800*dias+200){ pend.forEach(function(p){ mal(p,last); }); pend=[]; ok(e); return; }
+    if(pend.length){
+      var p=pend[pend.length-1], dp=Math.max(1,d2n(e.f)-d2n(p.f)), dd=e.km-p.km;
+      if(dd>=-0.5&&dd<=800*dp+200){
+        var p0=pend[0], dias0=Math.max(1,d2n(p0.f)-d2n(last.f)), tipo;
+        if(p0.km<last.km){ var c=causaBaja(last.km,p0.km,dias0); tipo = c==="millas"?"millas":(p0.km<last.km*0.5?"reinicio":"ajuste"); }
+        else tipo = Math.abs(p0.km/last.km-MI)<0.05*MI?"a_km":"salto";
+        ev.push({ tipo:tipo, f:p0.f, de:last.km, a:p0.km });
+        pend.push(e); pend.forEach(ok); pend=[]; return;
+      }
+      pend.forEach(function(x){ mal(x,last); }); pend=[e]; return;
+    }
+    pend.push(e);
+  });
+  return { ch:ch, dud:dud, pend:pend, ev:ev, last:last };
+}
+/* tramos sin avance: lecturas seguidas con ≤3 km de diferencia */
+function rachas(ch){
+  var R=[], cur=null, i;
+  function cerrar(av,desde,aj){
+    if(!cur) return;
+    if(aj) cur.ajuste=aj;
+    var span=d2n(cur.hasta)-d2n(cur.desde);
+    if((cur.n>=2&&span>=4)||(cur.n>=1&&span>=8)){ cur.activa=(av===null); cur.avances=av||0; cur.avanzaDesde=desde||null; R.push(cur); }
+    cur=null;
+  }
+  for(i=1;i<ch.length;i++){
+    var d=ch[i].km-ch[i-1].km;
+    /* sin avance real: de 0 a 3 km, o un incremento fijo y pequeño que se repite (p. ej. +10 en cada carga) */
+    var fijo = d>3&&d<=25&&((i>1&&Math.abs(ch[i-1].km-ch[i-2].km-d)<0.5)||(i<ch.length-1&&Math.abs(ch[i+1].km-ch[i].km-d)<0.5));
+    if(d>=-0.5&&(d<=3||fijo)){ if(!cur) cur={ desde:ch[i-1].f, kmDesde:ch[i-1].km, n:0 }; cur.n++; cur.hasta=ch[i].f; cur.kmHasta=ch[i].km; }
+    else if(cur){
+      var av=0, j;
+      if(d>3){ for(j=i;j<ch.length&&j<i+3;j++){ var dj=ch[j].km-ch[j-1].km; if(dj>3) av++; else break; } }
+      cerrar(av,av?ch[i].f:null,d<-0.5?{ f:ch[i].f, a:ch[i].km }:null);
+    }
+  }
+  if(cur) cerrar(null,null);
+  return R;
+}
+function tasa(ch){
+  var v=[], i; for(i=Math.max(1,ch.length-10);i<ch.length;i++){ var d=ch[i].km-ch[i-1].km, dias=d2n(ch[i].f)-d2n(ch[i-1].f); if(d>3&&dias>=1) v.push(d/dias); }
+  return v.length?med(v):null;
+}
+function rendimiento(ch){
+  var v=[], i; for(i=1;i<ch.length;i++){ var d=ch[i].km-ch[i-1].km, l=ch[i].lts; if(d>3&&l>0&&d2n(ch[i].f)-d2n(ch[i-1].f)<=7){ var r=d/l; if(r>=0.5&&r<=80) v.push(r); } }
+  return v.length>=2?med(v):null;
+}
+/* B, S: [{f,km,lts?}] ordenados por fecha. extra: {piso:bool, mats:[{f,t,o}]}. ref: fecha de los datos más recientes */
+function analizar(eco, B, S, ref, extra){
+  extra=extra||{};
+  var cb=limpiar(B), cs=limpiar(S), det=[], tags=[], estado="Avanzando", clase="e-av";
+  var lb=cb.ch[cb.ch.length-1], ls=cs.ch[cs.ch.length-1];
+  var ult=lb&&ls?(lb.f>=ls.f?lb:ls):(lb||ls);
+  var rb=rachas(cb.ch), rs=rachas(cs.ch);
+  var actB=rb.filter(function(r){return r.activa;})[0], actS=rs.filter(function(r){return r.activa;})[0];
+  var reciente=function(c){ return c&&d2n(ref)-d2n(c.f)<=12; };
+  function ganancia(ch,desde){ var base=null, fin=null; ch.forEach(function(e){ if(e.f<=desde) base=e.km; if(e.f>=desde) fin=e.km; }); return base!=null&&fin!=null?fin-base:0; }
+  /* desfase fijo entre bitácora y SAP (p. ej. se anotó mal la lectura inicial y todo sale con la misma diferencia) */
+  var difs=[]; cb.ch.forEach(function(b){ if(d2n(ref)-d2n(b.f)>25) return; var c=null; cs.ch.forEach(function(x){ if(Math.abs(d2n(x.f)-d2n(b.f))<=1&&(!c||Math.abs(x.km-b.km)<Math.abs(c.km-b.km))) c=x; }); if(c) difs.push(b.km-c.km); });
+  var desfase=null; if(difs.length>=2){ var u1=difs[difs.length-1], u2=difs[difs.length-2]; if(Math.abs(u1)>=50&&Math.abs(u1-u2)<=5&&u1*u2>0&&Math.abs(u1)<50000) desfase=Math.round((u1+u2)/2); }
+  var sapAvanza = actB ? ganancia(cs.ch,actB.desde)>20 : false;
+  var bitAvanza = !actS && cb.ch.length>=2 && (cb.ch[cb.ch.length-1].km-cb.ch[cb.ch.length-2].km)>3;
+  /* eventos */
+  var evs=[]; [["bitácora",cb],["SAP",cs]].forEach(function(par){
+    par[1].ev.forEach(function(e){ evs.push({ fuente:par[0], tipo:e.tipo, f:e.f, de:e.de, a:e.a }); });
+  });
+  evs.sort(function(a,b){ return a.f<b.f?-1:a.f>b.f?1:0; });
+  var milActiva=null;
+  evs.forEach(function(e){
+    var t;
+    if(e.tipo==="millas"){ t="El km bajó de "+fmt(e.de)+" a "+fmt(e.a)+" ("+fcorta(e.f)+", "+e.fuente+"): parece millas, en km serían ≈ "+fmt(e.a*MI); milActiva=e; }
+    else if(e.tipo==="a_km"){ t="El km subió de "+fmt(e.de)+" a "+fmt(e.a)+" ("+fcorta(e.f)+", "+e.fuente+"): volvió a km"; milActiva=null; }
+    else if(e.tipo==="reinicio") t="Odómetro reiniciado: de "+fmt(e.de)+" a "+fmt(e.a)+" ("+fcorta(e.f)+", "+e.fuente+") y sigue avanzando desde ahí";
+    else if(e.tipo==="ajuste") t="Km ajustado a la baja de "+fmt(e.de)+" a "+fmt(e.a)+" ("+fcorta(e.f)+", "+e.fuente+") y la serie continúa";
+    else t="Salto de "+fmt(e.de)+" a "+fmt(e.a)+" ("+fcorta(e.f)+", "+e.fuente+") que se mantiene";
+    det.push({ k:e.tipo, f:e.f, t:t });
+  });
+  var corregidos=[]; [["bitácora",rb],["SAP",rs]].forEach(function(par){
+    par[1].forEach(function(r){ if(!r.activa&&r.ajuste){ det.push({ k:"corregido", f:r.ajuste.f, t:"Estuvo detenido (de 0 a 3 km por carga) del "+fcorta(r.desde)+" al "+fcorta(r.hasta)+" en ≈ "+fmt(r.kmHasta)+" ("+par[0]+") y el "+fcorta(r.ajuste.f)+" el km se corrigió a "+fmt(r.ajuste.a), ok:true }); corregidos.push(r); }
+      else if(!r.activa&&r.avances>=1){ var t="Estuvo detenido del "+fcorta(r.desde)+" al "+fcorta(r.hasta)+" (≈ "+fmt(r.kmHasta)+" km, "+par[0]+") y ya avanza desde el "+fcorta(r.avanzaDesde)+(r.avances<2?" (falta confirmar con otra lectura)":""); det.push({ k:"corregido", f:r.avanzaDesde, t:t, ok:r.avances>=2 }); corregidos.push(r); } });
+  });
+  /* lecturas dudosas recientes */
+  [["bitácora",cb],["SAP",cs]].forEach(function(par){
+    par[1].dud.concat(par[1].pend.map(function(p){ return { f:p.f, km:p.km, ref:par[1].last?par[1].last.km:null, causa: par[1].last?(p.km<par[1].last.km?causaBaja(par[1].last.km,p.km,Math.max(1,d2n(p.f)-d2n(par[1].last.f))):"alta"):"alta", pend:true }; })).forEach(function(x){
+      if(d2n(ref)-d2n(x.f)>14) return;
+      var why = x.causa==="millas"?"parece millas, en km serían ≈ "+fmt(x.km*MI):x.causa==="digito"?"parece un dígito de menos o de más":x.causa==="a_km"?"parece haber vuelto de millas a km":x.km<x.ref?"baja respecto a lo anterior ("+fmt(x.ref)+")":"sube más de lo posible desde "+fmt(x.ref);
+      det.push({ k:"dudosa", f:x.f, t:"Lectura dudosa del "+fcorta(x.f)+" ("+par[0]+"): "+fmt(x.km)+", "+why+(x.pend?" (aún sin otra lectura que la confirme)":""), act:true });
+    });
+  });
+  /* material de odómetro, tablero, velocímetro */
+  (extra.mats||[]).forEach(function(m){ det.push({ k:"material", f:m.f, t:"Material: "+m.t+" ("+fcorta(m.f)+", orden "+m.o+")" }); });
+  /* estado */
+  if(!ult){ estado="Sin lecturas"; clase="e-av"; }
+  else if(!reciente(ult)){ estado="Sin lecturas recientes"; clase="e-av"; }
+  else if(actB&&reciente(lb)&&sapAvanza){ estado="Bitácora sin actualizar"; clase="e-bit"; det.unshift({ k:"estado", f:ref, t:"En la bitácora el km no cambia desde el "+fcorta(actB.desde)+" ("+fmt(actB.kmHasta)+") y SAP sí avanza: parece que se está repitiendo el último km." }); }
+  else if(actB&&reciente(lb)){ estado="Detenido"; clase="e-det"; det.unshift({ k:"estado", f:ref, t:"El km no avanza desde el "+fcorta(actB.desde)+" ("+fmt(actB.kmHasta)+") en la bitácora"+(actS?" y en SAP sube de 1 a 3 km por carga":"")+"." }); }
+  else if(actS&&reciente(ls)&&bitAvanza){ estado="SAP sube solo +1"; clase="e-sap"; det.unshift({ k:"estado", f:ref, t:"En SAP el km sube apenas de 1 a 3 km desde el "+fcorta(actS.desde)+" mientras la bitácora sí avanza." }); }
+  else if(actS&&reciente(ls)){ estado="Detenido"; clase="e-det"; det.unshift({ k:"estado", f:ref, t:"En SAP el km sube apenas de 1 a 3 km por carga desde el "+fcorta(actS.desde)+" (≈ "+fmt(actS.kmHasta)+"); no hay bitácora que lo contraste." }); }
+  else if(milActiva){ estado="En millas"; clase="e-mil"; }
+  else if(desfase!=null){ estado="Desfase fijo con SAP"; clase="e-dud"; det.unshift({ k:"estado", f:ref, t:"La bitácora trae "+fmt(Math.abs(desfase))+" km "+(desfase<0?"menos":"más")+" que SAP en las últimas lecturas, siempre la misma diferencia: lo recorrido sí coincide, se anotó mal la lectura inicial." }); }
+  else if(det.some(function(x){ return x.act; })){ estado="Captura dudosa"; clase="e-dud"; }
+  else if(det.some(function(x){ return (x.k==="reinicio"||x.k==="ajuste"||x.k==="a_km"||(x.k==="corregido"&&x.ok))&&d2n(ref)-d2n(x.f)<=45; })){ estado="Corregido / reiniciado"; clase="e-cor"; }
+  else if(ult&&(cb.ch.length+cs.ch.length)>=3) { estado="Avanzando"; clase="e-av"; }
+  else { estado="Pocas lecturas"; clase="e-av"; }
+  /* material que coincide con un reinicio */
+  det.forEach(function(x){ if(x.k==="material"){ var cerca=det.some(function(y){ return (y.k==="reinicio"||y.k==="corregido"||y.k==="a_km")&&Math.abs(d2n(y.f)-d2n(x.f))<=25; }); if(cerca) x.t+=" · coincide con el cambio del odómetro"; } });
+  det.sort(function(a,b){ return a.k==="estado"?-1:b.k==="estado"?1:(a.f<b.f?1:a.f>b.f?-1:0); });
+  /* base para la predicción */
+  var base = estado==="Bitácora sin actualizar"?ls : estado==="SAP sube solo +1"?lb : ult;
+  var chBase = base===ls&&cs.ch.length?cs.ch:cb.ch.length?cb.ch:cs.ch;
+  var rate = tasa(chBase); if(rate==null) rate=tasa(cb.ch.length>=cs.ch.length?cs.ch:cb.ch);
+  var rend = rendimiento(cb.ch);
+  return { economico:eco, estado:estado, clase:clase, det:det, ult:base?{ f:base.f, km:base.km }:null, tasa:(estado==="Detenido"?0:rate), rend:rend };
+}
+function esperado(r, fecha, litros){
+  if(!r||!r.ult) return null;
+  var dias=Math.max(0,d2n(fecha)-d2n(r.ult.f)), out={ dias:dias, base:r.ult.km };
+  if(r.tasa!=null&&r.tasa>0){ var d=r.tasa*dias; out.dia={ x:r.ult.km+d, a:r.ult.km+d*0.5, b:r.ult.km+d*1.6+30 }; }
+  if(litros>0&&r.rend){ var dl=r.rend*litros; out.lts={ x:r.ult.km+dl, a:r.ult.km+dl*0.75, b:r.ult.km+dl*1.25 }; }
+  return out;
+}
+function estadoDeTodo(bit, sap, mats, piso){
+  var B={}, S={}, ced={}, ref="";
+  bit.forEach(function(b){ if(b.km==null||b.km<=0) return; (B[b.economico]=B[b.economico]||[]).push({ f:b.fecha, km:b.km, lts:b.litros }); if(b.cedis) ced[b.economico]=b.cedis; if(b.fecha>ref) ref=b.fecha; });
+  sap.forEach(function(s){ if(s.anulado||s.km==null||s.km<=0) return; (S[s.economico]=S[s.economico]||[]).push({ f:s.fecha, km:s.km, d:s.documento||0 }); if(s.fecha>ref) ref=s.fecha; });
+  var ecos={}; Object.keys(B).forEach(function(k){ ecos[k]=1; }); Object.keys(S).forEach(function(k){ ecos[k]=1; });
+  var cmp=function(a,b){ return a.f<b.f?-1:a.f>b.f?1:((a.d||0)-(b.d||0)); };
+  var out=[];
+  Object.keys(ecos).sort().forEach(function(eco){
+    if(!/^M[A-Z]{2}\d{4}$/.test(eco)) return;
+    var r=analizar(eco,(B[eco]||[]).sort(cmp),(S[eco]||[]).sort(cmp),ref,{ mats:(mats||{})[eco] });
+    r.cedis=ced[eco]||PREF[eco.slice(0,3)]||""; r.piso=!!(piso&&piso[eco]);
+    out.push(r);
+  });
+  return { filas:out, ref:ref };
+}
+window.KM_ESTADO=estadoDeTodo; window.KM_ESPERADO=esperado; window.KM_ANALIZAR=analizar;
+
 window.KM_PARSE_BIT=parseBitacora; window.KM_PARSE_CARGAS=parseCargas; window.KM_COMPARAR=comparar;
 if(typeof document==="undefined"||!document.getElementById("mes")) return;
 
@@ -267,13 +451,98 @@ function copiar(){
   (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(function(){ say("mRes","Aviso copiado ("+v.length+" unidades-día).","ok"); }).catch(function(){ say("mRes","No pude copiar; selecciona la tabla manualmente.","err"); });
 }
 
-if(!ERP.token()){ say("mBit","Abre esta página desde el ERP con tu sesión iniciada.","err"); $("bBit").disabled=true; $("bSap").disabled=true; $("bVer").disabled=true; return; }
+
+/* ---------- pantalla: estado del odómetro ---------- */
+var EST=null, MAPA={};
+function opcional(path){ return fetch(ERP.URL+"/rest/v1/"+path,{headers:ERP.headers()}).then(function(r){ return r.ok?r.json():null; }).catch(function(){ return null; }); }
+function materiales(){
+  return Promise.all([ opcional("correctivos_datos?select=ord:datos->OM01OM02,mov:datos->OM01OM02mov&limit=1"), opcional("unidades_piso_datos?select=units:datos->units&limit=1") ]).then(function(x){
+    var mats={}, piso={};
+    function agrega(eco,f,t,o){ if(!/^M[A-Z]{2}\d{4}$/.test(eco)||!f||!RX_MAT.test(t)) return; var a=(mats[eco]=mats[eco]||[]); if(!a.some(function(m){ return m.o===o&&m.t===t; })) a.push({ f:f, t:t, o:o }); }
+    try{
+      var c=x[0]&&x[0][0]; if(c&&c.ord&&c.mov){
+        var H=c.ord[0]||[], iO=H.indexOf("Orden"), iE=H.indexOf("Equipo"), ord={};
+        c.ord.slice(1).forEach(function(r){ if(r[iO]!=null&&r[iE]) ord[String(r[iO]).trim()]=String(r[iE]).trim(); });
+        var M=c.mov[0]||[], mO=M.indexOf("Orden"), mF=M.indexOf("Fecha de documento"), mT=M.indexOf("Texto breve de material");
+        c.mov.slice(1).forEach(function(r){ var eco=ord[String(r[mO]).trim()]; if(eco) agrega(eco,iso(r[mF]),String(r[mT]||""),String(r[mO])); });
+      }
+    }catch(e){}
+    try{
+      var p=x[1]&&x[1][0]; if(p&&p.units) p.units.forEach(function(u){ piso[u.eco]=1; (u.mats||[]).forEach(function(m){ agrega(u.eco,m.f,String(m.t||""),String(m.o||"")); }); });
+    }catch(e){}
+    return { mats:mats, piso:piso };
+  });
+}
+var ORDEN={ "Detenido":1, "Bitácora sin actualizar":2, "SAP sube solo +1":3, "En millas":4, "Desfase fijo con SAP":5, "Captura dudosa":6, "Corregido / reiniciado":7, "Avanzando":8 };
+function pintarEstado(){
+  var ced=$("eCed").value, md=$("eEst").value;
+  var v=EST.filas.filter(function(f){ return (!ced||f.cedis===ced)&&(md==="act"?f.estado!=="Avanzando"&&f.estado!=="Pocas lecturas"&&f.estado!=="Sin lecturas recientes"&&f.estado!=="Sin lecturas":md===""?true:f.estado===md); });
+  v.sort(function(a,b){ return (ORDEN[a.estado]||9)-(ORDEN[b.estado]||9)||(a.cedis<b.cedis?-1:a.cedis>b.cedis?1:a.economico<b.economico?-1:1); });
+  var tb=$("eTb"); tb.innerHTML="";
+  var hoy=new Date(), hs=hoy.getFullYear()+"-"+("0"+(hoy.getMonth()+1)).slice(-2)+"-"+("0"+hoy.getDate()).slice(-2);
+  v.slice(0,800).forEach(function(r){
+    var tr=document.createElement("tr"), ex=esperado(r,hs,0);
+    var cel=[r.cedis, r.economico, r.estado+(r.piso?" · en piso":""), r.ult?fmt(r.ult.km)+" ("+fcorta(r.ult.f)+")":"—", ex&&ex.dia?"≈ "+fmt(ex.dia.x):"—", r.rend?r.rend.toFixed(1):"—"];
+    cel.forEach(function(t,i){ var td=document.createElement("td"); td.textContent=t; if(i===2) td.className=r.clase; if(i>=3) td.className="n"; tr.appendChild(td); });
+    var td=document.createElement("td"); td.className="det";
+    r.det.slice(0,7).forEach(function(d){ var x=document.createElement("div"); x.textContent=d.t; td.appendChild(x); });
+    if(r.det.length>7){ var m=document.createElement("div"); m.className="sub"; m.textContent="… y "+(r.det.length-7)+" más"; td.appendChild(m); }
+    tr.appendChild(td); tb.appendChild(tr);
+  });
+  $("eWrap").hidden=false;
+  say("mEst", v.length+" unidades"+(v.length>800?" (se muestran 800; filtra por CEDIS)":"")+". «Esperado hoy» usa el km que suele avanzar al día la unidad.");
+}
+function verEstado(){
+  say("mEst","Consultando bitácora, SAP y material de refacciones…");
+  Promise.all([
+    getAll("bitacora_km?select=economico,fecha,cedis,litros,km&order=economico,fecha"),
+    getAll("cargas_km?select=economico,fecha,km,anulado,documento&order=documento"),
+    materiales()
+  ]).then(function(x){
+    if(!x[0].length&&!x[1].length){ say("mEst","Todavía no hay lecturas guardadas.","err"); return; }
+    EST=estadoDeTodo(x[0],x[1],x[2].mats,x[2].piso);
+    MAPA={}; EST.filas.forEach(function(f){ MAPA[f.economico]=f; });
+    var c={}; EST.filas.forEach(function(f){ c[f.estado]=(c[f.estado]||0)+1; });
+    $("eKpis").innerHTML="";
+    Object.keys(ORDEN).forEach(function(k){ if(!c[k]) return; var d=document.createElement("div"); d.className="kpi"; d.innerHTML="<span class='sub'></span><b></b>"; d.firstChild.textContent=k; d.lastChild.textContent=c[k]; $("eKpis").appendChild(d); });
+    var ceds={}; EST.filas.forEach(function(f){ if(f.cedis) ceds[f.cedis]=1; });
+    var sel=$("eCed"), act=sel.value; sel.innerHTML='<option value="">Todos</option>'; Object.keys(ceds).sort().forEach(function(k){ var o=document.createElement("option"); o.value=k; o.textContent=k; sel.appendChild(o); }); sel.value=ceds[act]?act:"";
+    var se=$("eEst"), ea=se.value; se.innerHTML='<option value="act">Para revisar (todo menos «Avanzando»)</option>'; Object.keys(ORDEN).concat(["Pocas lecturas","Sin lecturas recientes"]).forEach(function(k){ var o=document.createElement("option"); o.value=k; o.textContent=k; se.appendChild(o); }); var o2=document.createElement("option"); o2.value=""; o2.textContent="Todas"; se.appendChild(o2); se.value=ea||"act";
+    $("lEco").innerHTML=""; EST.filas.forEach(function(f){ var o=document.createElement("option"); o.value=f.economico; $("lEco").appendChild(o); });
+    pintarEstado();
+  }).catch(function(e){ say("mEst","Error: "+e.message,"err"); });
+}
+function calcular(){
+  var eco=$("cEco").value.trim().toUpperCase(), f=$("cFec").value, l=parseFloat($("cLts").value);
+  if(!EST){ say("mCalc","Primero presiona «Ver estado de las unidades».","err"); return; }
+  var r=MAPA[eco]; if(!r||!r.ult){ say("mCalc","No tengo lecturas de esa unidad.","err"); return; }
+  if(!f){ say("mCalc","Elige la fecha de la carga.","err"); return; }
+  if(r.estado==="Detenido"){ say("mCalc",eco+" aparece detenida (último km "+fmt(r.ult.km)+" el "+fcorta(r.ult.f)+"): no hay base para predecir; revisa primero el odómetro.","err"); return; }
+  var e=esperado(r,f,l), t=eco+": último km confiable "+fmt(e.base)+" ("+fcorta(r.ult.f)+"). ";
+  if(e.dia) t+="Por días ("+e.dias+" d a ≈ "+fmt(r.tasa)+" km/día): ≈ "+fmt(e.dia.x)+" (entre "+fmt(e.dia.a)+" y "+fmt(e.dia.b)+"). ";
+  if(e.lts) t+="Por litros ("+l+" L a "+r.rend.toFixed(1)+" km/l): ≈ "+fmt(e.lts.x)+" (entre "+fmt(e.lts.a)+" y "+fmt(e.lts.b)+"). ";
+  else if(l>0) t+="Aún no hay rendimiento km/l confiable de esta unidad para usar los litros. ";
+  t+="En millas el mismo valor se vería ≈ "+fmt(e.base/MI)+" a "+fmt((e.dia?e.dia.x:e.base)/MI)+".";
+  say("mCalc",t,"ok");
+}
+function copiarEstado(){
+  var ced=$("eCed").value; if(!ced){ say("mEst","Elige primero un CEDIS.","err"); return; }
+  var v=EST?EST.filas.filter(function(f){ return f.cedis===ced&&(f.estado==="Detenido"||f.estado==="Bitácora sin actualizar"||f.estado==="SAP sube solo +1"||f.estado==="En millas"||f.estado==="Captura dudosa"||f.estado==="Desfase fijo con SAP"); }):[];
+  if(!v.length){ say("mEst","Ese CEDIS no tiene unidades por avisar.","ok"); return; }
+  var t="Kilometraje de "+ced+": unidades que conviene revisar.\n\n"+v.map(function(f){ var d=f.det.filter(function(x){ return x.k==="estado"||x.k==="dudosa"||x.k==="millas"; })[0]; return f.economico+" · "+f.estado+(d?" · "+d.t:""); }).join("\n");
+  (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(function(){ say("mEst","Aviso copiado ("+v.length+" unidades).","ok"); }).catch(function(){ say("mEst","No pude copiar.","err"); });
+}
+
+if(!ERP.token()){ say("mBit","Abre esta página desde el ERP con tu sesión iniciada.","err"); $("bBit").disabled=true; $("bSap").disabled=true; $("bVer").disabled=true; $("bEst").disabled=true; return; }
 var hoy=new Date(); $("mes").value=hoy.getFullYear()+"-"+("0"+(hoy.getMonth()+1)).slice(-2);
 infoSap();
 $("bVer").addEventListener("click",ver);
 $("mes").addEventListener("change",ver);
 $("fCed").addEventListener("change",pintar); $("fTipo").addEventListener("change",pintar);
 $("bCopiar").addEventListener("click",copiar);
+$("bEst").addEventListener("click",verEstado); $("eCed").addEventListener("change",function(){ if(EST) pintarEstado(); }); $("eEst").addEventListener("change",function(){ if(EST) pintarEstado(); });
+$("eCopiar").addEventListener("click",copiarEstado); $("cBtn").addEventListener("click",calcular);
+(function(){ var h=new Date(); $("cFec").value=h.getFullYear()+"-"+("0"+(h.getMonth()+1)).slice(-2)+"-"+("0"+h.getDate()).slice(-2); })();
 $("bBit").addEventListener("click",function(){
   var f=$("fBit").files[0]; if(!f){ say("mBit","Elige el archivo de la bitácora.","err"); return; }
   var b=this; b.disabled=true; say("mBit","Leyendo…");
