@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cargar concentrados de combustible</title>
+<script src="erp-auth.js"></script>
+<style>
+  body{margin:0;background:#EEF2F5;color:#142433;font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:16px}
+  .col{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:12px}
+  .card{background:#fff;border:1px solid #D3DCE3;border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:10px}
+  h2{margin:0;font-size:20px} p{margin:0} .sub{color:#48607A}
+  .btn{font:inherit;font-weight:600;background:#0E7C86;color:#fff;border:0;border-radius:8px;padding:9px 16px;cursor:pointer;align-self:flex-start}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .bar{height:10px;background:#E4EAEF;border-radius:6px;overflow:hidden}.bar i{display:block;height:100%;width:0;background:#0E7C86}
+  .ok{color:#1b7443}.mal{color:#bf2a2a}
+</style>
+</head>
+<body>
+<div class="col">
+  <div class="card">
+    <h2>Cargar concentrados de combustible (enero–octubre 2026)</h2>
+    <p class="sub">Sube a la base las cargas que reportan los almacenistas en sus concentrados (una fila por carga: fecha, CEDIS, unidad, ruta, litros y operador). Se puede repetir sin duplicar.</p>
+    <button class="btn" id="go">Cargar a la base</button>
+    <div class="bar"><i id="p"></i></div>
+    <p id="msg" class="sub">Listo para cargar.</p>
+  </div>
+</div>
+<script>
+(function(){
+  "use strict";
+  var msg = document.getElementById("msg"), bar = document.getElementById("p"), btn = document.getElementById("go");
+  function say(t, c){ msg.textContent = t; msg.className = c || "sub"; }
+  if(!ERP.token()){ say("Abre esta página desde el ERP con tu sesión iniciada.", "mal"); btn.disabled = true; return; }
+  btn.addEventListener("click", function(){
+    btn.disabled = true; say("Leyendo el archivo…");
+    fetch("datos/concentrados_2026.json?v=" + Date.now()).then(function(r){ return r.json(); }).then(function(d){
+      var filas = d.filas, A = d.archivos, paso = 1000, i = 0, hechas = 0;
+      function sig(){
+        if(i >= filas.length){ bar.style.width = "100%"; say("Listo: " + filas.length.toLocaleString("es-MX") + " cargas enviadas (las repetidas se ignoran).", "ok"); return; }
+        var lote = filas.slice(i, i + paso).map(function(f){
+          return { fecha:f[0], cedis:f[1], combustible:f[2], economico:f[3], ruta:f[4] || null, litros:f[5], operador:f[6], archivo:A[f[7]] };
+        });
+        return fetch(ERP.URL + "/rest/v1/combustible_concentrados?on_conflict=fecha,cedis,economico,litros,operador", {
+          method:"POST", headers:ERP.headers({ Prefer:"resolution=ignore-duplicates,return=minimal" }), body:JSON.stringify(lote)
+        }).then(function(r){
+          if(!r.ok) return r.text().then(function(t){ throw new Error("HTTP " + r.status + " " + t.slice(0, 200)); });
+          i += paso; hechas = Math.min(i, filas.length);
+          bar.style.width = Math.round(hechas / filas.length * 100) + "%";
+          say("Enviando… " + hechas.toLocaleString("es-MX") + " de " + filas.length.toLocaleString("es-MX"));
+          return sig();
+        });
+      }
+      return sig();
+    }).catch(function(e){ say("Error: " + e.message, "mal"); btn.disabled = false; });
+  });
+})();
+</script>
+</body>
+</html>
