@@ -443,7 +443,7 @@ function aplicarCatalogo(listas){
   function get(q){ return fetch(ERP.URL + "/rest/v1/" + q, { headers:ERP.headers() }).then(function(r){ return r.ok ? r.json() : []; }).catch(function(){ return []; }); }
   return Promise.all([
     pend.length ? get("catalogo_unidades?activo=eq.true&select=economico,ruta&limit=2000") : Promise.resolve([]),
-    get("combustible_correcciones?select=ceco,fecha,litros,eco_sap,eco_correcto,nota&limit=2000")
+    get("combustible_correcciones?select=ceco,fecha,litros,eco_sap,eco_correcto,operador,nota&limit=5000")
   ]).then(function(x){
     var ruta = {}; x[0].forEach(function(u){ if(u.ruta) ruta[u.economico] = u.ruta; });
     pend.forEach(function(f){
@@ -455,10 +455,13 @@ function aplicarCatalogo(listas){
     });
     /* Correcciones manuales (tabla combustible_correcciones): casos que el supervisor confirmó en campo o con el concentrado de cargas.
        Se identifican por centro de coste + fecha + litros (+ el ECO que trae SAP, si se anotó). */
+    function nom(t){ return String(t == null ? "" : t).toUpperCase().replace(/\s+/g, " ").trim(); }
     x[1].forEach(function(c){
       listas.forEach(function(f){
-        if(f.c === c.ceco && f.f === String(c.fecha).slice(0, 10) && Math.abs((f.l || 0) - Number(c.litros)) < 0.0005 && (!c.eco_sap || f.e === c.eco_sap)){
-          f.e = c.eco_correcto; f.fu = "Corrección manual"; f.mu = "Corrección manual: " + (c.nota || "confirmado por el supervisor");
+        if(f._corr) return;
+        if(f.c === c.ceco && f.f === String(c.fecha).slice(0, 10) && Math.abs((f.l || 0) - Number(c.litros)) < 0.0005
+           && (!c.eco_sap || f.e === c.eco_sap) && (!c.operador || nom(f.op) === nom(c.operador))){
+          f._corr = true; f.e = c.eco_correcto; f.fu = "Corrección manual"; f.mu = "Corrección manual: " + (c.nota || "confirmado por el supervisor");
         }
       });
     });
@@ -540,7 +543,7 @@ function arrancarCarga(){
         if(r.tipo === "real") L.reales = L.reales.concat(r.filas); else L.planes.push(r);
       });
       (L.listas ? aplicarCatalogo(L.listas) : Promise.resolve()).then(function(){
-        if(L.listas) L.listas.forEach(function(f){ delete f.ec; });
+        if(L.listas) L.listas.forEach(function(f){ delete f.ec; delete f._corr; });
         inp.value = ""; pintarCarga(zona);
       });
     });
