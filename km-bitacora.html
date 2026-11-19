@@ -336,6 +336,11 @@ function analizar(eco, B, S, ref, extra){
   else if(det.some(function(x){ return (x.k==="reinicio"||x.k==="ajuste"||x.k==="a_km"||(x.k==="corregido"&&x.ok))&&d2n(ref)-d2n(x.f)<=45; })){ estado="Corregido / reiniciado"; clase="e-cor"; }
   else if(ult&&(cb.ch.length+cs.ch.length)>=3) { estado="Avanzando"; clase="e-av"; }
   else { estado="Pocas lecturas"; clase="e-av"; }
+  /* piezas del odómetro cambiadas durante un tramo detenido que sigue detenido */
+  var runAct=(actS&&reciente(ls))?actS:((actB&&reciente(lb))?actB:null);
+  if(runAct&&(estado==="Detenido"||estado==="Bitácora sin actualizar"||estado==="SAP sube solo +1")){
+    (extra.mats||[]).forEach(function(m){ if(m.f>=runAct.desde) det.push({ k:"material_sigue", f:m.f, t:"Después del cambio de «"+m.t+"» ("+fcorta(m.f)+") el km sigue sin avanzar: revisar que quedó bien instalado o que la falla es otra." }); });
+  }
   /* material que coincide con un reinicio */
   det.forEach(function(x){ if(x.k==="material"){ var cerca=det.some(function(y){ return (y.k==="reinicio"||y.k==="corregido"||y.k==="a_km")&&Math.abs(d2n(y.f)-d2n(x.f))<=25; }); if(cerca) x.t+=" · coincide con el cambio del odómetro"; } });
   det.sort(function(a,b){ return a.k==="estado"?-1:b.k==="estado"?1:(a.f<b.f?1:a.f>b.f?-1:0); });
