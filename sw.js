@@ -21,7 +21,7 @@ function claveUsuario(req){
     return j.sub || j.role || "anon";
   }catch(e){ return "anon"; }
 }
-var PAGINAS = ["./", "index.html", "stock-carga.html", "preventivos.html", "catalogo-maestro.html", "hojalateria.html", "carga-mecanicos.html", "erp.html", "historial.html", "unidades-piso.html", "faltantes.html", "catalogo-refacciones.html", "carta-peticion.html", "offline.js", "erp-tema.css", "erp-auth.js", "correctivos.html", "correctivos-lib.js", "gastos.html", "gastos-lib.js", "gastos-combustible.html", "llantas.html", "llantas-lib.js"];
+var PAGINAS = ["./", "index.html", "stock-carga.html", "preventivos.html", "catalogo-maestro.html", "hojalateria.html", "carga-mecanicos.html", "erp.html", "historial.html", "unidades-piso.html", "faltantes.html", "catalogo-refacciones.html", "carta-peticion.html", "offline.js", "erp-tema.css", "erp-auth.js", "correctivos.html", "correctivos-lib.js", "gastos.html", "gastos-lib.js", "gastos-combustible.html", "km-bitacora.html", "llantas.html", "llantas-lib.js"];
 var LIBRERIAS = [
   "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js",
   "https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js",

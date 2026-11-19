@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kilometraje: bitácora contra SAP</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="erp-auth.js"></script>
+<style>
+  :root{ --ink:#142433; --soft:#48607A; --bg:#EEF2F5; --card:#fff; --line:#D3DCE3; --acc:#0E7C86; --ok:#1b7443; --warn:#9a5b00; --bad:#bf2a2a; }
+  @media (prefers-color-scheme: dark){ :root{ --ink:#E7EDF2; --soft:#9AB0C2; --bg:#0F1620; --card:#182230; --line:#2B3B4D; --acc:#35B6C2; --ok:#59d08c; --warn:#f2b44d; --bad:#ff7a72; } }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:16px}
+  .col{max-width:1100px;margin:0 auto;display:flex;flex-direction:column;gap:12px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:10px}
+  h2{margin:0;font-size:20px} h3{margin:0;font-size:15px} p{margin:0} .sub{color:var(--soft)}
+  .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+  .btn{font:inherit;font-weight:600;background:var(--acc);color:#fff;border:0;border-radius:8px;padding:8px 14px;cursor:pointer}
+  .btn.sec{background:transparent;color:var(--acc);border:1px solid var(--acc)}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  select,input[type=month]{font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink)}
+  .msg{min-height:1.2em} .ok{color:var(--ok)} .err{color:var(--bad)}
+  .kpis{display:flex;flex-wrap:wrap;gap:10px}
+  .kpi{border:1px solid var(--line);border-radius:8px;padding:8px 12px;min-width:130px}
+  .kpi b{display:block;font-size:20px}
+  .wrap{overflow:auto;max-height:560px;border:1px solid var(--line);border-radius:8px}
+  table{border-collapse:collapse;width:100%} th,td{padding:6px 10px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+  th{position:sticky;top:0;background:var(--card)} td.n{text-align:right;font-variant-numeric:tabular-nums}
+  .t-dif{color:var(--bad);font-weight:600} .t-ret{color:var(--bad);font-weight:600} .t-sin{color:var(--warn)} .t-dig{color:var(--bad);font-weight:600}
+  details summary{cursor:pointer;font-weight:600}
+</style>
+</head>
+<body>
+<div class="col">
+  <div class="card">
+    <h2>Kilometraje: bitácora contra SAP</h2>
+    <p class="sub">Compara el km que capturan los almacenistas en la bitácora de rendimiento con el que se sube a SAP (Cargas), por unidad y por día, para avisar a quien capturó mal.</p>
+    <div class="row"><label>Mes <input type="month" id="mes"></label><button class="btn" id="bVer">Ver comparación</button></div>
+  </div>
+  <div class="card">
+    <h3>1. Subir la bitácora del mes</h3>
+    <p class="sub">Elige <b>Bitacora_Rendimiento_&lt;Mes&gt;.xlsx</b>. Se leen las hojas de los 6 CEDIS (litros y km por día). Se puede repetir cada semana.</p>
+    <div class="row"><input type="file" id="fBit" accept=".xlsx,.xlsm"><button class="btn" id="bBit">Guardar bitácora</button></div>
+    <p class="msg" id="mBit"></p>
+  </div>
+  <div class="card">
+    <h3>2. Lecturas de km de SAP</h3>
+    <p class="sub">Se guardan solas al cargar <b>Unidades en piso</b>. Si necesitas actualizarlas antes, elige aquí el <b>Cargas.XLSX</b> de IK17 (hoja de cálculo, con el campo de documentos en 9999).</p>
+    <p class="sub" id="infoSap"></p>
+    <div class="row"><input type="file" id="fSap" accept=".xlsx,.xls"><button class="btn sec" id="bSap">Guardar Cargas de SAP</button></div>
+    <p class="msg" id="mSap"></p>
+  </div>
+  <div class="card" id="res" hidden>
+    <h3>Resultado</h3>
+    <div class="kpis" id="kpis"></div>
+    <div class="row">
+      <label>CEDIS <select id="fCed"><option value="">Todos</option></select></label>
+      <label>Mostrar <select id="fTipo"><option value="rev">Diferencias (km distinto, baja o sin lectura)</option><option value="solo">Solo en SAP (no está en la bitácora)</option><option value="">Todo</option></select></label>
+      <button class="btn sec" id="bCopiar">Copiar aviso del CEDIS</button>
+    </div>
+    <p class="msg" id="mRes"></p>
+    <div class="wrap"><table><thead><tr><th>CEDIS</th><th>Unidad</th><th>Fecha</th><th>Bitácora (km)</th><th>SAP (km)</th><th>Diferencia</th><th>Observación</th></tr></thead><tbody id="tb"></tbody></table></div>
+  </div>
+</div>
+<script>
+(function(){
+"use strict";
+var HOJAS = { "cuernavaca":"MMCV", "cuautla":"MMCU", "jojutla":"MMJO", "puente de ixtla":"MMPU", "axochiapan":"MMAX", "cocoyoc":"MMCC" };
+var $ = function(i){ return document.getElementById(i); };
+function say(id, t, c){ var e=$(id); e.textContent=t; e.className="msg "+(c||""); }
+function num(v){ if(v==null||v==="") return null; var n=Number(String(v).replace(/,/g,"").trim()); return isFinite(n)?n:null; }
+function iso(v){
+  if(v==null||v==="") return "";
+  if(typeof v==="number") return new Date(Math.round((v-25569)*86400000)).toISOString().slice(0,10);
+  if(v instanceof Date) return v.getFullYear()+"-"+("0"+(v.getMonth()+1)).slice(-2)+"-"+("0"+v.getDate()).slice(-2);
+  var s=String(v).trim(), m=s.match(/^(\d{4})-(\d{2})-(\d{2})/); if(m) return m[1]+"-"+m[2]+"-"+m[3];
+  m=s.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})/); return m?m[3]+"-"+("0"+m[2]).slice(-2)+"-"+("0"+m[1]).slice(-2):"";
+}
+function norm(s){ return String(s==null?"":s).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").trim(); }
+
+/* ---------- lectura de archivos ---------- */
+function parseBitacora(wb){
+  var out=[], vistas=0;
+  wb.SheetNames.forEach(function(n){
+    var ced=HOJAS[norm(n)]; if(!ced) return;
+    var R=XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,raw:true,defval:null});
+    var enc=null, i;
+    for(i=0;i<R.length&&i<8;i++){ if(norm(R[i][0])==="economico"){ enc=i; break; } }
+    if(enc==null) return;
+    var H=R[enc], k=-1, j;
+    for(j=1;j<H.length;j++){ if(norm(H[j])==="economico"){ k=j; break; } }
+    if(k<0) return;
+    vistas++;
+    for(i=enc+1;i<R.length;i++){
+      var r=R[i], eco=r[0]==null?"":String(r[0]).trim();
+      if(!/^M[A-Z]{2}\d{4}$/.test(eco)) continue;
+      for(j=1;j<k;j++){
+        var f=iso(H[j]); if(!f) continue;
+        var l=num(r[j]), km=num(r[k+j]);
+        if((l!=null&&l>0)||(km!=null&&km>0)) out.push({ economico:eco, fecha:f, cedis:ced, litros:l, km:km });
+      }
+    }
+  });
+  if(!vistas) throw new Error("No encontré las hojas de los CEDIS (Cuernavaca, Cuautla, Jojutla, Puente De Ixtla, Axochiapan, Cocoyoc).");
+  return out;
+}
+function parseCargas(wb){
+  var ws=wb.Sheets[wb.SheetNames[0]], F=XLSX.utils.sheet_to_json(ws,{defval:null,raw:true}), out=[], vistos={};
+  if(!F.length) throw new Error("El archivo está vacío.");
+  var mapa={}; Object.keys(F[0]).forEach(function(c){ mapa[norm(c)]=c; });
+  ["documento medicion","fecha","unidadcaracteristica","equipo","valor de contador"].forEach(function(c){ if(!mapa[c]) throw new Error("Falta la columna «"+c+"». Baja Cargas de IK17 como hoja de cálculo."); });
+  F.forEach(function(r){
+    if(String(r[mapa["unidadcaracteristica"]]||"").trim()!=="km") return;
+    var doc=Math.round(num(r[mapa["documento medicion"]])||0), eco=String(r[mapa["equipo"]]||"").trim(), f=iso(r[mapa["fecha"]]);
+    if(!doc||!eco||!f||vistos[doc]) return; vistos[doc]=1;
+    out.push({ documento:doc, fecha:f, economico:eco, km:num(r[mapa["valor de contador"]]), diferencia:num(r[mapa["diferencia val. cont."]]),
+      anulado:!!String(r[mapa["indicador anulacion"]]||"").trim(), creado_por:String(r[mapa["creado por"]]||"").trim()||null });
+  });
+  return out;
+}
+function leer(file){ return new Promise(function(ok,mal){
+  var rd=new FileReader();
+  rd.onload=function(){ try{ ok(XLSX.read(new Uint8Array(rd.result),{type:"array"})); }catch(e){ mal(new Error("No pude abrir el archivo como Excel.")); } };
+  rd.onerror=function(){ mal(new Error("No se pudo leer el archivo.")); };
+  rd.readAsArrayBuffer(file);
+}); }
+
+/* ---------- comparación ---------- */
+function digitoDeMas(a,b){
+  var x=String(Math.round(a)), y=String(Math.round(b));
+  if(Math.abs(x.length-y.length)!==1) return false;
+  var g=x.length>y.length?x:y, c=x.length>y.length?y:x;
+  for(var i=0;i<g.length;i++){ if(g.slice(0,i)+g.slice(i+1)===c) return true; }
+  return false;
+}
+function unDigito(a,b){
+  var x=String(Math.round(a)), y=String(Math.round(b));
+  if(x.length!==y.length) return false;
+  var d=0; for(var i=0;i<x.length;i++) if(x[i]!==y[i]) d++;
+  return d===1;
+}
+function dia(f,n){ var d=new Date(f+"T00:00:00Z"); d.setUTCDate(d.getUTCDate()+n); return d.toISOString().slice(0,10); }
+/* bit: [{economico,fecha,cedis,km}], sap: [{economico,fecha,km,anulado}] → filas con tipo: ok | dif | sin | solo | ret */
+function comparar(bit, sap, desde, hasta){
+  var maxSap=""; sap.forEach(function(s){ if(!s.anulado&&s.fecha>maxSap) maxSap=s.fecha; });
+  if(maxSap&&maxSap<hasta) hasta=maxSap;   /* no comparar días que SAP todavía no trae */
+  var S={}; sap.forEach(function(s){ if(s.anulado||s.km==null) return; (S[s.economico+"|"+s.fecha]=S[s.economico+"|"+s.fecha]||[]).push(s.km); });
+  var B={}, cedDe={};
+  bit.forEach(function(b){ if(b.km==null||b.km<=0) return; (B[b.economico+"|"+b.fecha]=B[b.economico+"|"+b.fecha]||[]).push(b.km); cedDe[b.economico]=b.cedis; });
+  var filas=[];
+  bit.forEach(function(b){
+    if(b.km==null||b.km<=0||b.fecha<desde||b.fecha>hasta) return;
+    var cand=(S[b.economico+"|"+b.fecha]||[]), tipo, sapkm=null, obs="";
+    if(cand.some(function(v){ return Math.abs(v-b.km)<1; })){ tipo="ok"; sapkm=b.km; }
+    else {
+      var cerca=(S[b.economico+"|"+dia(b.fecha,-1)]||[]).concat(S[b.economico+"|"+dia(b.fecha,1)]||[]);
+      if(cerca.some(function(v){ return Math.abs(v-b.km)<1; })){ tipo="ok"; sapkm=b.km; }
+      else if(cand.length){
+        tipo="dif"; sapkm=cand[0]; obs="Km distinto";
+        cand.forEach(function(v){ if(Math.abs(v-b.km)<Math.abs(sapkm-b.km)) sapkm=v; });
+        if(unDigito(b.km,sapkm)) obs="Un dígito distinto (posible error de captura)";
+        else if(digitoDeMas(b.km,sapkm)) obs="Un dígito de más o de menos (posible error de captura)";
+      } else if(cerca.length){ tipo="dif"; sapkm=cerca[0]; obs="Km distinto (SAP en día contiguo)"; if(unDigito(b.km,sapkm)) obs="Un dígito distinto (SAP en día contiguo)"; }
+      else { tipo="sin"; obs="Sin lectura de km en SAP ese día"; }
+    }
+    filas.push({ cedis:b.cedis, economico:b.economico, fecha:b.fecha, bit:b.km, sap:sapkm, dif:(sapkm!=null?b.km-sapkm:null), tipo:tipo, obs:obs });
+  });
+  /* lecturas de SAP en unidades de la bitácora que no están en ella */
+  Object.keys(S).forEach(function(k){
+    var p=k.split("|"), eco=p[0], f=p[1];
+    if(!cedDe[eco]||f<desde||f>hasta) return;
+    if(B[k]||B[eco+"|"+dia(f,-1)]||B[eco+"|"+dia(f,1)]) return;
+    filas.push({ cedis:cedDe[eco], economico:eco, fecha:f, bit:null, sap:S[k][0], dif:null, tipo:"solo", obs:"Está en SAP y no en la bitácora" });
+  });
+  /* km que retrocede dentro de cada serie */
+  [["bit",B,"bitácora"],["sap",S,"SAP"]].forEach(function(par){
+    var ult={}, porU={};
+    Object.keys(par[1]).forEach(function(k){ var p=k.split("|"); if(p[1]<desde||p[1]>hasta) return; (porU[p[0]]=porU[p[0]]||[]).push([p[1],Math.max.apply(null,par[1][k])]); });
+    Object.keys(porU).forEach(function(eco){
+      var a=porU[eco].sort(function(x,y){ return x[0]<y[0]?-1:x[0]>y[0]?1:0; });
+      for(var i=1;i<a.length;i++){ if(a[i][1]<a[i-1][0+1]-0.5){
+        filas.push({ cedis:cedDe[eco]||"", economico:eco, fecha:a[i][0], bit:par[0]==="bit"?a[i][1]:null, sap:par[0]==="sap"?a[i][1]:null, dif:a[i][1]-a[i-1][1], tipo:"ret", obs:"El km baja respecto a la lectura anterior en "+par[2]+" ("+a[i-1][1]+")" });
+      } }
+    });
+  });
+  filas.sort(function(a,b){ return a.cedis<b.cedis?-1:a.cedis>b.cedis?1:a.economico<b.economico?-1:a.economico>b.economico?1:a.fecha<b.fecha?-1:a.fecha>b.fecha?1:0; });
+  return filas;
+}
+window.KM_PARSE_BIT=parseBitacora; window.KM_PARSE_CARGAS=parseCargas; window.KM_COMPARAR=comparar;
+if(typeof document==="undefined"||!document.getElementById("mes")) return;
+
+/* ---------- base de datos ---------- */
+function getAll(path){
+  var out=[], off=0, paso=1000;
+  function sig(){
+    var h=ERP.headers(); h.Range=off+"-"+(off+paso-1); h["Range-Unit"]="items";
+    return fetch(ERP.URL+"/rest/v1/"+path,{headers:h}).then(function(r){
+      if(!r.ok) return r.text().then(function(t){ throw new Error("HTTP "+r.status+" "+t.slice(0,160)); });
+      return r.json();
+    }).then(function(j){ out=out.concat(j); if(j.length<paso) return out; off+=paso; return sig(); });
+  }
+  return sig();
+}
+function subir(tabla, conflicto, filas, msgId, etiqueta){
+  var i=0;
+  function lote(){
+    if(i>=filas.length) return Promise.resolve();
+    var parte=filas.slice(i,i+1000); i+=1000;
+    say(msgId, etiqueta+" "+Math.min(i,filas.length)+" de "+filas.length+"…");
+    return fetch(ERP.URL+"/rest/v1/"+tabla+"?on_conflict="+conflicto,{ method:"POST", headers:ERP.headers({ Prefer:"resolution=merge-duplicates,return=minimal" }), body:JSON.stringify(parte) })
+      .then(function(r){ if(!r.ok) return r.text().then(function(t){ throw new Error("HTTP "+r.status+" "+t.slice(0,200)); }); }).then(lote);
+  }
+  return lote();
+}
+function rango(mes){ var p=mes.split("-"), y=+p[0], m=+p[1], ult=new Date(Date.UTC(y,m,0)).getUTCDate(); return [mes+"-01", mes+"-"+("0"+ult).slice(-2)]; }
+
+function infoSap(){
+  fetch(ERP.URL+"/rest/v1/cargas_km?select=fecha&order=fecha.desc&limit=1",{headers:ERP.headers()}).then(function(r){ return r.json(); }).then(function(j){
+    $("infoSap").textContent = j&&j[0] ? "Última lectura de km de SAP guardada: "+j[0].fecha+"." : "Todavía no hay lecturas de km de SAP guardadas.";
+  }).catch(function(){});
+}
+var FILAS=[];
+function pintar(){
+  var ced=$("fCed").value, md=$("fTipo").value;
+  var v=FILAS.filter(function(f){ return (!ced||f.cedis===ced)&&(md==="rev"?(f.tipo==="dif"||f.tipo==="ret"||f.tipo==="sin"):md==="solo"?f.tipo==="solo":true); });
+  var tb=$("tb"); tb.innerHTML="";
+  v.slice(0,1500).forEach(function(f){
+    var tr=document.createElement("tr");
+    [f.cedis,f.economico,f.fecha,f.bit,f.sap,f.dif==null?"":(f.dif>0?"+":"")+Math.round(f.dif*10)/10,f.tipo==="ok"?"Coincide":f.obs].forEach(function(t,i){
+      var td=document.createElement("td"); td.textContent=t==null?"":t; if(i>=3&&i<=5) td.className="n";
+      if(i===6&&f.tipo!=="ok") td.className=(/dígito/.test(f.obs)?"t-dig":f.tipo==="dif"?"t-dif":f.tipo==="ret"?"t-ret":"t-sin");
+      tr.appendChild(td);
+    });
+    tb.appendChild(tr);
+  });
+  say("mRes", v.length>1500 ? "Se muestran 1,500 de "+v.length+" filas; filtra por CEDIS." : v.length+" filas.");
+}
+function ver(){
+  var mes=$("mes").value; if(!mes){ return; }
+  var r=rango(mes), desdeSap=dia(r[0],-35);
+  say("mRes","Consultando…"); $("res").hidden=false;
+  Promise.all([
+    getAll("bitacora_km?select=economico,fecha,cedis,litros,km&fecha=gte."+r[0]+"&fecha=lte."+r[1]+"&order=economico,fecha"),
+    getAll("cargas_km?select=economico,fecha,km,anulado&fecha=gte."+desdeSap+"&fecha=lte."+r[1]+"&order=documento")
+  ]).then(function(x){
+    if(!x[0].length){ say("mRes","No hay bitácora guardada de ese mes. Súbela arriba.","err"); $("tb").innerHTML=""; $("kpis").innerHTML=""; return; }
+    FILAS=comparar(x[0],x[1],r[0],r[1]);
+    var c={ ok:0, dif:0, sin:0, solo:0, ret:0 }, dig=0; FILAS.forEach(function(f){ c[f.tipo]++; if(/dígito/.test(f.obs)) dig++; });
+    var tot=c.ok+c.dif+c.sin;
+    $("kpis").innerHTML="";
+    [["Lecturas de la bitácora",tot],["Coinciden con SAP",c.ok],["Km distinto",c.dif],["De ellas, un dígito",dig],["Sin lectura en SAP",c.sin],["Solo en SAP",c.solo],["Km que baja",c.ret]].forEach(function(k){
+      var d=document.createElement("div"); d.className="kpi"; d.innerHTML="<span class='sub'></span><b></b>"; d.firstChild.textContent=k[0]; d.lastChild.textContent=k[1].toLocaleString("es-MX"); $("kpis").appendChild(d);
+    });
+    var ceds={}; FILAS.forEach(function(f){ if(f.cedis) ceds[f.cedis]=1; });
+    var sel=$("fCed"), act=sel.value; sel.innerHTML='<option value="">Todos</option>';
+    Object.keys(ceds).sort().forEach(function(k){ var o=document.createElement("option"); o.value=k; o.textContent=k; sel.appendChild(o); }); sel.value=ceds[act]?act:"";
+    pintar();
+  }).catch(function(e){ say("mRes","Error: "+e.message,"err"); });
+}
+function copiar(){
+  var ced=$("fCed").value; if(!ced){ say("mRes","Elige primero un CEDIS.","err"); return; }
+  var v=FILAS.filter(function(f){ return f.cedis===ced&&(f.tipo==="dif"||f.tipo==="ret"); });
+  if(!v.length){ say("mRes","Ese CEDIS no tiene diferencias de km.","ok"); return; }
+  var t="Kilometraje de "+ced+": diferencias entre la bitácora y SAP, por favor revisar y corregir lo que esté mal capturado.\n\n"+v.map(function(f){
+    return f.economico+" · "+f.fecha+" · bitácora "+(f.bit==null?"—":f.bit)+" · SAP "+(f.sap==null?"—":f.sap)+" · "+f.obs;
+  }).join("\n");
+  (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(function(){ say("mRes","Aviso copiado ("+v.length+" unidades-día).","ok"); }).catch(function(){ say("mRes","No pude copiar; selecciona la tabla manualmente.","err"); });
+}
+
+if(!ERP.token()){ say("mBit","Abre esta página desde el ERP con tu sesión iniciada.","err"); $("bBit").disabled=true; $("bSap").disabled=true; $("bVer").disabled=true; return; }
+var hoy=new Date(); $("mes").value=hoy.getFullYear()+"-"+("0"+(hoy.getMonth()+1)).slice(-2);
+infoSap();
+$("bVer").addEventListener("click",ver);
+$("mes").addEventListener("change",ver);
+$("fCed").addEventListener("change",pintar); $("fTipo").addEventListener("change",pintar);
+$("bCopiar").addEventListener("click",copiar);
+$("bBit").addEventListener("click",function(){
+  var f=$("fBit").files[0]; if(!f){ say("mBit","Elige el archivo de la bitácora.","err"); return; }
+  var b=this; b.disabled=true; say("mBit","Leyendo…");
+  leer(f).then(function(wb){ var filas=parseBitacora(wb); if(!filas.length) throw new Error("No encontré litros ni km capturados."); return subir("bitacora_km","economico,fecha",filas,"mBit","Guardando bitácora").then(function(){
+    var meses={}; filas.forEach(function(x){ meses[x.fecha.slice(0,7)]=1; }); var m=Object.keys(meses).sort().pop(); $("mes").value=m;
+    say("mBit","Listo: "+filas.length.toLocaleString("es-MX")+" lecturas guardadas.","ok"); ver(); }); })
+  .catch(function(e){ say("mBit","Error: "+e.message,"err"); }).then(function(){ b.disabled=false; });
+});
+$("bSap").addEventListener("click",function(){
+  var f=$("fSap").files[0]; if(!f){ say("mSap","Elige el Cargas.XLSX.","err"); return; }
+  var b=this; b.disabled=true; say("mSap","Leyendo…");
+  leer(f).then(function(wb){ var filas=parseCargas(wb); if(!filas.length) throw new Error("No encontré lecturas de km."); 
+    var mx=filas.reduce(function(m,x){ return x.fecha>m?x.fecha:m; },""), corte=dia(mx.slice(0,7)+"-01",-70);
+    filas=filas.filter(function(x){ return x.fecha>=corte; });
+    return subir("cargas_km","documento",filas,"mSap","Guardando lecturas de SAP").then(function(){ say("mSap","Listo: "+filas.length.toLocaleString("es-MX")+" lecturas de km (últimos 2 meses y medio).","ok"); infoSap(); }); })
+  .catch(function(e){ say("mSap","Error: "+e.message,"err"); }).then(function(){ b.disabled=false; });
+});
+ver();
+})();
+</script>
+</body>
+</html>
