@@ -1,0 +1,86 @@
+/* Tema compartido del ERP (liquid glass · paleta "Primavera de Morelos").
+   Lo cargan erp.html y todos los módulos. Los colores se cambian SOLO aquí.
+   Las superficies de los módulos (--surface) siguen opacas a propósito: las tablas deben leerse bien. */
+
+:root{
+  color-scheme:light;
+  --ink:#12272B; --ink-soft:#4A6468; --ink-faint:#5F767A;
+  --bg:#E8F1EE; --surface:#FFFFFF; --surface-alt:#EEF5F2; --border:#CFE0DA;
+  --accent:#0B7A62; --accent-ink:#FFFFFF; --accent-soft:#D6EEE7;
+  --shadow:0 1px 2px rgba(18,39,43,.06),0 6px 18px rgba(18,39,43,.08);
+  --good:#1F8F5F; --warn:#B06F0A; --bad:#C83C3C;
+  /* nombres que usa unidades-piso.html */
+  --fg:#12272B; --muted:#4A6468; --line:#CFE0DA; --surface2:#EEF5F2; --accent-bg:#D6EEE7;
+  /* vidrio y fondo */
+  --glass-bg:rgba(255,255,255,.62); --glass-line:rgba(255,255,255,.85);
+  --glass-shadow:0 10px 36px rgba(18,39,43,.10),inset 0 1px 0 rgba(255,255,255,.9);
+  --glass-solid:#FBFDFC;
+  --nav-on:rgba(255,255,255,.92); --nav-hover:rgba(255,255,255,.55);
+  --blob1:rgba(14,143,114,.28); --blob2:rgba(232,163,61,.26); --blob3:rgba(90,170,220,.22);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --ink:#E8F2EF; --ink-soft:#A3BAB5; --ink-faint:#86A09B;
+    --bg:#0B1315; --surface:#142022; --surface-alt:#1A2A2D; --border:#27393C;
+    --accent:#2CC9A2; --accent-ink:#052019; --accent-soft:#12312B;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 6px 18px rgba(0,0,0,.35);
+    --good:#3DD39B; --warn:#F2B04F; --bad:#F2706B;
+    --fg:#E8F2EF; --muted:#A3BAB5; --line:#27393C; --surface2:#1A2A2D; --accent-bg:#12312B;
+    --glass-bg:rgba(255,255,255,.07); --glass-line:rgba(255,255,255,.14);
+    --glass-shadow:0 10px 40px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.10);
+    --glass-solid:#142022;
+    --nav-on:rgba(255,255,255,.13); --nav-hover:rgba(255,255,255,.07);
+    --blob1:rgba(44,201,162,.30); --blob2:rgba(242,176,79,.18); --blob3:rgba(60,140,200,.22);
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --ink:#E8F2EF; --ink-soft:#A3BAB5; --ink-faint:#86A09B;
+  --bg:#0B1315; --surface:#142022; --surface-alt:#1A2A2D; --border:#27393C;
+  --accent:#2CC9A2; --accent-ink:#052019; --accent-soft:#12312B;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 6px 18px rgba(0,0,0,.35);
+  --good:#3DD39B; --warn:#F2B04F; --bad:#F2706B;
+  --fg:#E8F2EF; --muted:#A3BAB5; --line:#27393C; --surface2:#1A2A2D; --accent-bg:#12312B;
+  --glass-bg:rgba(255,255,255,.07); --glass-line:rgba(255,255,255,.14);
+  --glass-shadow:0 10px 40px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.10);
+  --glass-solid:#142022;
+  --nav-on:rgba(255,255,255,.13); --nav-hover:rgba(255,255,255,.07);
+  --blob1:rgba(44,201,162,.30); --blob2:rgba(242,176,79,.18); --blob3:rgba(60,140,200,.22);
+}
+
+/* Fondo: tres manchas de color fijas detrás de todo (barato: sin desenfoque). */
+html{background:var(--bg);-webkit-text-size-adjust:100%;text-size-adjust:100%;}
+body{background:transparent !important;}
+body::before{
+  content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:
+    radial-gradient(540px 540px at 6% -4%, var(--blob1), transparent 70%),
+    radial-gradient(580px 580px at 100% 38%, var(--blob2), transparent 70%),
+    radial-gradient(540px 440px at 38% 108%, var(--blob3), transparent 70%);
+}
+
+/* Vidrio. Respaldo opaco si el equipo no soporta el desenfoque, si pide menos transparencia
+   o si el ERP detecta un equipo modesto (clase "lite" en <html>). */
+:is(.glass, html.shell .login, html.shell .side, html.shell .mbar, html.shell .kpi, html.shell .card, html.shell .subnav){
+  background:var(--glass-bg);border:1px solid var(--glass-line);box-shadow:var(--glass-shadow);
+  -webkit-backdrop-filter:blur(22px) saturate(1.6);backdrop-filter:blur(22px) saturate(1.6);
+}
+@supports not ((backdrop-filter:blur(2px)) or (-webkit-backdrop-filter:blur(2px))){
+  :is(.glass, html.shell .login, html.shell .side, html.shell .mbar, html.shell .kpi, html.shell .card, html.shell .subnav){background:var(--glass-solid);}
+}
+@media (prefers-reduced-transparency: reduce){
+  :is(.glass, html.shell .login, html.shell .side, html.shell .mbar, html.shell .kpi, html.shell .card, html.shell .subnav){background:var(--glass-solid);-webkit-backdrop-filter:none;backdrop-filter:none;}
+}
+html.lite :is(.glass, html.shell .login, html.shell .side, html.shell .mbar, html.shell .kpi, html.shell .card, html.shell .subnav){background:var(--glass-solid);-webkit-backdrop-filter:none;backdrop-filter:none;}
+
+/* Celulares: los campos a 16 px evitan el acercamiento automático de iPhone al tocarlos. */
+@media (max-width:640px){
+  input,select,textarea{font-size:16px !important;}
+}
+
+/* Impresión: sin fondo de color. */
+@media print{
+  body::before{display:none !important;}
+  html{background:#fff !important;}
+}
