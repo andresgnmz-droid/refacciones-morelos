@@ -293,7 +293,7 @@ function analizar(eco, B, S, ref, extra){
   var difs=[]; cb.ch.forEach(function(b){ if(d2n(ref)-d2n(b.f)>25) return; var c=null; cs.ch.forEach(function(x){ if(Math.abs(d2n(x.f)-d2n(b.f))<=1&&(!c||Math.abs(x.km-b.km)<Math.abs(c.km-b.km))) c=x; }); if(c) difs.push(b.km-c.km); });
   var desfase=null; if(difs.length>=2){ var u1=difs[difs.length-1], u2=difs[difs.length-2]; if(Math.abs(u1)>=50&&Math.abs(u1-u2)<=5&&u1*u2>0&&Math.abs(u1)<50000) desfase=Math.round((u1+u2)/2); }
   var sapAvanza = actB ? ganancia(cs.ch,actB.desde)>20 : false;
-  var bitAvanza = !actS && cb.ch.length>=2 && (cb.ch[cb.ch.length-1].km-cb.ch[cb.ch.length-2].km)>3;
+  var bitAvanza = actS ? ganancia(cb.ch,actS.desde)>20 : false;
   /* eventos */
   var evs=[]; [["bitácora",cb],["SAP",cs]].forEach(function(par){
     par[1].ev.forEach(function(e){ evs.push({ fuente:par[0], tipo:e.tipo, f:e.f, de:e.de, a:e.a }); });
@@ -328,7 +328,7 @@ function analizar(eco, B, S, ref, extra){
   else if(!reciente(ult)){ estado="Sin lecturas recientes"; clase="e-av"; }
   else if(actB&&reciente(lb)&&sapAvanza){ estado="Bitácora sin actualizar"; clase="e-bit"; det.unshift({ k:"estado", f:ref, t:"En la bitácora el km no cambia desde el "+fcorta(actB.desde)+" ("+fmt(actB.kmHasta)+") y SAP sí avanza: parece que se está repitiendo el último km." }); }
   else if(actB&&reciente(lb)){ estado="Detenido"; clase="e-det"; det.unshift({ k:"estado", f:ref, t:"El km no avanza desde el "+fcorta(actB.desde)+" ("+fmt(actB.kmHasta)+") en la bitácora"+(actS?" y en SAP sube de 1 a 3 km por carga":"")+"." }); }
-  else if(actS&&reciente(ls)&&bitAvanza){ estado="SAP sube solo +1"; clase="e-sap"; det.unshift({ k:"estado", f:ref, t:"En SAP el km sube apenas de 1 a 3 km desde el "+fcorta(actS.desde)+" mientras la bitácora sí avanza." }); }
+  else if(actS&&reciente(ls)&&bitAvanza){ estado="SAP avanza anormal"; clase="e-sap"; det.unshift({ k:"estado", f:ref, t:"La bitácora sí avanza (+"+fmt(ganancia(cb.ch,actS.desde))+" km desde el "+fcorta(actS.desde)+") y en SAP el km sube apenas de 0 a 3 km, o un incremento fijo, por carga: SAP está mal capturado." }); }
   else if(actS&&reciente(ls)){ estado="Detenido"; clase="e-det"; det.unshift({ k:"estado", f:ref, t:"En SAP el km sube apenas de 1 a 3 km por carga desde el "+fcorta(actS.desde)+" (≈ "+fmt(actS.kmHasta)+"); no hay bitácora que lo contraste." }); }
   else if(milActiva){ estado="En millas"; clase="e-mil"; }
   else if(desfase!=null){ estado="Desfase fijo con SAP"; clase="e-dud"; det.unshift({ k:"estado", f:ref, t:"La bitácora trae "+fmt(Math.abs(desfase))+" km "+(desfase<0?"menos":"más")+" que SAP en las últimas lecturas, siempre la misma diferencia: lo recorrido sí coincide, se anotó mal la lectura inicial." }); }
@@ -338,14 +338,14 @@ function analizar(eco, B, S, ref, extra){
   else { estado="Pocas lecturas"; clase="e-av"; }
   /* piezas del odómetro cambiadas durante un tramo detenido que sigue detenido */
   var runAct=(actS&&reciente(ls))?actS:((actB&&reciente(lb))?actB:null);
-  if(runAct&&(estado==="Detenido"||estado==="Bitácora sin actualizar"||estado==="SAP sube solo +1")){
+  if(runAct&&(estado==="Detenido"||estado==="Bitácora sin actualizar"||estado==="SAP avanza anormal")){
     (extra.mats||[]).forEach(function(m){ if(m.f>=runAct.desde) det.push({ k:"material_sigue", f:m.f, t:"Después del cambio de «"+m.t+"» ("+fcorta(m.f)+") el km sigue sin avanzar: revisar que quedó bien instalado o que la falla es otra." }); });
   }
   /* material que coincide con un reinicio */
   det.forEach(function(x){ if(x.k==="material"){ var cerca=det.some(function(y){ return (y.k==="reinicio"||y.k==="corregido"||y.k==="a_km")&&Math.abs(d2n(y.f)-d2n(x.f))<=25; }); if(cerca) x.t+=" · coincide con el cambio del odómetro"; } });
   det.sort(function(a,b){ return a.k==="estado"?-1:b.k==="estado"?1:(a.f<b.f?1:a.f>b.f?-1:0); });
   /* base para la predicción */
-  var base = estado==="Bitácora sin actualizar"?ls : estado==="SAP sube solo +1"?lb : ult;
+  var base = estado==="Bitácora sin actualizar"?ls : estado==="SAP avanza anormal"?lb : ult;
   var chBase = base===ls&&cs.ch.length?cs.ch:cb.ch.length?cb.ch:cs.ch;
   var rate = tasa(chBase); if(rate==null) rate=tasa(cb.ch.length>=cs.ch.length?cs.ch:cb.ch);
   var rend = rendimiento(cb.ch);
@@ -478,7 +478,7 @@ function materiales(){
     return { mats:mats, piso:piso };
   });
 }
-var ORDEN={ "Detenido":1, "Bitácora sin actualizar":2, "SAP sube solo +1":3, "En millas":4, "Desfase fijo con SAP":5, "Captura dudosa":6, "Corregido / reiniciado":7, "Avanzando":8 };
+var ORDEN={ "Detenido":1, "Bitácora sin actualizar":2, "SAP avanza anormal":3, "En millas":4, "Desfase fijo con SAP":5, "Captura dudosa":6, "Corregido / reiniciado":7, "Avanzando":8 };
 function pintarEstado(){
   var ced=$("eCed").value, md=$("eEst").value;
   var v=EST.filas.filter(function(f){ return (!ced||f.cedis===ced)&&(md==="act"?f.estado!=="Avanzando"&&f.estado!=="Pocas lecturas"&&f.estado!=="Sin lecturas recientes"&&f.estado!=="Sin lecturas":md===""?true:f.estado===md); });
@@ -532,7 +532,7 @@ function calcular(){
 }
 function copiarEstado(){
   var ced=$("eCed").value; if(!ced){ say("mEst","Elige primero un CEDIS.","err"); return; }
-  var v=EST?EST.filas.filter(function(f){ return f.cedis===ced&&(f.estado==="Detenido"||f.estado==="Bitácora sin actualizar"||f.estado==="SAP sube solo +1"||f.estado==="En millas"||f.estado==="Captura dudosa"||f.estado==="Desfase fijo con SAP"); }):[];
+  var v=EST?EST.filas.filter(function(f){ return f.cedis===ced&&(f.estado==="Detenido"||f.estado==="Bitácora sin actualizar"||f.estado==="SAP avanza anormal"||f.estado==="En millas"||f.estado==="Captura dudosa"||f.estado==="Desfase fijo con SAP"); }):[];
   if(!v.length){ say("mEst","Ese CEDIS no tiene unidades por avisar.","ok"); return; }
   var t="Kilometraje de "+ced+": unidades que conviene revisar.\n\n"+v.map(function(f){ var d=f.det.filter(function(x){ return x.k==="estado"||x.k==="dudosa"||x.k==="millas"; })[0]; return f.economico+" · "+f.estado+(d?" · "+d.t:""); }).join("\n");
   (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(function(){ say("mEst","Aviso copiado ("+v.length+" unidades).","ok"); }).catch(function(){ say("mEst","No pude copiar.","err"); });
