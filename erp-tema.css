@@ -74,6 +74,19 @@ body::before{
 }
 html.lite :is(.glass, html.shell .login, html.shell .side, html.shell .mbar, html.shell .kpi, html.shell .card, html.shell .subnav){background:var(--glass-solid);-webkit-backdrop-filter:none;backdrop-filter:none;}
 
+/* Computadora: aprovechar el ancho y no encerrar las tablas en cajas con su propia barra.
+   (--ancho es el ancho máximo del contenido de cada módulo; cada módulo trae su valor de respaldo.)
+   El ancho se mide dentro del módulo, que ya viene sin el menú lateral. */
+@media (min-width:900px){
+  :root{--ancho:1680px;}
+  .table-wrap{max-height:none !important;}
+}
+/* Barras de desplazamiento delgadas (donde aún haga falta una) */
+*{scrollbar-width:thin;scrollbar-color:var(--border) transparent;}
+::-webkit-scrollbar{width:9px;height:9px;}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:8px;}
+::-webkit-scrollbar-track{background:transparent;}
+
 /* Celulares: los campos a 16 px evitan el acercamiento automático de iPhone al tocarlos. */
 @media (max-width:640px){
   input,select,textarea{font-size:16px !important;}
