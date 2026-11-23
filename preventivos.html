@@ -279,10 +279,38 @@
   function periodoLabel(p){ var y = p.slice(0,4), m = parseInt(p.slice(5,7),10); return MESES[m-1] + " " + y; }
   function fechaCorta(s){ if(!s) return ""; var p = String(s).slice(0,10).split("-"); return p[2] + "/" + p[1] + "/" + p[0]; }
   function norm(v){ return String(v||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").trim().toLowerCase(); }
+  /* Cruce hoja -> personal. La hoja trae texto libre ("ISAAC", "izac", "Isac", "BERNA", "JOSE LUIS").
+     1) alias exacto (alias_hoja o alias_extra), sin importar mayúsculas ni acentos;
+     2) si no, todas las palabras del nombre corto están en el nombre completo (prefijo de 4+ letras o 1 letra de diferencia).
+     Busca primero en el mismo CEDIS y luego en todo el personal; si queda ambiguo no adivina. */
+  var _pcache = {};
+  function editDist1(a,b){
+    if(a===b) return true; if(Math.abs(a.length-b.length)>1||a.length<5) return false;
+    var i=0,j=0,d=0; while(i<a.length&&j<b.length){ if(a[i]===b[j]){i++;j++;continue;} if(++d>1) return false;
+      if(a.length>b.length) i++; else if(b.length>a.length) j++; else {i++;j++;} }
+    return d+(a.length-i)+(b.length-j)<=1;
+  }
   function persona(cedis, alias){
-    var c = norm(cedis), a = norm(alias);
-    for(var i=0;i<personal.length;i++){ if(personal[i].alias_hoja && norm(personal[i].cedis) === c && norm(personal[i].alias_hoja) === a) return personal[i]; }
-    return null;
+    var nn = norm(alias).replace(/\s+/g," ");
+    if(!nn || /^(inactivo|sin mecanico|no hay personal)/.test(nn)) return null;
+    var ck = norm(cedis) + "|" + nn;
+    if(ck in _pcache) return _pcache[ck];
+    var toks = nn.split(" ");
+    function score(p){
+      var als = [p.alias_hoja].concat(String(p.alias_extra||"").split(",")).map(function(x){ return norm(x).replace(/\s+/g," "); }).filter(Boolean);
+      if(als.indexOf(nn) >= 0) return 2;
+      var pt = norm(p.nombre).split(/\s+/);
+      var ok = toks.every(function(t){ return pt.some(function(x){ return x===t || (t.length>=4 && x.indexOf(t)===0) || editDist1(x,t); }); });
+      return ok ? 1 : 0;
+    }
+    function elegir(lista){
+      var ex = lista.filter(function(p){ return score(p)===2; }); if(ex.length===1) return ex[0];
+      var ok = lista.filter(function(p){ return score(p)>0; }); return ok.length===1 ? ok[0] : null;
+    }
+    var c = norm(cedis);
+    var r = c ? elegir(personal.filter(function(p){ return norm(p.cedis)===c; })) : null;
+    r = r || elegir(personal);
+    return (_pcache[ck] = r);
   }
   function nombreMec(r){ var p = persona(r.cedis, r.mecanico); return p ? p.nombre : (r.mecanico || "Sin asignar"); }
   function jefeZona(z){
@@ -393,7 +421,7 @@
   function renderMecanicos(list){
     var map = {};
     list.forEach(function(r){
-      var k = r.cedis + "||" + (r.mecanico || "");
+      var _p = persona(r.cedis, r.mecanico); var k = r.cedis + "||" + (_p ? _p.nombre : (r.mecanico || ""));
       if(!map[k]){ var p = persona(r.cedis, r.mecanico); map[k] = {nombre:nombreMec(r), puesto:p ? p.puesto : "", jefe:p ? (p.reporta_a || "") : "", cedis:r.cedis, list:[]}; }
       map[k].list.push(r);
     });
@@ -575,7 +603,7 @@
       sbGet("preventivos_cargas?select=*&order=periodo.desc"),
       sbGet("personal?select=*").catch(function(){ return []; })
     ]).then(function(res){
-      var data = res[0]; personal = res[1];
+      var data = res[0]; personal = res[1]; _pcache = {};
       cargas = data;
       if(!cargas.length){ showError("Todavía no hay meses cargados en Supabase."); $("metaCarga").textContent = ""; return; }
       $("fMes").innerHTML = cargas.map(function(c){ return '<option value="' + esc(c.periodo) + '">' + esc(periodoLabel(c.periodo)) + '</option>'; }).join("");
