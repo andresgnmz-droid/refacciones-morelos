@@ -73,7 +73,10 @@
       <button class="btn sec" id="eCopiar">Copiar aviso del CEDIS</button></div>
     <p class="msg" id="mEst"></p>
     <div class="kpis" id="eKpis"></div>
-    <div class="wrap" id="eWrap" hidden><table><thead><tr><th>CEDIS</th><th>Unidad</th><th>Estado</th><th>Último km</th><th>Esperado hoy</th><th>Rend. km/l</th><th>Qué se ve</th></tr></thead><tbody id="eTb"></tbody></table></div>
+    <h3>Fallas de odómetro por CEDIS y material para repararlas</h3>
+    <p class="sub">Solo cuenta unidades <b>detenidas</b> (el odómetro no avanza). Los casos de «SAP avanza anormal» o «Bitácora sin actualizar» son errores de captura y no necesitan material. La existencia es el <b>libre utilización</b> del catálogo de refacciones.</p>
+    <div class="wrap" id="eResWrap" hidden><table><thead><tr><th>CEDIS</th><th>Detenidas</th><th>Hay material en su CEDIS</th><th>Solo en otro CEDIS</th><th>Sin existencia</th><th>Sin pieza definida</th></tr></thead><tbody id="eRes"></tbody></table></div>
+    <div class="wrap" id="eWrap" hidden><table><thead><tr><th>CEDIS</th><th>Unidad</th><th>Estado</th><th>Último km</th><th>Esperado hoy</th><th>Rend. km/l</th><th>Material para reparar</th><th>Qué se ve</th></tr></thead><tbody id="eTb"></tbody></table></div>
     <h3>Km esperado en la próxima carga</h3>
     <p class="sub">Escribe la unidad, la fecha de la carga y, si ya lo tienes, los litros. Te dice entre qué km debería caer la lectura antes de que la captures.</p>
     <div class="row"><input id="cEco" list="lEco" placeholder="Económico" size="10"><datalist id="lEco"></datalist>
@@ -459,6 +462,37 @@ function copiar(){
 
 /* ---------- pantalla: estado del odómetro ---------- */
 var EST=null, MAPA={};
+/* piezas que arreglan el odómetro según el tipo de unidad (materiales del catálogo de refacciones) */
+var KITS=[
+  { rx:/CARGO 150/i, tipo:"Moto", piezas:[ {m:"513441",n:"Chicote de velocímetro"}, {m:"532590",n:"Engrane de velocímetro"}, {m:"517853",n:"Tablero"} ] },
+  { rx:/FREIGHTLINER/i, tipo:"Camión", piezas:[ {m:"519594",n:"Hubodómetro rin 22.5"}, {m:"525147",n:"Hubodómetro rin 17.5"}, {m:"516025",n:"Base de hubodómetro"}, {m:"521308",n:"Sensor de velocidad caja FS 5406"} ] },
+  { rx:/SPARK/i, tipo:"Spark", piezas:[ {m:"531693",n:"Sensor de velocidad"}, {m:"533232",n:"Arnés del sensor"}, {m:"532556",n:"Engrane de velocímetro"}, {m:"533606",n:"Engrane de velocímetro 94580307"} ] }
+];
+var INV={ stock:null, marca:{} };
+function inventario(){
+  return Promise.all([ opcional("catalogo_refacciones_datos?select=rows:datos->rows&limit=1"), opcional("catalogo_unidades?select=economico,marca&limit=1000") ]).then(function(x){
+    var st={}; try{ ((x[0]&&x[0][0]&&x[0][0].rows)||[]).forEach(function(r){ if(r[2]!=null){ (st[r[0]]=st[r[0]]||{})[r[1]]=Number(r[2])||0; } }); }catch(e){}
+    var mc={}; (x[1]||[]).forEach(function(u){ mc[u.economico]=u.marca||""; });
+    INV={ stock:Object.keys(st).length?st:null, marca:mc };
+  });
+}
+/* qué material hay para una unidad detenida: {kit, veredicto, partes:[{n,propio,otros}]} */
+function materialDe(r){
+  var marca=INV.marca[r.economico]||"", kit=null; KITS.forEach(function(k){ if(!kit&&k.rx.test(marca)) kit=k; });
+  if(!kit) return { v:"sin_kit", t:"Sin pieza definida para "+(marca||"este modelo")+"; revisar con el taller", partes:[] };
+  if(!INV.stock) return { v:"sin_datos", t:"No pude leer el catálogo de refacciones", partes:[] };
+  var partes=kit.piezas.map(function(p){
+    var por=INV.stock[p.m]||{}, propio=por[r.cedis]||0, otros=Object.keys(por).filter(function(c){ return c!==r.cedis&&por[c]>0; }).map(function(c){ return c+":"+por[c]; });
+    return { n:p.n, m:p.m, propio:propio, otros:otros };
+  });
+  var hay=partes.filter(function(p){ return p.propio>0; }), otro=partes.some(function(p){ return p.otros.length; });
+  var v=hay.length?"hay":otro?"otro":"sin";
+  var t=v==="hay"?"Hay en "+r.cedis+": "+hay.map(function(p){ return p.n+" ("+p.propio+")"; }).join(", ")
+       :v==="otro"?"No hay en "+r.cedis+"; sí en otro CEDIS: "+partes.filter(function(p){ return p.otros.length; }).map(function(p){ return p.n+" "+p.otros.join(" "); }).join(" · ")
+       :"Sin existencia en ningún CEDIS: "+partes.map(function(p){ return p.n; }).join(", ");
+  return { v:v, t:t, partes:partes, tipo:kit.tipo };
+}
+
 function opcional(path){ return fetch(ERP.URL+"/rest/v1/"+path,{headers:ERP.headers()}).then(function(r){ return r.ok?r.json():null; }).catch(function(){ return null; }); }
 function materiales(){
   return Promise.all([ opcional("correctivos_datos?select=ord:datos->OM01OM02,mov:datos->OM01OM02mov&limit=1"), opcional("unidades_piso_datos?select=units:datos->units&limit=1") ]).then(function(x){
@@ -479,6 +513,15 @@ function materiales(){
   });
 }
 var ORDEN={ "Detenido":1, "Bitácora sin actualizar":2, "SAP avanza anormal":3, "En millas":4, "Desfase fijo con SAP":5, "Captura dudosa":6, "Corregido / reiniciado":7, "Avanzando":8 };
+
+function resumenMaterial(ced){
+  var G={}; EST.filas.forEach(function(f){ if(f.estado!=="Detenido"||!f.cedis) return; var g=(G[f.cedis]=G[f.cedis]||{ n:0, hay:0, otro:0, sin:0, nokit:0 }); g.n++; var m=materialDe(f); if(m.v==="hay") g.hay++; else if(m.v==="otro") g.otro++; else if(m.v==="sin") g.sin++; else g.nokit++; });
+  var tb=$("eRes"); tb.innerHTML=""; var tot={ n:0, hay:0, otro:0, sin:0, nokit:0 };
+  Object.keys(G).sort().forEach(function(c){ var g=G[c]; ["n","hay","otro","sin","nokit"].forEach(function(k){ tot[k]+=g[k]; });
+    var tr=document.createElement("tr"); [c,g.n,g.hay,g.otro,g.sin,g.nokit].forEach(function(t,i){ var td=document.createElement("td"); td.textContent=t; if(i) td.className="n"; tr.appendChild(td); }); tb.appendChild(tr); });
+  if(Object.keys(G).length){ var tr=document.createElement("tr"); ["Total",tot.n,tot.hay,tot.otro,tot.sin,tot.nokit].forEach(function(t,i){ var td=document.createElement("td"); td.textContent=t; td.style.fontWeight="700"; if(i) td.className="n"; tr.appendChild(td); }); tb.appendChild(tr); }
+  $("eResWrap").hidden=!Object.keys(G).length;
+}
 function pintarEstado(){
   var ced=$("eCed").value, md=$("eEst").value;
   var v=EST.filas.filter(function(f){ return (!ced||f.cedis===ced)&&(md==="act"?f.estado!=="Avanzando"&&f.estado!=="Pocas lecturas"&&f.estado!=="Sin lecturas recientes"&&f.estado!=="Sin lecturas":md===""?true:f.estado===md); });
@@ -492,8 +535,12 @@ function pintarEstado(){
     var td=document.createElement("td"); td.className="det";
     r.det.slice(0,7).forEach(function(d){ var x=document.createElement("div"); x.textContent=d.t; td.appendChild(x); });
     if(r.det.length>7){ var m=document.createElement("div"); m.className="sub"; m.textContent="… y "+(r.det.length-7)+" más"; td.appendChild(m); }
-    tr.appendChild(td); tb.appendChild(tr);
+    var tm=document.createElement("td"); tm.className="det";
+    if(r.estado==="Detenido"){ var mt=materialDe(r); var xm=document.createElement("div"); xm.textContent=mt.t; xm.className=mt.v==="hay"?"e-cor":mt.v==="otro"?"e-dud":mt.v==="sin"?"e-det":"sub"; tm.appendChild(xm); }
+    else tm.textContent=(r.estado==="SAP avanza anormal"||r.estado==="Bitácora sin actualizar")?"No requiere (error de captura)":"";
+    tr.appendChild(tm); tr.appendChild(td); tb.appendChild(tr);
   });
+  resumenMaterial(ced);
   $("eWrap").hidden=false;
   say("mEst", v.length+" unidades"+(v.length>800?" (se muestran 800; filtra por CEDIS)":"")+". «Esperado hoy» usa el km que suele avanzar al día la unidad.");
 }
@@ -502,7 +549,8 @@ function verEstado(){
   Promise.all([
     getAll("bitacora_km?select=economico,fecha,cedis,litros,km&order=economico,fecha"),
     getAll("cargas_km?select=economico,fecha,km,anulado,documento&order=documento"),
-    materiales()
+    materiales(),
+    inventario()
   ]).then(function(x){
     if(!x[0].length&&!x[1].length){ say("mEst","Todavía no hay lecturas guardadas.","err"); return; }
     EST=estadoDeTodo(x[0],x[1],x[2].mats,x[2].piso);
