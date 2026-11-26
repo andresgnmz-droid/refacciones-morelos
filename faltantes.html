@@ -152,7 +152,7 @@
         <div class="f" id="fSemW"><label>Semáforo (solo correctivos)</label><select id="sSem">
           <option value="0">Todos</option><option value="1">Verde: menos de 3 días</option><option value="2">Amarillo: 3 a 7 días</option>
           <option value="3">Naranja: 8 a 10 días</option><option value="4">Rojo: más de 10 días</option></select></div>
-        <div class="f"><label>Buscar</label><input id="qBus" type="search" placeholder="Material, descripción, pedido, solicitante"></div>
+        <div class="f"><label>Buscar</label><input id="qBus" type="search" placeholder="Material, descripción, pedido, solicitud, económico, solicitante"></div>
       </div>
       <p class="sub" id="notaAlcance"></p>
     </div>
@@ -316,7 +316,7 @@ function aplicar(){
   var base=alc.filter(function(l){
     if(S.ced && l.centro!==S.ced) return false;
     if(!estOK(l)) return false;
-    if(q){ var t=(l.pedido+" "+l.material+" "+l.texto+" "+l.solicitante+" "+l.necesidad+" "+l.solicitud).toLowerCase(); if(t.indexOf(q)<0) return false; }
+    if(q){ var t=(l.pedido+" "+l.material+" "+l.texto+" "+l.solicitante+" "+l.necesidad+" "+ecoDe(l)+" "+l.solicitud).toLowerCase(); if(t.indexOf(q)<0) return false; }
     return true;
   });
   FILT=base.filter(function(l){ return !S.sem || l.sem===S.sem; });
@@ -363,8 +363,14 @@ function pintarBarras(alc){
 }
 function nombreClave(alc,k,l,v){ for(var i=0;i<alc.length;i++){ if(alc[i][k]===v) return alc[i][l]; } return v; }
 
-var COLS=[ ["centro","CEDIS"],["tipo","Tipo"],["pedido","Pedido"],["material","Material"],["texto","Descripción"],["um","UM"],["pedida","Pedido",1],["recibida","Recibido",1],["faltante","Falta",1],["exist","Existencia",1],["fsol","Solicitud"],["dias","Días",1],["estatus","Estatus"],["sem","Semáforo"],["solicitante","Solicitante"] ];
-function valor(l,k){ if(k==="exist") return existDe(l); return l[k]; }
+var COLS=[ ["centro","CEDIS"],["tipo","Tipo"],["solicitud","Solicitud de pedido"],["pedido","Pedido"],["eco","Económico"],["material","Material"],["texto","Descripción"],["um","UM"],["pedida","Pedido",1],["recibida","Recibido",1],["faltante","Falta",1],["exist","Existencia",1],["fsol","Solicitud"],["dias","Días",1],["estatus","Estatus"],["sem","Semáforo"],["solicitante","Solicitante"] ];
+function ecoDe(l){
+  if(l._eco!==undefined) return l._eco;
+  var nec=String(l.necesidad||"").trim(), pref=String(l.centro||"").replace(/^MM/,"M"), out=[], vistos={}, m, re=/(?<!\d)(\d{4})(?!\d)/g;
+  while((m=re.exec(nec))){ var e=pref+m[1]; if(!vistos[e]){ vistos[e]=1; out.push(e); } }
+  return (l._eco = out.length ? out.join(", ") : nec);
+}
+function valor(l,k){ if(k==="exist") return existDe(l); if(k==="eco") return ecoDe(l); return l[k]; }
 function existDe(l){ if(!EXIST) return null; var c=EXIST[l.material]; if(!c) return null; var v=c[l.centro]; return v==null?null:+v; }
 function ordenar(){
   var k=S.sort, d=S.dir;
@@ -387,7 +393,7 @@ function pintarTabla(){
     var ex=existDe(l), est=l.estatus;
     var pill = est==="Completo" ? '<span class="pill">Completo</span>' : est==="Parcial" ? '<span class="pill warn">Parcial</span>' : est==="Sin surtir" ? '<span class="pill bad">Sin surtir</span>' : '<span class="pill mute">Sin pedido</span>';
     var sem = l.sem ? '<span class="psem p'+l.sem+'" title="'+["","Menos de 3 días","3 a 7 días","8 a 10 días","Más de 10 días"][l.sem]+'">'+SEMTXT[l.sem]+"</span>" : "—";
-    return '<tr class="'+(l.sem?"r"+l.sem:"")+'"><td>'+esc(l.centro)+"</td>"+(S.tipo==="todos"?"<td>"+(l.tipo==="ZMRP"?"ZMRP":"Correctivo")+"</td>":"")+"<td>"+(l.pedido?esc(l.pedido):"—")+"</td><td>"+esc(l.material)+'</td><td class="tx">'+esc(l.texto)+"</td><td>"+esc(l.um)+'</td><td class="num">'+fmt(l.pedida)+'</td><td class="num">'+fmt(l.recibida)+'</td><td class="num"><b>'+fmt(l.faltante)+'</b></td><td class="num">'+(EXIST==null?"…":ex==null?"—":fmt(ex))+"</td><td>"+fechaCorta(l.fsol)+'</td><td class="num">'+(l.dias>60?'<span class="dias-alert">'+l.dias+"</span>":l.dias)+"</td><td>"+pill+"</td>"+(S.tipo==="ZMRP"?"":"<td>"+sem+"</td>")+"<td>"+esc(l.solicitante)+"</td></tr>";
+    return '<tr class="'+(l.sem?"r"+l.sem:"")+'"><td>'+esc(l.centro)+"</td>"+(S.tipo==="todos"?"<td>"+(l.tipo==="ZMRP"?"ZMRP":"Correctivo")+"</td>":"")+"<td>"+(l.solicitud?esc(l.solicitud):"—")+"</td><td>"+(l.pedido?esc(l.pedido):"—")+"</td><td>"+(ecoDe(l)?esc(ecoDe(l)):"—")+"</td><td>"+esc(l.material)+'</td><td class="tx">'+esc(l.texto)+"</td><td>"+esc(l.um)+'</td><td class="num">'+fmt(l.pedida)+'</td><td class="num">'+fmt(l.recibida)+'</td><td class="num"><b>'+fmt(l.faltante)+'</b></td><td class="num">'+(EXIST==null?"…":ex==null?"—":fmt(ex))+"</td><td>"+fechaCorta(l.fsol)+'</td><td class="num">'+(l.dias>60?'<span class="dias-alert">'+l.dias+"</span>":l.dias)+"</td><td>"+pill+"</td>"+(S.tipo==="ZMRP"?"":"<td>"+sem+"</td>")+"<td>"+esc(l.solicitante)+"</td></tr>";
   }).join("")+"</tbody>";
   t.innerHTML=head+body;
   $("pInfo").textContent=fmt(ini+1)+"–"+fmt(fin)+" de "+fmt(FILT.length)+" líneas";
@@ -410,7 +416,7 @@ $("chips").addEventListener("click",function(e){ var b=e.target.closest("button.
 $("sSem").addEventListener("change",function(){ S.sem=+this.value; aplicar(); });
 $("tabla").addEventListener("click",function(e){
   var th=e.target.closest("th.s"); if(!th) return; var k=th.dataset.k;
-  if(S.sort===k) S.dir=-S.dir; else { S.sort=k; S.dir=(k==="centro"||k==="tipo"||k==="pedido"||k==="material"||k==="texto"||k==="um"||k==="estatus"||k==="solicitante")?1:-1; }
+  if(S.sort===k) S.dir=-S.dir; else { S.sort=k; S.dir=(k==="centro"||k==="tipo"||k==="eco"||k==="pedido"||k==="material"||k==="texto"||k==="um"||k==="estatus"||k==="solicitante")?1:-1; }
   ordenar(); S.page=0; pintarTabla();
 });
 $("pPrev").addEventListener("click",function(){ if(S.page>0){ S.page--; pintarTabla(); } });
@@ -420,7 +426,7 @@ $("bExcel").addEventListener("click",function(){
   if(!FILT.length) return;
   var det=FILT.map(function(l){
     var ex=existDe(l);
-    return { "CEDIS":l.centro, "Tipo":l.tipo, "Clase documento":l.clase, "Ciclo ZMRP":l.cicloLbl, "Mes de solicitud":l.mesLbl, "Solicitud de pedido":l.solicitud, "Pedido":l.pedido, "Posición":l.pos,
+    return { "CEDIS":l.centro, "Tipo":l.tipo, "Clase documento":l.clase, "Ciclo ZMRP":l.cicloLbl, "Mes de solicitud":l.mesLbl, "Solicitud de pedido":l.solicitud||"", "Económico":ecoDe(l), "Pedido":l.pedido, "Posición":l.pos,
       "Material":Number(l.material), "Descripción":l.texto, "UM":l.um, "Cantidad pedida":l.pedida, "Cantidad recibida":l.recibida, "Faltante":l.faltante,
       "Existencia en CEDIS":ex==null?"":ex, "Fecha de solicitud":l.fsol, "Fecha de ingreso":l.fent||"", "Días":l.dias, "Estatus":l.estatus==="Sin pedido"?"Sin pedido generado":l.estatus,
       "Semáforo":l.sem?SEMTXT[l.sem]:"", "Semáforo (orden)":l.sem||"", "Rango de días":l.sem?["","Menos de 3 días","3 a 7 días","8 a 10 días","Más de 10 días"][l.sem]:"", "Solicitante":l.solicitante, "Número de necesidad":l.necesidad };

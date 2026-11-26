@@ -577,17 +577,20 @@
       d.real.forEach(function(r){ real[r[2]] += r[3]; if(r[0].slice(-4) === "0002") rR[r[2]] += r[3]; if(r[2] > ult) ult = r[2]; });
       d.plan.forEach(function(r){ for(m = 1; m <= 12; m++){ plan[m] += r[1 + m]; if(r[0].slice(-4) === "0002") pR[m] += r[1 + m]; } });
       if(!ult){ kG.set("—", "Sin gastos cargados"); return; }
-      var hasta = ult, aparte = "", f = d.carga && d.carga.fecha_max ? String(d.carga.fecha_max).slice(0, 10) : "";
+      // El número principal es todo lo gastado hasta la fecha del último corte de SAP (incluye el mes en curso).
+      // Si el corte cae a mitad de mes, el presupuesto del último mes se prorratea por los días transcurridos.
+      var hasta = ult, parcial = false, frac = 1, f = d.carga && d.carga.fecha_max ? String(d.carga.fecha_max).slice(0, 10) : "", dd = 0;
       if(f){
-        var y = +f.slice(0, 4), mm = +f.slice(5, 7), dd = +f.slice(8, 10);
-        if(mm === ult && ult > 1 && dd < new Date(Date.UTC(y, mm, 0)).getUTCDate()){
-          hasta = ult - 1; aparte = "En " + NOMBRE_MES[ult - 1] + " van " + pesos(real[ult]) + " (al " + dd + ")";
-        }
+        var y = +f.slice(0, 4), mm = +f.slice(5, 7), diasMes;
+        dd = +f.slice(8, 10); diasMes = new Date(Date.UTC(y, mm, 0)).getUTCDate();
+        if(mm === ult && dd < diasMes){ parcial = true; frac = dd / diasMes; }
       }
-      var g = 0, p = 0, gR = 0, ppR = 0; for(m = 1; m <= hasta; m++){ g += real[m]; p += plan[m]; gR += rR[m]; ppR += pR[m]; }
+      var g = 0, p = 0, gR = 0, ppR = 0;
+      for(m = 1; m <= hasta; m++){ var fm = (m === hasta ? frac : 1); g += real[m]; p += plan[m] * fm; gR += rR[m]; ppR += pR[m] * fm; }
+      p = Math.round(p); ppR = Math.round(ppR);
       var dif = g - p, bajo = dif <= 0;
-      kG.node.querySelector(".l").textContent = "Gasto de mantenimiento · a " + NOMBRE_MES[hasta - 1];
-      kG.set(pesos(g), p ? "Presupuesto " + pesos(p) : "Sin presupuesto cargado");
+      kG.node.querySelector(".l").textContent = "Gasto de mantenimiento · " + (f && parcial ? "al " + dd + " de " + NOMBRE_MES[hasta - 1] : "a " + NOMBRE_MES[hasta - 1]);
+      kG.set(pesos(g), p ? "Presupuesto " + pesos(p) + (parcial ? " (proporcional al día " + dd + ")" : "") : "Sin presupuesto cargado");
       if(p){
         var s2 = el("span", "s", "Desviación " + (dif > 0 ? "+" : "") + (Math.round(dif / p * 1000) / 10) + "% (" + (dif > 0 ? "+" : "-") + pesos(Math.abs(dif)) + ") · " + (bajo ? "por debajo" : "por encima"));
         s2.style.color = bajo ? "var(--good)" : "var(--bad)"; s2.style.fontWeight = "600"; kG.node.appendChild(s2);
@@ -596,7 +599,7 @@
         var dR = Math.round((gR - ppR) / ppR * 1000) / 10;
         kG.node.appendChild(el("span", "s", "Reparto: " + pesos(gR) + " de " + pesos(ppR) + " (" + (dR > 0 ? "+" : "") + dR + "%)"));
       }
-      if(aparte) kG.node.appendChild(el("span", "s", aparte));
+      if(parcial) kG.node.appendChild(el("span", "s", "Mes en curso: " + pesos(real[hasta]) + " al " + dd + " de " + NOMBRE_MES[hasta - 1]));
     }).catch(function(e){ console.error(e); kG.set("—", "Sin datos de gastos"); });
   }
 
@@ -615,26 +618,29 @@
       d.plan.forEach(function(p){ (pc[p[0]] = pc[p[0]] || {})[p[1]] = 1; });
       d.real.forEach(function(r){ if(r[2] > ult) ult = r[2]; });
       if(!ult){ kC.set("—", "Sin gasto cargado"); return; }
-      var hasta = ult, aparte = "", f = d.carga && d.carga.fecha_max ? String(d.carga.fecha_max).slice(0, 10) : "";
+      // Igual que en mantenimiento: todo lo gastado hasta el último corte, con el presupuesto del mes en curso prorrateado.
+      var hasta = ult, parcial = false, frac = 1, f = d.carga && d.carga.fecha_max ? String(d.carga.fecha_max).slice(0, 10) : "", dd = 0;
       if(f){
-        var y = +f.slice(0, 4), mm = +f.slice(5, 7), dd = +f.slice(8, 10);
-        if(mm === ult && ult > 1 && dd < new Date(Date.UTC(y, mm, 0)).getUTCDate()){ hasta = ult - 1; aparte = "En " + NOMBRE_MES[ult - 1] + " van al " + dd; }
+        var y = +f.slice(0, 4), mm = +f.slice(5, 7), diasMes;
+        dd = +f.slice(8, 10); diasMes = new Date(Date.UTC(y, mm, 0)).getUTCDate();
+        if(mm === ult && dd < diasMes){ parcial = true; frac = dd / diasMes; }
       }
-      var g = 0, p = 0, ap = 0, enCurso = 0;
+      var g = 0, p = 0, ap = 0, mesCurso = 0;
       d.real.forEach(function(r){
         var gp = pc[grupo(r[0])], esAp = r[1] === "6011001" && gp && gp["6011002"] && !gp["6011001"];
-        if(r[2] <= hasta){ if(esAp) ap += r[3]; else g += r[3]; } else if(!esAp) enCurso += r[3];
+        if(r[2] <= hasta){ if(esAp) ap += r[3]; else { g += r[3]; if(r[2] === hasta) mesCurso += r[3]; } }
       });
-      d.plan.forEach(function(r){ for(m = 1; m <= hasta; m++) p += r[1 + m]; });
+      d.plan.forEach(function(r){ for(m = 1; m <= hasta; m++) p += r[1 + m] * (m === hasta ? frac : 1); });
+      p = Math.round(p);
       var dif = g - p, bajo = dif <= 0;
-      kC.node.querySelector(".l").textContent = "Gasto de combustible · a " + NOMBRE_MES[hasta - 1];
-      kC.set(pesos(g), p ? "Presupuesto " + pesos(p) : "Sin presupuesto cargado");
+      kC.node.querySelector(".l").textContent = "Gasto de combustible · " + (f && parcial ? "al " + dd + " de " + NOMBRE_MES[hasta - 1] : "a " + NOMBRE_MES[hasta - 1]);
+      kC.set(pesos(g), p ? "Presupuesto " + pesos(p) + (parcial ? " (proporcional al día " + dd + ")" : "") : "Sin presupuesto cargado");
       if(p){
         var s2 = el("span", "s", "Desviación " + (dif > 0 ? "+" : "") + (Math.round(dif / p * 1000) / 10) + "% (" + (dif > 0 ? "+" : "-") + pesos(Math.abs(dif)) + ") · " + (bajo ? "por debajo" : "por encima"));
         s2.style.color = bajo ? "var(--good)" : "var(--bad)"; s2.style.fontWeight = "600"; kC.node.appendChild(s2);
       }
       if(ap) kC.node.appendChild(el("span", "s", "Gasolina en centros de gas LP (aparte): " + pesos(ap)));
-      if(aparte) kC.node.appendChild(el("span", "s", aparte + ": " + pesos(enCurso)));
+      if(parcial) kC.node.appendChild(el("span", "s", "Mes en curso: " + pesos(mesCurso) + " al " + dd + " de " + NOMBRE_MES[hasta - 1]));
     }).catch(function(e){ console.error(e); kC.set("—", "Sin datos de combustible"); });
   }
 
